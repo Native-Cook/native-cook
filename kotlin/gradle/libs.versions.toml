@@ -11,6 +11,13 @@ coil = "3.6.3"
 jbox2d = "2.2.1.1"
 filament = "1.77.1"
 
+# particle-dispersion: camera capture and on-device subject isolation.
+camerax = "1.5.1"
+exif = "1.4.2"
+playServicesBase = "18.10.1"
+subjectSegmentation = "16.0.0-beta1"
+coroutines = "1.10.2"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
@@ -34,6 +41,15 @@ filament-utils-android = { group = "com.google.android.filament", name = "filame
 filamat-android = { group = "com.google.android.filament", name = "filamat-android", version.ref = "filament" }
 # choose-your-ball loads its glTF model with Filament's loader.
 filament-gltfio-android = { group = "com.google.android.filament", name = "gltfio-android", version.ref = "filament" }
+
+# particle-dispersion
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exif" }
+play-services-base = { module = "com.google.android.gms:play-services-base", version.ref = "playServicesBase" }
+mlkit-subject-segmentation = { module = "com.google.android.gms:play-services-mlkit-subject-segmentation", version.ref = "subjectSegmentation" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

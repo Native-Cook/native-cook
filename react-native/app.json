@@ -10,7 +10,8 @@
     "ios": {
       "bundleIdentifier": "com.ngocdevv.nativecook.free",
       "infoPlist": {
-        "CADisableMinimumFrameDurationOnPhone": true
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "NSCameraUsageDescription": "Particle Dispersion uses the camera to isolate your subject and animate the photo on your device."
       }
     },
     "android": {
@@ -19,7 +20,10 @@
         "backgroundColor": "#121210",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "static",
@@ -52,6 +56,9 @@
         {
           "android": {
             "minSdkVersion": 26
+          },
+          "ios": {
+            "deploymentTarget": "17.0"
           }
         }
       ],

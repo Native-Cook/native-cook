@@ -1,0 +1,8 @@
+<resources>
+  <item type="id" name="particledispersion_capture_button" />
+  <item type="id" name="particledispersion_replay_button" />
+  <item type="id" name="particledispersion_retake_button" />
+  <item type="id" name="particledispersion_reduced_motion_toggle" />
+  <item type="id" name="particledispersion_effect_status" />
+  <item type="id" name="particledispersion_dispersion_canvas" />
+</resources>

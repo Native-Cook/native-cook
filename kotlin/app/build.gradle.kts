@@ -63,4 +63,12 @@ dependencies {
     implementation(libs.filament.utils.android)
     implementation(libs.filamat.android)
     implementation(libs.filament.gltfio.android)
+    // particle-dispersion: real camera capture, image orientation and subject segmentation.
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.exifinterface)
+    implementation(libs.play.services.base)
+    implementation(libs.mlkit.subject.segmentation)
+    implementation(libs.kotlinx.coroutines.android)
 }

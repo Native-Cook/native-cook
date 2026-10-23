@@ -1,0 +1,14 @@
+{
+  "name": "subject-segmentation",
+  "version": "1.0.0",
+  "description": "Local Expo module for preparing effect frames, extracting foreground subject masks, and rendering particles on Android and iOS.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true,
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}
