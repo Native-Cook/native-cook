@@ -2,735 +2,585 @@ package com.ngocdevv.nativecook.blocks.gestures.dragcardtosend
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
-import kotlin.math.hypot
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
-import kotlin.math.sqrt
+import kotlin.math.roundToInt
 
 @Stable
 internal class DragCardToSendEngine(
     private val autoPlay: Boolean,
     val reducedMotion: Boolean,
-    private val onHaptic: (DragCardToSendHaptic) -> Unit,
+    private val onHaptic: (Haptic) -> Unit,
 ) {
-    var width by mutableDoubleStateOf(402.0)
+    enum class Phase { Rest, Pulling, Falling, Sent }
+    enum class Haptic { Selection, Light, Success }
+
+    data class Flight(
+        val fromX: Float = 0f,
+        val fromY: Float = 0f,
+        val radius: Float = 0f,
+        val toX: Float = 0f,
+        val toY: Float = 0f,
+    )
+
+    var layout by mutableStateOf(dragCardToSendLayout(402f))
         private set
-    var height by mutableDoubleStateOf(874.0)
+    var phase by mutableStateOf(Phase.Rest)
         private set
-    var phase by mutableStateOf(DragCardToSendPhase.Rest)
+    var cardY by mutableFloatStateOf(0f)
         private set
-    var g by mutableDoubleStateOf(0.0)
+    var press by mutableFloatStateOf(0f)
         private set
-    var veil by mutableDoubleStateOf(0.0)
+    var step by mutableIntStateOf(-1)
         private set
-    var cardX by mutableDoubleStateOf(0.0)
+    var dropRadius by mutableFloatStateOf(0f)
         private set
-    var cardY by mutableDoubleStateOf(0.0)
+    var selectedPerson by mutableIntStateOf(-1)
         private set
-    var cardScale by mutableDoubleStateOf(1.0)
+    var ringX by mutableFloatStateOf(layout.avatarX[0])
         private set
-    var cardOpacity by mutableDoubleStateOf(1.0)
+    var ringOn by mutableFloatStateOf(0f)
         private set
-    var press by mutableDoubleStateOf(1.0)
+    var flightProgress by mutableFloatStateOf(-1f)
         private set
-    var tilt by mutableDoubleStateOf(0.0)
+    var flight by mutableStateOf(Flight())
         private set
-    var sway by mutableDoubleStateOf(0.0)
+    var targetPerson by mutableIntStateOf(-1)
         private set
-    var hoverIndex by mutableIntStateOf(-1)
+    var ripple by mutableFloatStateOf(0f)
         private set
-    var hoverAmount by mutableDoubleStateOf(0.0)
+    var catchAmount by mutableFloatStateOf(0f)
         private set
-    var sendIndex by mutableIntStateOf(-1)
+    var receipt by mutableFloatStateOf(0f)
         private set
-    var ring by mutableDoubleStateOf(0.0)
+    var undoProgress by mutableFloatStateOf(0f)
         private set
-    var check by mutableDoubleStateOf(0.0)
+    var transactionProgress by mutableFloatStateOf(0f)
         private set
-    var sent by mutableDoubleStateOf(0.0)
+    var transactionElapsedMs by mutableFloatStateOf(-1f)
         private set
-    var undo by mutableDoubleStateOf(0.0)
+    var transactionReturning by mutableStateOf(false)
         private set
-    var balanceProgress by mutableDoubleStateOf(0.0)
+    var lastPerson by mutableIntStateOf(-1)
         private set
-    var clockMs by mutableDoubleStateOf(0.0)
-        private set
-    var scriptedFinger by mutableStateOf<Offset?>(null)
+    var lastCents by mutableIntStateOf(0)
         private set
 
-    val cardWidth: Double
-        get() = width - DragCardToSendTokens.Layout.side * 2.0
-    val homeCenterX: Double
-        get() = width / 2.0
-    val homeCenterY: Double
-        get() = DragCardToSendTokens.Layout.cardTop + DragCardToSendTokens.Layout.cardHeight / 2.0
     val displayedBalance: Int
-        get() = DragCardToSendTokens.startBalance - (selectedCents * balanceProgress).toInt()
+        get() = DragCardToSendTokens.StartBalance - (lastCents * transactionProgress).roundToInt()
+    val hint: String
+        get() {
+            val valid = step >= 0 && selectedPerson >= 0
+            val amount = if (valid) DragCardToSendTokens.Amounts[step] else 0
+            val name = if (valid) DragCardToSendTokens.People[selectedPerson].name else ""
+            return when {
+                phase == Phase.Pulling && valid -> "Let go to send \$$amount to $name"
+                phase == Phase.Falling && lastPerson >= 0 -> "Sending \$${lastCents / 100} to ${DragCardToSendTokens.People[lastPerson].name}"
+                else -> "Pull the card to send"
+            }
+        }
 
-    private val selectedCents = DragCardToSendTokens.amounts[DragCardToSendTokens.defaultAmountIndex] * 100
     private var lastFrameNanos: Long? = null
-    private var scriptTimeMs = 0.0
-    private var scriptEnabled = autoPlay
-    private var quietMs = 0.0
+    private var active = false
+    private var scriptedGesture = false
     private var touching = false
-    private var downPosition = Offset.Zero
-    private var downCardX = 0.0
-    private var downCardY = 0.0
-    private var travel = 0.0
-    private var finger = Offset.Zero
-    private var grabOffset = Offset.Zero
-    private var didHitCard = false
-    private var sendTimeMs = 0.0
-    private var sentTimeMs = 0.0
-    private var closeTimeMs = 0.0
-    private var successHapticSent = false
-    private var targetG = 0.0
-    private var gVelocity = 0.0
-    private var targetCardX = 0.0
-    private var cardXVelocity = 0.0
-    private var targetCardY = 0.0
-    private var cardYVelocity = 0.0
-    private var targetScale = 1.0
-    private var scaleVelocity = 0.0
+    private var downX = 0f
+    private var downY = 0f
+    private var downBase = 0f
+    private var travel = 0f
+    private var latestY = 0f
+    private var scriptEnabled = autoPlay && !reducedMotion
+    private var scriptTimeMs = 0f
+    private var quietMs = 0f
 
-    fun setSize(newWidth: Double, newHeight: Double) {
-        width = newWidth
-        height = newHeight
+    private var cardTarget = 0f
+    private var cardVelocity = 0f
+    private var dropTarget = 0f
+    private var dropVelocity = 0f
+    private var ringTarget = ringX
+    private var ringVelocity = 0f
+    private var pressTarget = 0f
+    private var ringOnTarget = 0f
+    private var receiptTarget = 0f
+    private var receiptVelocity = 0f
+    private var catchVelocity = 0f
+    private var flightElapsedMs = 0f
+    private var contactSent = false
+    private var receiptDelayMs = 0f
+    private var rippleElapsedMs = -1f
+    private var undoElapsedMs = 0f
+    private var tapElapsedMs = -1f
+    private var closeElapsedMs = -1f
+    private var closeFrom = 0f
+    private var transactionFrom = 0f
+    private var transactionTarget = 0f
+
+    fun setSize(width: Float) {
+        if (abs(width - layout.width) < 0.1f) return
+        layout = dragCardToSendLayout(width)
+        ringX = layout.avatarX[max(0, selectedPerson)]
+        ringTarget = ringX
     }
 
     fun frame(frameNanos: Long) {
         val previous = lastFrameNanos
         lastFrameNanos = frameNanos
-        if (previous == null) {
-            return
-        }
-        val dtSeconds = min((frameNanos - previous) / 1_000_000_000.0, 0.1)
-        val dtMs = dtSeconds * 1_000.0
-        clockMs = (clockMs + dtMs) % DragCardToSendTokens.Ambient.sheenMs
-        if (scriptEnabled) {
-            scriptTimeMs += dtMs / DragCardToSendTokens.QA_SLOWMO
-            val heldAt = DragCardToSendTokens.QA_HOLD_AT
-            if (heldAt != null) {
-                scriptTimeMs = min(scriptTimeMs, heldAt)
+        if (previous == null) return
+        val dtMs = min(64f, (frameNanos - previous) / 1_000_000f)
+        if (scriptEnabled) updateScript(dtMs)
+        updateMotion(dtMs)
+        if (!scriptEnabled && autoPlay && !reducedMotion && !touching) {
+            val resting = phase == Phase.Rest && receipt < 0.01f && flightProgress < 0f
+            quietMs = if (resting) quietMs + dtMs else 0f
+            if (quietMs >= DragCardToSendTokens.Send.ResumeAfterMs) {
+                resetForLoop()
+                scriptEnabled = true
             }
-            if (scriptTimeMs >= DragCardToSendTokens.LOOP_MS) {
-                scriptTimeMs %= DragCardToSendTokens.LOOP_MS
-            }
-            sampleScript(scriptTimeMs)
-            return
-        }
-        stepManual(dtSeconds, dtMs)
-    }
-
-    fun pointerDown(position: Offset): Boolean {
-        takeOver()
-        touching = true
-        downPosition = position
-        finger = position
-        travel = 0.0
-        val scale = max(cardScale, 0.08)
-        val center = Offset((homeCenterX + cardX).toFloat(), (homeCenterY + cardY).toFloat())
-        didHitCard = abs(position.x - center.x).toDouble() <= cardWidth * scale / 2.0 &&
-            abs(position.y - center.y).toDouble() <= DragCardToSendTokens.Layout.cardHeight * scale / 2.0 &&
-            phase != DragCardToSendPhase.Docked &&
-            phase != DragCardToSendPhase.Sending &&
-            phase != DragCardToSendPhase.Closing
-        if (!didHitCard) {
-            return false
-        }
-        downCardX = cardX
-        downCardY = cardY
-        grabOffset = position - center
-        press = DragCardToSendTokens.Press.scale
-        if (phase == DragCardToSendPhase.Holding) {
-            return true
-        }
-        if (phase == DragCardToSendPhase.Sent) {
-            clearReceipt()
-        }
-        phase = DragCardToSendPhase.Pulling
-        return true
-    }
-
-    fun pointerMove(position: Offset, velocityX: Double) {
-        if (!didHitCard) {
-            return
-        }
-        finger = position
-        travel = max(travel, (abs(position.x - downPosition.x) + abs(position.y - downPosition.y)).toDouble())
-        if (phase == DragCardToSendPhase.Pulling) {
-            var y = downCardY + position.y.toDouble() - downPosition.y.toDouble()
-            if (y < 0.0) {
-                y *= DragCardToSendTokens.Pull.upResist
-            }
-            cardY = y
-            cardX = downCardX + (position.x.toDouble() - downPosition.x.toDouble()) * DragCardToSendTokens.Pull.sideFollow
-            tilt = clamp01(y / DragCardToSendTokens.Pull.full)
-            if (!reducedMotion) {
-                g = clamp01(y / DragCardToSendTokens.Pull.full)
-            }
-            if (y >= DragCardToSendTokens.Pull.commit) {
-                commit(position)
-            }
-            return
-        }
-        if (phase == DragCardToSendPhase.Holding) {
-            followFinger(position)
-            sway = (velocityX * 0.006).coerceIn(-7.0, 7.0)
-            updateHover(position)
         }
     }
 
-    fun pointerUp(position: Offset, velocity: Offset) {
+    fun pointerDown(position: Offset, fromScript: Boolean = false) {
+        if (!fromScript) takeOver()
+        touching = !fromScript
+        scriptedGesture = fromScript
+        active = false
+        downX = position.x
+        downY = position.y
+        latestY = position.y
+        travel = 0f
+        if (phase == Phase.Falling || phase == Phase.Pulling) return
+        val top = layout.cardTop + cardY
+        if (position.x !in DragCardToSendTokens.Layout.Edge..(DragCardToSendTokens.Layout.Edge + layout.cardWidth) ||
+            position.y !in top..(top + layout.cardHeight)
+        ) return
+        if (phase == Phase.Sent) closeReceipt(undo = false)
+        active = true
+        downBase = untether(cardY)
+        cardVelocity = 0f
+        pressTarget = 1f
+        phase = Phase.Pulling
+        setSelection(-1)
+        step = -1
+    }
+
+    fun pointerMove(position: Offset) {
+        if (!active || phase != Phase.Pulling) return
+        latestY = position.y
+        val d = position.y - downY
+        travel = max(travel, abs(position.x - downX) + abs(d))
+        cardY = tether(downBase + d)
+        cardTarget = cardY
+        val nextStep = stepAt(d)
+        var ticked = false
+        if (nextStep != step) {
+            updateStep(nextStep)
+            haptic(Haptic.Selection)
+            ticked = true
+        }
+        val nextPerson = if (nextStep >= 0) {
+            ((position.x - layout.avatarX[0]) / layout.pitch).roundToInt().coerceIn(0, DragCardToSendTokens.People.lastIndex)
+        } else {
+            -1
+        }
+        if (nextPerson != selectedPerson) {
+            setSelection(nextPerson)
+            if (nextPerson >= 0 && !ticked) haptic(Haptic.Selection)
+        }
+    }
+
+    fun pointerUp(position: Offset, velocityY: Float, fromScript: Boolean = false) {
         touching = false
-        quietMs = 0.0
-        press = 1.0
-        if (!didHitCard) {
-            tap(position)
+        quietMs = 0f
+        latestY = position.y
+        if (!active) {
+            if (!fromScript) tap(position)
             return
         }
-        didHitCard = false
-        when (phase) {
-            DragCardToSendPhase.Pulling -> finishPull(position, velocity)
-            DragCardToSendPhase.Holding -> {
-                if (hoverIndex >= 0) {
-                    beginSend(hoverIndex)
-                } else {
-                    dock()
-                }
-            }
-            else -> Unit
+        active = false
+        pressTarget = 0f
+        if (phase != Phase.Pulling) return
+        val cardReleaseVelocity = tetherSlope(downBase + position.y - downY) * velocityY
+        if (step >= 0 && selectedPerson >= 0) {
+            send(selectedPerson, step, cardReleaseVelocity)
+        } else {
+            cancel(travel < DragCardToSendTokens.Pull.TapTravel, cardReleaseVelocity)
         }
+    }
+
+    fun tapUndo(fromScript: Boolean = false) {
+        if (phase != Phase.Sent) return
+        scriptedGesture = fromScript
+        if (!fromScript) onHaptic(Haptic.Light)
+        closeReceipt(undo = true)
     }
 
     private fun takeOver() {
-        if (!scriptEnabled) {
-            return
-        }
+        if (!scriptEnabled) return
         scriptEnabled = false
-        scriptedFinger = null
-        quietMs = 0.0
-        if (phase == DragCardToSendPhase.Holding) {
-            hoverIndex = -1
-            dock()
+        quietMs = 0f
+        if (active && scriptedGesture) {
+            active = false
+            pressTarget = 0f
+            cancel(tap = false, velocity = 0f)
         }
-    }
-
-    private fun finishPull(position: Offset, velocity: Offset) {
-        if (travel < 6.0) {
-            val localX = position.x.toDouble() - homeCenterX - (-cardWidth / 2.0 + 44.0)
-            val localY = position.y.toDouble() - homeCenterY - (DragCardToSendTokens.Layout.cardHeight / 2.0 - 64.0)
-            if (hypot(localX, localY) < 30.0) {
-                openSheet()
-                return
-            }
-        }
-        if (cardY > 20.0) {
-            onHaptic(DragCardToSendHaptic.Light)
-        }
-        phase = DragCardToSendPhase.Rest
-        targetCardX = 0.0
-        targetCardY = 0.0
-        cardXVelocity = velocity.x * DragCardToSendTokens.Pull.sideFollow
-        cardYVelocity = velocity.y.toDouble()
-        targetScale = 1.0
-        targetG = 0.0
-    }
-
-    private fun commit(position: Offset) {
-        phase = DragCardToSendPhase.Holding
-        onHaptic(DragCardToSendHaptic.Medium)
-        finger = position
-        targetScale = DragCardToSendTokens.Token.scale
-        targetG = 2.0
-        if (reducedMotion) {
-            g = 2.0
-            veil = 1.0
-        }
-    }
-
-    private fun followFinger(position: Offset) {
-        val scale = cardScale
-        cardX = position.x.toDouble() - grabOffset.x.toDouble() * scale - homeCenterX
-        cardY = position.y.toDouble() - grabOffset.y.toDouble() * scale - homeCenterY
-    }
-
-    private fun updateHover(position: Offset) {
-        if (g < 1.6 && veil < 0.9) {
-            return
-        }
-        val targets = targets()
-        var best = -1
-        var bestDistance = Double.MAX_VALUE
-        targets.forEachIndexed { index, target ->
-            val rowTarget = index >= DragCardToSendTokens.favourites.size
-            val inside = abs(position.x.toDouble() - width / 2.0) < innerWidth() / 2.0 + 8.0
-            val distance = if (rowTarget) {
-                if (inside) abs(position.y - target.y).toDouble() * 1.6 else Double.MAX_VALUE
-            } else {
-                hypot((position.x - target.x).toDouble(), (position.y - target.y).toDouble())
-            }
-            if (distance < bestDistance) {
-                bestDistance = distance
-                best = index
-            }
-        }
-        val next = if (best >= 0 && bestDistance < DragCardToSendTokens.Magnet.over) best else -1
-        if (next != hoverIndex) {
-            hoverIndex = next
-            hoverAmount = if (next >= 0) 1.0 else 0.0
-            if (next >= 0) {
-                onHaptic(DragCardToSendHaptic.Select)
-            }
-        }
-        if (best >= 0 && bestDistance < DragCardToSendTokens.Magnet.radius) {
-            val target = targets[best]
-            val amount = 1.0 - smooth(
-                (bestDistance - DragCardToSendTokens.Magnet.over * 0.4) /
-                    (DragCardToSendTokens.Magnet.radius - DragCardToSendTokens.Magnet.over * 0.4),
-            )
-            val pull = DragCardToSendTokens.Magnet.pull * amount
-            cardX += (target.x - position.x).toDouble() * pull
-            cardY += (target.y - position.y).toDouble() * pull
-        }
-    }
-
-    private fun dock() {
-        phase = DragCardToSendPhase.Docked
-        hoverIndex = -1
-        hoverAmount = 0.0
-        cardOpacity = 0.0
-        targetCardX = 0.0
-        targetCardY = 0.0
-        targetScale = 1.0
-        sway = 0.0
-    }
-
-    private fun openSheet() {
-        phase = DragCardToSendPhase.Docked
-        cardOpacity = 0.0
-        targetG = 2.0
-        if (reducedMotion) {
-            g = 2.0
-            veil = 1.0
-        }
-    }
-
-    private fun beginSend(index: Int) {
-        phase = DragCardToSendPhase.Sending
-        sendIndex = index
-        hoverIndex = index
-        hoverAmount = 1.0
-        sendTimeMs = 0.0
-        sentTimeMs = 0.0
-        successHapticSent = false
-        sway = 0.0
-    }
-
-    private fun beginClose() {
-        if (phase != DragCardToSendPhase.Docked && phase != DragCardToSendPhase.Holding) {
-            return
-        }
-        onHaptic(DragCardToSendHaptic.Light)
-        phase = DragCardToSendPhase.Closing
-        closeTimeMs = 0.0
-        hoverIndex = -1
-        hoverAmount = 0.0
-        targetCardX = 0.0
-        targetCardY = 0.0
-        targetScale = 1.0
-        cardOpacity = 1.0
     }
 
     private fun tap(position: Offset) {
-        if (phase == DragCardToSendPhase.Sent && position.y <= DragCardToSendTokens.Layout.pillTop + DragCardToSendTokens.Layout.pillHeight) {
-            onHaptic(DragCardToSendHaptic.Light)
-            clearReceipt()
-            return
-        }
-        if (phase != DragCardToSendPhase.Docked) {
-            return
-        }
-        val sheetLeft = DragCardToSendTokens.Sheet.inset
-        val sheetTop = DragCardToSendTokens.Sheet.top
-        val closeCenterX = width - sheetLeft - DragCardToSendTokens.Sheet.closeRight - DragCardToSendTokens.Sheet.close / 2.0
-        val closeCenterY = sheetTop + DragCardToSendTokens.Sheet.titleTop + DragCardToSendTokens.Sheet.close / 2.0
-        if (hypot(position.x.toDouble() - closeCenterX, position.y.toDouble() - closeCenterY) <= DragCardToSendTokens.Sheet.close / 2.0) {
-            beginClose()
-            return
-        }
-        val target = targets().indexOfFirst { point ->
-            hypot((position.x - point.x).toDouble(), (position.y - point.y).toDouble()) <= DragCardToSendTokens.Magnet.radius
-        }
-        if (target >= 0) {
-            hoverIndex = target
-            hoverAmount = 1.0
-            onHaptic(DragCardToSendHaptic.Select)
-            return
-        }
-        val nextLeft = (width - DragCardToSendTokens.Sheet.nextWidth) / 2.0
-        val nextTop = sheetTop + DragCardToSendTokens.Sheet.nextTop
-        if (position.x.toDouble() in nextLeft..(nextLeft + DragCardToSendTokens.Sheet.nextWidth) &&
-            position.y.toDouble() in nextTop..(nextTop + DragCardToSendTokens.Sheet.nextHeight) && hoverIndex >= 0
+        if (phase != Phase.Sent) return
+        val receipt = DragCardToSendTokens.Receipt
+        val right = layout.width - DragCardToSendTokens.Layout.Edge - receipt.UndoWidth / 2f
+        val centerY = receipt.Top + receipt.Height / 2f
+        if (position.x in (right - receipt.UndoWidth / 2f)..(right + receipt.UndoWidth / 2f) &&
+            position.y in (centerY - receipt.UndoHeight / 2f)..(centerY + receipt.UndoHeight / 2f)
         ) {
-            beginSend(hoverIndex)
+            tapUndo()
         }
     }
 
-    private fun stepManual(dtSeconds: Double, dtMs: Double) {
-        if (!touching) {
-            val resting = phase == DragCardToSendPhase.Rest || phase == DragCardToSendPhase.Docked
-            quietMs = if (resting) quietMs + dtMs else 0.0
-            if (phase == DragCardToSendPhase.Docked && quietMs >= DragCardToSendTokens.RESUME_AFTER_MS) {
-                beginClose()
-                quietMs = 0.0
-            } else if (autoPlay && phase == DragCardToSendPhase.Rest && quietMs >= DragCardToSendTokens.RESUME_AFTER_MS) {
-                resetRest()
-                scriptTimeMs = 0.0
-                scriptEnabled = true
-                return
+    private fun updateStep(next: Int) {
+        step = next
+        dropTarget = if (next >= 0) radiusFor(DragCardToSendTokens.Amounts[next]) else 0f
+        if (reducedMotion) dropVelocity = 0f
+    }
+
+    private fun setSelection(next: Int) {
+        if (next == selectedPerson) return
+        if (next >= 0) {
+            if (selectedPerson < 0 || ringOn < 0.05f) {
+                ringX = layout.avatarX[next]
+                ringVelocity = 0f
             }
+            ringTarget = layout.avatarX[next]
+            ringOnTarget = 1f
+        } else {
+            ringOnTarget = 0f
         }
-        if (phase == DragCardToSendPhase.Sending) {
-            sendTimeMs += dtMs
-            sampleSend(sendTimeMs, sendIndex)
+        selectedPerson = next
+    }
+
+    private fun cancel(tap: Boolean, velocity: Float) {
+        setSelection(-1)
+        updateStep(-1)
+        phase = Phase.Rest
+        cardTarget = 0f
+        cardVelocity = velocity
+        if (tap) {
+            tapElapsedMs = 0f
+            if (!reducedMotion) cardY = DragCardToSendTokens.Send.Nod
+            dropRadius = DragCardToSendTokens.Send.Bead
+            dropTarget = DragCardToSendTokens.Send.Bead
+        }
+    }
+
+    private fun send(person: Int, amountStep: Int, velocity: Float) {
+        phase = Phase.Falling
+        targetPerson = person
+        lastPerson = person
+        lastCents = DragCardToSendTokens.Amounts[amountStep] * 100
+        cardTarget = 0f
+        cardVelocity = velocity
+        pressTarget = 0f
+        flightElapsedMs = 0f
+        contactSent = false
+        if (reducedMotion) {
+            flightProgress = -1f
+            dropTarget = 0f
             return
         }
-        if (phase == DragCardToSendPhase.Sent) {
-            sentTimeMs += dtMs
-            undo = 1.0 - clamp01(sentTimeMs / DragCardToSendTokens.Send.undoMs)
-            if (sentTimeMs >= DragCardToSendTokens.Send.undoMs) {
-                clearReceipt()
-            }
-            return
-        }
-        if (phase == DragCardToSendPhase.Closing) {
-            closeTimeMs += dtMs
-            val duration = if (reducedMotion) DragCardToSendTokens.Fade.reducedMs else DragCardToSendTokens.Send.closeMs
-            val progress = clamp01(closeTimeMs / duration)
-            if (reducedMotion) {
-                veil = 1.0 - progress
-            } else {
-                g = 2.0 * (1.0 - cubicBezier(progress, DragCardToSendTokens.Send.closeEase))
-            }
-            if (progress >= 1.0) {
-                resetRest()
-            }
-            return
-        }
-        val cardSpring = DragCardToSendTokens.Springs.card
-        val openSpring = DragCardToSendTokens.Springs.open
-        val tokenSpring = DragCardToSendTokens.Springs.token
-        val x = spring(cardX, cardXVelocity, targetCardX, cardSpring, dtSeconds)
-        cardX = x.first
-        cardXVelocity = x.second
-        val y = spring(cardY, cardYVelocity, targetCardY, cardSpring, dtSeconds)
-        cardY = y.first
-        cardYVelocity = y.second
-        val scale = spring(cardScale, scaleVelocity, targetScale, tokenSpring, dtSeconds)
-        cardScale = scale.first
-        scaleVelocity = scale.second
+        val radius = max(dropRadius, 1f)
+        val fromY = layout.islandCenterY + DragCardToSendTokens.Island.Height / 2f + DragCardToSendTokens.Drop.Hang * radius
+        flight = Flight(layout.islandCenterX, fromY, radius, layout.avatarX[person], layout.avatarY)
+        dropRadius = 0f
+        dropTarget = 0f
+        flightProgress = 0f
+    }
+
+    private fun land() {
+        if (contactSent) return
+        contactSent = true
+        haptic(Haptic.Success)
         if (!reducedMotion) {
-            val shape = spring(g, gVelocity, targetG, openSpring, dtSeconds)
-            g = shape.first
-            gVelocity = shape.second
+            catchAmount = 1f
+            catchVelocity = 0f
         }
-        if (phase == DragCardToSendPhase.Holding && touching) {
-            updateHover(finger)
-        }
+        ripple = 0f
+        rippleElapsedMs = 0f
+        receiptDelayMs = if (reducedMotion) 0f else 60f
+        receiptTarget = 1f
+        receiptVelocity = 0f
+        phase = Phase.Sent
+        undoProgress = 1f
+        undoElapsedMs = 0f
+        animateTransaction(1f)
     }
 
-    private fun sampleScript(timeMs: Double) {
-        resetVisualOnly()
-        val script = DragCardToSendTokens.Script
-        when {
-            timeMs < script.down -> {
-                phase = DragCardToSendPhase.Rest
-                scriptedFinger = null
-            }
-            timeMs < script.pullEnd -> {
-                phase = DragCardToSendPhase.Pulling
-                val progress = easeInOut((timeMs - script.down - 100.0) / (script.pullEnd - script.down - 100.0))
-                val x = homeCenterX + 24.0 + 6.0 * progress
-                val y = DragCardToSendTokens.Layout.cardTop + 118.0 + script.pullBy * progress
-                scriptedFinger = Offset(x.toFloat(), y.toFloat())
-                cardX = 6.0 * progress * DragCardToSendTokens.Pull.sideFollow
-                cardY = script.pullBy * progress
-                tilt = clamp01(cardY / DragCardToSendTokens.Pull.full)
-                if (!reducedMotion) {
-                    g = clamp01(cardY / DragCardToSendTokens.Pull.full)
-                }
-                press = DragCardToSendTokens.Press.scale
-            }
-            timeMs < script.release -> sampleScriptHolding(timeMs)
-            timeMs < script.undoTap -> sampleScriptSending(timeMs)
-            else -> {
-                val receiptFade = 1.0 - clamp01((timeMs - script.undoTap) / DragCardToSendTokens.Send.pillSwapMs)
-                phase = if (receiptFade > 0.0) DragCardToSendPhase.Sent else DragCardToSendPhase.Rest
-                sent = receiptFade
-                undo = 0.0
-                balanceProgress = receiptFade
-                cardScale = 1.0
-                cardOpacity = 1.0
-                scriptedFinger = if (timeMs < script.undoTap + 120.0) {
-                    Offset((width / 2.0 + 92.0).toFloat(), 29.0f)
-                } else {
-                    null
-                }
-            }
-        }
+    private fun closeReceipt(undo: Boolean) {
+        if (undo) animateTransaction(0f)
+        closeFrom = receipt
+        closeElapsedMs = 0f
+        receiptTarget = 0f
+        undoProgress = 0f
+        phase = Phase.Rest
     }
 
-    private fun sampleScriptHolding(timeMs: Double) {
-        val script = DragCardToSendTokens.Script
-        phase = DragCardToSendPhase.Holding
-        val opening = clamp01((timeMs - script.pullEnd) / 600.0)
-        g = if (reducedMotion) 2.0 else 1.0 + springEase(opening)
-        veil = if (reducedMotion) clamp01((timeMs - script.pullEnd) / DragCardToSendTokens.Fade.reducedMs) else 0.0
-        cardScale = mix(1.0 - DragCardToSendTokens.Pull.shrink, DragCardToSendTokens.Token.scale, springEase(clamp01((timeMs - script.pullEnd) / 360.0)))
-        val startX = homeCenterX + 30.0
-        val startY = DragCardToSendTokens.Layout.cardTop + 118.0 + script.pullBy
-        val target = targets()[2]
-        val targetX = target.x.toDouble() + 24.0 * DragCardToSendTokens.Token.scale
-        val targetY = target.y.toDouble() - 18.0 * DragCardToSendTokens.Token.scale
-        val progress = easeInOut((timeMs - script.hoverStart) / (script.hoverArrive - script.hoverStart))
-        val point = if (timeMs < script.hoverStart) {
-            Offset(startX.toFloat(), startY.toFloat())
+    private fun animateTransaction(target: Float) {
+        transactionFrom = transactionProgress
+        transactionTarget = target
+        transactionReturning = target < transactionFrom
+        transactionElapsedMs = 0f
+    }
+
+    private fun updateMotion(dtMs: Float) {
+        val dt = dtMs / 1_000f
+        if (tapElapsedMs >= 0f) {
+            tapElapsedMs += dtMs
+            if (tapElapsedMs >= DragCardToSendTokens.Send.NodMs) {
+                cardTarget = 0f
+                dropTarget = 0f
+            }
+            if (tapElapsedMs >= DragCardToSendTokens.Send.NodMs + 520f) tapElapsedMs = -1f
+        }
+
+        if (!active) {
+            val card = spring(cardY, cardVelocity, cardTarget, 400f, if (reducedMotion) 1f else 0.8f, dt)
+            cardY = card.first
+            cardVelocity = card.second
+        }
+        press = timedToward(press, pressTarget, dtMs, if (pressTarget > press) DragCardToSendTokens.Send.PressInMs else DragCardToSendTokens.Send.PressOutMs)
+
+        if (reducedMotion) {
+            dropRadius = timedToward(dropRadius, dropTarget, dtMs, 90f)
         } else {
-            quadratic(
-                Offset(startX.toFloat(), startY.toFloat()),
-                Offset((targetX + 70.0).toFloat(), ((startY + targetY) / 2.0 + 30.0).toFloat()),
-                Offset(targetX.toFloat(), targetY.toFloat()),
-                progress,
-            )
+            val drop = spring(dropRadius, dropVelocity, dropTarget, 420f, 0.5f, dt)
+            dropRadius = drop.first.coerceAtLeast(0f)
+            dropVelocity = drop.second
         }
-        scriptedFinger = point
-        cardX = point.x.toDouble() - 24.0 * cardScale - homeCenterX
-        cardY = point.y.toDouble() + 18.0 * cardScale - homeCenterY
-        hoverIndex = if (timeMs >= script.hoverArrive - 180.0) 2 else -1
-        hoverAmount = if (hoverIndex >= 0) springEase(clamp01((timeMs - script.hoverArrive + 180.0) / 180.0)) else 0.0
-        sway = if (timeMs in script.hoverStart..script.hoverArrive) 7.0 * (1.0 - progress) else 0.0
-    }
+        val ring = spring(ringX, ringVelocity, ringTarget, 300f, 0.8f, dt)
+        ringX = ring.first
+        ringVelocity = ring.second
+        ringOn = timedToward(ringOn, ringOnTarget, dtMs, if (ringOnTarget > ringOn) 200f else 160f)
 
-    private fun sampleScriptSending(timeMs: Double) {
-        val elapsed = timeMs - DragCardToSendTokens.Script.release
-        sendIndex = 2
-        scriptedFinger = null
-        sampleSend(elapsed, sendIndex)
-    }
+        if (phase == Phase.Falling && reducedMotion) {
+            flightElapsedMs += dtMs
+            if (flightElapsedMs >= DragCardToSendTokens.Send.ReducedMs) {
+                land()
+                step = -1
+            }
+        } else if (!reducedMotion && flightProgress >= 0f) {
+            flightElapsedMs += dtMs
+            flightProgress = clamp01(flightElapsedMs / DragCardToSendTokens.Flight.DurationMs)
+            if (flightProgress >= DragCardToSendTokens.Flight.Contact) land()
+            if (flightProgress >= 1f) {
+                flightProgress = -1f
+                step = -1
+            }
+        }
 
-    private fun sampleSend(elapsed: Double, target: Int) {
-        val send = DragCardToSendTokens.Send
-        val absorb = clamp01(elapsed / send.absorbMs)
-        val targetPoint = targets()[target]
-        val fromX = targetPoint.x.toDouble() - homeCenterX
-        val fromY = targetPoint.y.toDouble() - homeCenterY
-        phase = DragCardToSendPhase.Sending
-        sendIndex = target
-        hoverIndex = target
-        if (elapsed <= send.absorbMs) {
-            val eased = cubicBezier(absorb, send.absorbEase)
-            cardX = mix(fromX - 12.0, fromX, eased)
-            cardY = mix(fromY - 10.0, fromY, eased)
-            cardScale = mix(DragCardToSendTokens.Token.scale, send.absorbScale, eased)
-            cardOpacity = 1.0 - clamp01((absorb - 0.6) / 0.4)
-            hoverAmount = if (absorb < 0.7) 1.0 else 1.0 + 0.7 * springEase((absorb - 0.7) / 0.3)
-        } else {
-            cardX = fromX
-            cardY = fromY
-            cardScale = send.absorbScale
-            cardOpacity = 0.0
-            hoverAmount = 1.0
-        }
-        ring = easeInOut((elapsed - send.absorbMs) / send.ringMs)
-        check = springEase(clamp01((elapsed - send.absorbMs - send.ringMs) / 260.0))
-        val closeAt = send.absorbMs + send.ringMs + send.holdMs
-        if (!scriptEnabled && !successHapticSent && elapsed >= send.absorbMs + send.ringMs) {
-            successHapticSent = true
-            onHaptic(DragCardToSendHaptic.Success)
-        }
-        if (elapsed >= closeAt) {
-            val close = clamp01((elapsed - closeAt) / send.closeMs)
+        if (receiptDelayMs > 0f) {
+            receiptDelayMs -= dtMs
+        } else if (closeElapsedMs < 0f) {
             if (reducedMotion) {
-                veil = 1.0 - clamp01((elapsed - closeAt) / DragCardToSendTokens.Fade.reducedMs)
-                g = 2.0
+                receipt = timedToward(receipt, receiptTarget, dtMs, DragCardToSendTokens.Send.ReducedMs)
             } else {
-                g = 2.0 * (1.0 - cubicBezier(close, send.closeEase))
+                val result = spring(receipt, receiptVelocity, receiptTarget, 300f, 0.8f, dt)
+                receipt = result.first.coerceIn(0f, 1.06f)
+                receiptVelocity = result.second
             }
-            sent = clamp01((elapsed - closeAt - send.closeMs * 0.55) / send.pillSwapMs)
+        }
+        if (closeElapsedMs >= 0f) {
+            closeElapsedMs += dtMs
+            val p = clamp01(closeElapsedMs / DragCardToSendTokens.Send.CloseMs)
+            receipt = closeFrom * (1f - cubicBezier(p, EASE_IN_OUT))
+            if (p >= 1f) {
+                receipt = 0f
+                closeElapsedMs = -1f
+                targetPerson = -1
+                selectedPerson = -1
+                ringOn = 0f
+                ringOnTarget = 0f
+            }
+        }
+
+        if (catchAmount > 0.0001f) {
+            val result = spring(catchAmount, catchVelocity, 0f, 620f, 0.42f, dt)
+            catchAmount = result.first.coerceAtLeast(0f)
+            catchVelocity = result.second
         } else {
-            g = 2.0
-            veil = if (reducedMotion) 1.0 else 0.0
+            catchAmount = 0f
         }
-        if (elapsed >= closeAt + send.closeMs) {
-            phase = DragCardToSendPhase.Sent
-            g = 0.0
-            veil = 0.0
-            sendIndex = -1
-            hoverIndex = -1
-            ring = 0.0
-            check = 0.0
-            cardX = 0.0
-            cardY = 0.0
-            cardOpacity = 1.0
-            cardScale = mix(send.enterFrom, 1.0, springEase(clamp01((elapsed - closeAt - send.closeMs) / 320.0)))
-            sent = 1.0
-            undo = 1.0 - clamp01((elapsed - closeAt - send.closeMs) / send.undoMs)
-            balanceProgress = easeOutCubic((elapsed - closeAt - send.closeMs) / send.rollMs)
-            if (!scriptEnabled && sentTimeMs == 0.0) {
-                sentTimeMs = 0.001
+        if (rippleElapsedMs >= 0f) {
+            rippleElapsedMs += dtMs
+            ripple = cubicBezier(clamp01(rippleElapsedMs / DragCardToSendTokens.Send.RippleMs), EASE_OUT)
+            if (rippleElapsedMs >= DragCardToSendTokens.Send.RippleMs) {
+                ripple = 0f
+                rippleElapsedMs = -1f
+                selectedPerson = -1
+                ringOn = 0f
+                ringOnTarget = 0f
             }
         }
-    }
-
-    private fun clearReceipt() {
-        phase = DragCardToSendPhase.Rest
-        sent = 0.0
-        undo = 0.0
-        balanceProgress = 0.0
-        sentTimeMs = 0.0
-    }
-
-    private fun resetRest() {
-        resetVisualOnly()
-        phase = DragCardToSendPhase.Rest
-        targetG = 0.0
-        targetCardX = 0.0
-        targetCardY = 0.0
-        targetScale = 1.0
-        gVelocity = 0.0
-        cardXVelocity = 0.0
-        cardYVelocity = 0.0
-        scaleVelocity = 0.0
-    }
-
-    private fun resetVisualOnly() {
-        g = 0.0
-        veil = 0.0
-        cardX = 0.0
-        cardY = 0.0
-        cardScale = 1.0
-        cardOpacity = 1.0
-        press = 1.0
-        tilt = 0.0
-        sway = 0.0
-        hoverIndex = -1
-        hoverAmount = 0.0
-        sendIndex = -1
-        ring = 0.0
-        check = 0.0
-        sent = 0.0
-        undo = 0.0
-        balanceProgress = 0.0
-    }
-
-    fun targets(): List<Offset> {
-        val innerX = DragCardToSendTokens.Sheet.inset + DragCardToSendTokens.Sheet.favPad
-        val innerWidth = innerWidth()
-        val favouriteY = DragCardToSendTokens.Sheet.top + DragCardToSendTokens.Sheet.favTop + DragCardToSendTokens.Sheet.favSize / 2.0
-        val result = mutableListOf<Offset>()
-        DragCardToSendTokens.favourites.indices.forEach { index ->
-            result += Offset(
-                x = (innerX + innerWidth * (index + 0.5) / 4.0).toFloat(),
-                y = favouriteY.toFloat(),
-            )
+        if (phase == Phase.Sent) {
+            undoElapsedMs += dtMs
+            undoProgress = 1f - clamp01(undoElapsedMs / DragCardToSendTokens.Send.UndoMs)
+            if (undoProgress <= 0f) closeReceipt(undo = false)
         }
-        DragCardToSendTokens.contacts.indices.forEach { index ->
-            result += Offset(
-                x = (DragCardToSendTokens.Sheet.inset + DragCardToSendTokens.Sheet.rowAvatarX).toFloat(),
-                y = (DragCardToSendTokens.Sheet.top + DragCardToSendTokens.Sheet.rowsTop +
-                    index * DragCardToSendTokens.Sheet.rowHeight + DragCardToSendTokens.Sheet.rowHeight / 2.0).toFloat(),
-            )
+        if (transactionElapsedMs >= 0f) {
+            transactionElapsedMs += dtMs
+            val p = cubicBezier(clamp01(transactionElapsedMs / DragCardToSendTokens.Send.RollMs), EASE_OUT)
+            transactionProgress = mix(transactionFrom, transactionTarget, p)
+            val rowsDuration = DragCardToSendTokens.RowsMotion.ExitMs +
+                DragCardToSendTokens.RowsMotion.EnterAfterMs + DragCardToSendTokens.RowsMotion.EnterMs
+            if (transactionElapsedMs >= rowsDuration) transactionElapsedMs = -1f
         }
-        return result
     }
 
-    private fun innerWidth(): Double {
-        val innerX = DragCardToSendTokens.Sheet.inset + DragCardToSendTokens.Sheet.favPad
-        return width - innerX * 2.0
+    private fun updateScript(dtMs: Float) {
+        var previous = scriptTimeMs
+        var now = previous + dtMs
+        if (now >= DragCardToSendTokens.Script.LoopMs) {
+            resetForLoop()
+            previous = 0f
+            now %= DragCardToSendTokens.Script.LoopMs
+        }
+        val script = DragCardToSendTokens.Script
+        val x0 = DragCardToSendTokens.Layout.Edge + script.TouchX
+        val y0 = layout.cardTop + script.TouchY
+        if (previous < script.Down && now >= script.Down) pointerDown(Offset(x0, y0), fromScript = true)
+        if (now > script.PullStart && previous < script.PullEnd) {
+            val u = smoother((now - script.PullStart) / (script.PullEnd - script.PullStart))
+            pointerMove(Offset(x0, y0 + script.PullBy * u))
+        }
+        if (now > script.SlideStart && previous < script.SlideEnd) {
+            val u = smoother((now - script.SlideStart) / (script.SlideEnd - script.SlideStart))
+            val x = mix(x0, layout.avatarX[script.SlideTo], u)
+            pointerMove(Offset(x, y0 + script.PullBy))
+        }
+        if (previous < script.Release && now >= script.Release) {
+            pointerUp(Offset(layout.avatarX[script.SlideTo], y0 + script.PullBy), 0f, fromScript = true)
+        }
+        if (previous < script.Undo && now >= script.Undo) tapUndo(fromScript = true)
+        scriptTimeMs = now
     }
+
+    private fun resetForLoop() {
+        phase = Phase.Rest
+        cardY = 0f
+        cardTarget = 0f
+        cardVelocity = 0f
+        press = 0f
+        pressTarget = 0f
+        step = -1
+        dropRadius = 0f
+        dropTarget = 0f
+        dropVelocity = 0f
+        selectedPerson = -1
+        targetPerson = -1
+        ringX = layout.avatarX[0]
+        ringTarget = ringX
+        ringVelocity = 0f
+        ringOn = 0f
+        ringOnTarget = 0f
+        flightProgress = -1f
+        ripple = 0f
+        rippleElapsedMs = -1f
+        catchAmount = 0f
+        receipt = 0f
+        receiptTarget = 0f
+        receiptVelocity = 0f
+        closeElapsedMs = -1f
+        undoProgress = 0f
+        transactionProgress = 0f
+        transactionElapsedMs = -1f
+        transactionReturning = false
+        lastPerson = -1
+        lastCents = 0
+        active = false
+        scriptedGesture = false
+        touching = false
+        quietMs = 0f
+        scriptTimeMs = 0f
+    }
+
+    private fun haptic(kind: Haptic) {
+        if (!scriptedGesture) onHaptic(kind)
+    }
+
+    private fun tether(distance: Float): Float {
+        val pull = DragCardToSendTokens.Pull
+        return if (distance >= 0f) pull.Tether * (1f - exp(-distance / pull.Falloff)) else distance * pull.UpResistance
+    }
+
+    private fun untether(value: Float): Float {
+        val pull = DragCardToSendTokens.Pull
+        return if (value < 0f) value / pull.UpResistance else -pull.Falloff * ln(1f - min(value / pull.Tether, 0.999f))
+    }
+
+    private fun tetherSlope(distance: Float): Float {
+        val pull = DragCardToSendTokens.Pull
+        return if (distance >= 0f) (pull.Tether / pull.Falloff) * exp(-distance / pull.Falloff) else pull.UpResistance
+    }
+
+    private fun stepAt(distance: Float): Int {
+        val pull = DragCardToSendTokens.Pull
+        if (distance < pull.Dead) return -1
+        return ((distance - pull.Dead) / pull.Step).toInt().coerceAtMost(DragCardToSendTokens.Amounts.lastIndex)
+    }
+}
+
+internal val EASE_OUT = floatArrayOf(0.23f, 1f, 0.32f, 1f)
+internal val EASE_IN_OUT = floatArrayOf(0.77f, 0f, 0.175f, 1f)
+
+internal fun clamp01(value: Float): Float = value.coerceIn(0f, 1f)
+internal fun mix(start: Float, end: Float, progress: Float): Float = start + (end - start) * progress
+internal fun smoother(value: Float): Float {
+    val t = clamp01(value)
+    return t * t * t * (t * (t * 6f - 15f) + 10f)
+}
+internal fun radiusFor(dollars: Int): Float {
+    return DragCardToSendTokens.Drop.BaseRadius + DragCardToSendTokens.Drop.RadiusScale * dollars.toFloat().pow(1f / 3f)
+}
+
+internal fun cubicBezier(progress: Float, points: FloatArray): Float {
+    val x = clamp01(progress)
+    var lo = 0f
+    var hi = 1f
+    repeat(20) {
+        val t = (lo + hi) / 2f
+        if (bezierCoordinate(t, points[0], points[2]) < x) lo = t else hi = t
+    }
+    return bezierCoordinate((lo + hi) / 2f, points[1], points[3])
+}
+
+private fun bezierCoordinate(t: Float, first: Float, second: Float): Float {
+    val q = 1f - t
+    return 3f * q * q * t * first + 3f * q * t * t * second + t * t * t
 }
 
 private fun spring(
-    value: Double,
-    velocity: Double,
-    target: Double,
-    spec: DragCardToSendTokens.Spring,
-    dt: Double,
-): Pair<Double, Double> {
-    val acceleration = (-spec.stiffness * (value - target) - spec.damping * velocity) / spec.mass
+    value: Float,
+    velocity: Float,
+    target: Float,
+    durationMs: Float,
+    dampingRatio: Float,
+    dt: Float,
+): Pair<Float, Float> {
+    val omega = 4.6f / max(0.001f, dampingRatio * durationMs / 1_000f)
+    val acceleration = -2f * dampingRatio * omega * velocity - omega * omega * (value - target)
     val nextVelocity = velocity + acceleration * dt
-    val nextValue = value + nextVelocity * dt
-    return nextValue to nextVelocity
+    return (value + nextVelocity * dt) to nextVelocity
 }
 
-private fun quadratic(start: Offset, control: Offset, end: Offset, progress: Double): Offset {
-    val t = clamp01(progress).toFloat()
-    val a = (1.0f - t) * (1.0f - t)
-    val b = 2.0f * (1.0f - t) * t
-    val c = t * t
-    return Offset(
-        x = a * start.x + b * control.x + c * end.x,
-        y = a * start.y + b * control.y + c * end.y,
-    )
-}
-
-internal fun clamp01(value: Double): Double {
-    return value.coerceIn(0.0, 1.0)
-}
-
-internal fun smooth(value: Double): Double {
-    val clamped = clamp01(value)
-    return clamped * clamped * (3.0 - 2.0 * clamped)
-}
-
-internal fun easeInOut(value: Double): Double {
-    val clamped = clamp01(value)
-    return if (clamped < 0.5) {
-        4.0 * clamped * clamped * clamped
-    } else {
-        1.0 - (-2.0 * clamped + 2.0).pow(3.0) / 2.0
-    }
-}
-
-internal fun springEase(value: Double): Double {
-    val clamped = clamp01(value)
-    return 1.0 - (1.0 - clamped).pow(3.0) * (1.0 - 0.16 * kotlin.math.sin(clamped * Math.PI * 3.0))
-}
-
-internal fun easeOutCubic(value: Double): Double {
-    val clamped = clamp01(value)
-    return 1.0 - (1.0 - clamped).pow(3.0)
-}
-
-internal fun mix(start: Double, end: Double, progress: Double): Double {
-    return start + (end - start) * progress
-}
-
-internal fun cubicBezier(progress: Double, points: DoubleArray): Double {
-    val targetX = clamp01(progress)
-    var low = 0.0
-    var high = 1.0
-    repeat(10) {
-        val t = (low + high) / 2.0
-        val x = bezierCoordinate(t, points[0], points[2])
-        if (x < targetX) {
-            low = t
-        } else {
-            high = t
-        }
-    }
-    return bezierCoordinate((low + high) / 2.0, points[1], points[3])
-}
-
-private fun bezierCoordinate(t: Double, first: Double, second: Double): Double {
-    val inverse = 1.0 - t
-    return 3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t
+private fun timedToward(value: Float, target: Float, dtMs: Float, durationMs: Float): Float {
+    if (abs(target - value) < 0.0001f) return target
+    val alpha = 1f - exp(-5f * dtMs / max(1f, durationMs))
+    return mix(value, target, alpha)
 }

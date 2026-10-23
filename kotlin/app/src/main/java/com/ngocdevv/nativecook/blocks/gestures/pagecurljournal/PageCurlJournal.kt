@@ -4,6 +4,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.graphics.BitmapFactory
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -25,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
@@ -40,13 +42,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import com.ngocdevv.nativecook.shared.rememberReducedMotion
 
 /**
- * A white book, four pages, turned with a page curl: drag the right edge to the left to turn forward, drag
+ * A printed book, four pages, turned with a page curl: drag the right edge to the left to turn forward, drag
  * to the right to turn back, tap the margins or "Turn the page". Let go past half a turn, or flick, and the
  * sheet goes over on a mass-spring; a hard flick right turns every page back to the title in one riffle.
- * With [autoPlay] a scripted finger plays one 14 s loop (see LOOP) through the same input as a real one;
+ * With [autoPlay] a scripted finger plays one 10 s loop (see LOOP) through the same input as a real one;
  * a real touch takes over and 2 s after the last touch the script resumes.
  */
 @Composable
@@ -56,25 +60,38 @@ fun PageCurlJournal(autoPlay: Boolean = false) {
     val context = LocalContext.current
     val fonts = LocalFontFamilyResolver.current
     val reduced = rememberReducedMotion()
+    val roman = remember(context) {
+        FontFamily(Font(PageCurlJournalAssets.ROMAN, context.assets))
+    }
+    val italic = remember(context) {
+        FontFamily(Font(PageCurlJournalAssets.ITALIC, context.assets))
+    }
+    val paper = remember(context) {
+        requireNotNull(
+            context.assets.open(PageCurlJournalAssets.PAPER).use { stream -> BitmapFactory.decodeStream(stream) },
+        ).asImageBitmap()
+    }
     val page = remember { mutableIntStateOf(0) }
     // Bumped once a frame that changed something, so only the canvas draws again.
     val tick = remember { mutableIntStateOf(0) }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(INK.paper)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(PAPER.base)) {
         val widthPx = constraints.maxWidth
         val heightPx = constraints.maxHeight
         val widthDp = widthPx / density
         val heightDp = heightPx / density
         val s = widthDp / REF.WIDTH
 
-        val art = remember(widthPx, heightPx, density, fonts) { PageCurlPages(widthDp, heightDp, density, fonts) }
+        val art = remember(widthPx, heightPx, density, fonts, roman, italic, paper) {
+            PageCurlPages(widthDp, heightDp, density, fonts, roman, italic, paper)
+        }
         val engine = remember(widthPx, heightPx, density, reduced, autoPlay, view) {
             PageCurlEngine(
                 width = widthDp,
                 height = heightDp,
                 density = density,
                 reduced = reduced,
-                autoPlay = autoPlay,
+                autoPlay = autoPlay && !reduced,
                 haptic = { kind -> view.performHapticFeedback(hapticConstant(kind)) },
                 onPage = { page.intValue = it },
             )
@@ -85,7 +102,7 @@ fun PageCurlJournal(autoPlay: Boolean = false) {
         val foilUniforms = remember { FoilUniforms() }
         val spine = remember(density, s) {
             Brush.horizontalGradient(
-                listOf(Color.Black.copy(alpha = 0.05f), Color.Black.copy(alpha = 0f)),
+                listOf(Color(0xFF463018).copy(alpha = 0.08f), Color.Transparent),
                 startX = 0f,
                 endX = SPACE.MD * s * density,
             )
@@ -175,10 +192,9 @@ fun PageCurlJournal(autoPlay: Boolean = false) {
             if (frame < 0) return@Canvas
             val canvas = drawContext.canvas.nativeCanvas
             val gpu = renderer
-            // The page the book lies open on, live: the title's sparkles twinkle on it. A turning sheet covers every
-            // pixel of it, so the page is not drawn again while one is out.
+            // A turning sheet covers every pixel of the resting page, so it is not drawn again while one is out.
             if (gpu == null || !engine.slotShown(0)) {
-                art.draw(this, engine.viewPage, engine.twinkle.value)
+                art.draw(this, engine.viewPage)
             }
             if (gpu != null) {
                 if (engine.foilVisible()) {

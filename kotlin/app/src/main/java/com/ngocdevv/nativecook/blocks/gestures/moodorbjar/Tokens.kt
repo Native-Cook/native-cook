@@ -6,30 +6,33 @@ internal object MoodOrbJarTokens {
     const val REPLICA = false
 
     object Colors {
-        const val bg = "#F4FDFE"
-        const val bgBottom = "#E3F0FB"
-        const val card = "#F7FCFF"
-        const val label = "#3A3A3F"
-        const val secondary = "#8F9298"
-        const val cardShadow = "rgba(60, 100, 160, 0.08)"
-        const val ink = "#16233A"
-        const val mute = "rgba(22, 35, 58, 0.55)"
-        const val faint = "rgba(22, 35, 58, 0.35)"
-        const val glass = "rgba(255, 255, 255, 0.38)"
-        const val glassBack = "rgba(214, 230, 246, 0.55)"
-        const val glassEdge = "rgba(255, 255, 255, 0.95)"
-        const val glassShade = "rgba(110, 150, 200, 0.28)"
-        const val floorShadow = "rgba(70, 110, 170, 0.18)"
-        val lid = arrayOf("#8E949C", "#D8DDE3", "#F7F8FA", "#B4BAC2", "#7C828A")
-        val lidStops = doubleArrayOf(0.0, 0.2, 0.42, 0.75, 1.0)
-        const val lidRidge = "rgba(60, 66, 74, 0.25)"
+        const val bg = "#F3EFE8"
+        const val bgBottom = "#E7E0D3"
+        const val card = "#FBF9F5"
+        const val cardEdge = "rgba(60, 48, 30, 0.07)"
+        const val label = "#4A4338"
+        const val secondary = "#8A8173"
+        const val cardShadow = "rgba(80, 60, 30, 0.10)"
+        const val ink = "#2A251E"
+        const val mute = "rgba(42, 37, 30, 0.58)"
+        const val faint = "rgba(42, 37, 30, 0.34)"
+        const val glassBody = "rgba(196, 210, 204, 0.16)"
+        const val glassBack = "rgba(150, 170, 165, 0.22)"
+        const val glassEdge = "rgba(92, 112, 108, 0.42)"
+        const val glassEdgeSoft = "rgba(92, 112, 108, 0.16)"
+        const val glassLight = "rgba(255, 255, 255, 0.9)"
+        const val floorShadow = "rgba(70, 55, 30, 0.22)"
+        const val caustic = "rgba(255, 236, 196, 0.75)"
+        val lid = arrayOf("#6E6A63", "#C9C4BA", "#F1EEE8", "#A9A398", "#5E5A53")
+        val lidStops = doubleArrayOf(0.0, 0.22, 0.45, 0.78, 1.0)
+        const val lidRidge = "rgba(40, 34, 26, 0.22)"
         const val print = "#0E0E10"
-        const val danger = "#F4545E"
+        const val danger = "#B9563E"
         const val dangerInk = "#FFFFFF"
-        const val dotsBg = "#EEF1F5"
-        const val sheetLine = "rgba(22, 35, 58, 0.1)"
-        const val dotsInk = "#5B616B"
-        const val aim = "rgba(22, 35, 58, 0.18)"
+        const val dotsBg = "#F1EDE6"
+        const val sheetLine = "rgba(42, 37, 30, 0.1)"
+        const val dotsInk = "#5E574C"
+        const val aim = "rgba(42, 37, 30, 0.22)"
     }
 
     data class Mood(
@@ -41,11 +44,11 @@ internal object MoodOrbJarTokens {
     )
 
     val MOODS = arrayOf(
-        Mood("Awful", "#A24CE6", "#E0B0FF", "#6A22A8", "Angry, Overwhelmed"),
-        Mood("Bad", "#5E7DF6", "#BCCBFF", "#2F4CC2", "Disgusted, Friends"),
-        Mood("Neutral", "#3FC6E6", "#B4F0FF", "#1689A8", "Work, Tired"),
-        Mood("Good", "#57D27A", "#C2F5CF", "#22964A", "Calm, Partner"),
-        Mood("Great", "#F4545E", "#FFC2B8", "#B8243A", "Family, Sunshine"),
+        Mood("Awful", "#6B6F8C", "#C3C5DA", "#363954", "Overwhelmed, Late night"),
+        Mood("Bad", "#5F86A8", "#BCD2E4", "#2F4F6B", "Tired, Commute"),
+        Mood("Neutral", "#B5A486", "#EDE3CF", "#7A6B50", "Work, Errands"),
+        Mood("Good", "#7EA67C", "#CFE2CA", "#46694A", "Calm, Long walk"),
+        Mood("Great", "#E0965A", "#F8D4AE", "#A55B26", "Family, Sunshine"),
     )
 
     object Space {
@@ -88,55 +91,54 @@ internal object MoodOrbJarTokens {
         const val slotLabelH = 63.0
         const val labelSize = 13.0
         const val cardRadius = 16.0
-        const val entriesTop = 512.0
-        const val entryHeight = 106.0
+        const val entriesTop = 508.0
+        const val entryHeight = 64.0
         const val sectionH = 26.0
         const val rowHeight = 68.0
         const val hairlineInset = 70.0
-        const val entryGap = 18.0
-        const val entryOrb = 22.0
+        const val entryGap = 8.0
+        const val entryOrb = 18.0
         const val orb = 25.0
     }
 
     object Style {
         const val headerInset = 8.0
-        const val chevronSize = 12.0
-        const val chevronStroke = 2.2
+        const val chevronSize = 11.0
+        const val chevronStroke = 2.0
         const val chevronInset = 4.0
-        const val calendarSize = 22.0
+        const val calendarSize = 20.0
         const val calendarRadius = 5.0
-        const val calendarStroke = 2.0
-        const val calendarTextSize = 10.0
+        const val calendarStroke = 1.75
+        const val calendarTextSize = 9.0
         const val calendarTextTop = 1.0
-        const val moreTextSize = 13.0
+        const val moreTextSize = 12.0
         const val moreTracking = 1.0
         const val slotHitHalfWidth = 30.0
         const val slotHitTop = 24.0
         const val monthSize = 11.0
-        const val monthTracking = 2.2
-        const val countBoxHeight = 30.0
-        const val countSize = 24.0
-        const val countLineHeight = 30.0
-        const val undoRight = 24.0
+        const val monthTracking = 2.4
+        const val countBoxHeight = 32.0
+        const val countSize = 26.0
+        const val countLineHeight = 32.0
+        const val undoRight = 20.0
         const val undoSize = 15.0
-        const val avatarTextGap = 16.3
-        const val entryTextTop = 27.4
+        const val avatarTextGap = 12.0
+        const val entryTextTop = 0.0
         const val entryTitleSize = 16.0
         const val entryTitleLineHeight = 20.0
         const val entryTitleTracking = -0.2
-        const val entryLineSize = 14.0
+        const val entryLineSize = 13.0
         const val entryLineHeight = 18.0
-        const val entryLineGap = 4.1
-        const val dotsRight = 11.3
-        const val dotsTop = 14.3
-        const val dotsSize = 27.0
-        const val dotsRadius = 8.0
-        const val dotsStroke = 2.0
-        const val dotsGap = 3.0
+        const val entryLineGap = 2.0
+        const val dotsRight = 12.0
+        const val dotsTop = 18.0
+        const val dotsSize = 28.0
+        const val dotsRadius = 14.0
+        const val dotsStroke = 0.0
+        const val dotsGap = 2.5
         const val dotSize = 3.0
-        const val cardShadowY = 4.0
-        const val cardShadowBlur = 10.0
-        const val orbImageScale = 144.0 / 132.0
+        const val cardShadowY = 6.0
+        const val cardShadowBlur = 12.0
         const val underFull = 60.0
         const val entryRise = 25.0
         const val entryEnterMs = 260
@@ -170,8 +172,8 @@ internal object MoodOrbJarTokens {
         const val now = "Just now"
         val replicaEntry = Entry(0, "Ashamed, Partner", "4:21 PM")
         val entries = arrayOf(
-            Entry(1, "Disgusted, Friends", "4:20 PM"),
-            Entry(2, "Work, Tired", "1:05 PM"),
+            Entry(3, "Calm, Long walk", "4:20 PM"),
+            Entry(2, "Work, Errands", "1:05 PM"),
         )
 
         fun add(mood: String) = "Add $mood"
@@ -210,7 +212,6 @@ internal object MoodOrbJarTokens {
 
     const val STEP = 1.0 / 120.0
     const val MAX_STEPS = 30
-    const val MAX_FRAME_DELTA = 0.1
 
     object Pile {
         const val count = 16
@@ -221,7 +222,7 @@ internal object MoodOrbJarTokens {
         const val passes = 3
         const val restSpeed = 18.0
         const val restTime = 0.35
-        const val collisionScale = 0.9
+        const val collisionScale = 0.98
     }
 
     object Throw {
@@ -249,7 +250,7 @@ internal object MoodOrbJarTokens {
         const val tilt = 0.09
         const val stiffness = 120.0
         const val damping = 9.0
-        const val hold = 2.4
+        const val hold = 1.1
     }
 
     object Haptic {
@@ -298,8 +299,9 @@ internal object MoodOrbJarTokens {
 
     object Hop {
         const val every = 2.0
-        const val phase = 1.0
+        const val phase = 0.5
         const val speed = 70.0
+        const val last = 6.0
     }
 
     object Aim {
@@ -311,7 +313,7 @@ internal object MoodOrbJarTokens {
         const val fade = 0.2
     }
 
-    const val LOOP_MS = 12_000.0
+    const val LOOP_MS = 10_000.0
     const val RESUME_MS = 2_000.0
 
     object Script {
@@ -319,7 +321,7 @@ internal object MoodOrbJarTokens {
         val pick = doubleArrayOf(1.0, 1.35)
         val pickBy = doubleArrayOf(-30.0, -80.0)
         val release = doubleArrayOf(-500.0, -1500.0)
-        val swipe = doubleArrayOf(7.0, 7.55)
+        val swipe = doubleArrayOf(5.6, 6.15)
         const val swipeBy = -150.0
     }
 

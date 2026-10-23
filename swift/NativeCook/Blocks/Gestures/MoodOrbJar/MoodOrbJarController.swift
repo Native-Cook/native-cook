@@ -55,9 +55,13 @@ final class MoodOrbJarController {
         self.reducedMotion = reducedMotion
         if next != geometry || sim == nil {
             geometry = next
-            sim = MoodOrbJarSim(geometry: next, reduced: reducedMotion, autoPlay: autoPlay)
+            sim = MoodOrbJarSim(geometry: next, reduced: reducedMotion, autoPlay: autoPlay && !reducedMotion)
         } else {
             sim?.reduced = reducedMotion
+            if reducedMotion {
+                sim?.demoOn = false
+                sim?.quiet = 0
+            }
         }
         publish()
     }

@@ -1,722 +1,222 @@
-import CoreImage
-import Foundation
-import SwiftUI
 import UIKit
 
-/// Rendering port of the active React Native route, `GumballUpgrade`.
-/// Coordinates are transformed once from its 402 point-wide Skia stage.
-struct GumballCrankScene: View {
-    let state: GumballCrankState
-    let width: CGFloat
-    let height: CGFloat
-    let safeTop: CGFloat
-    let onTurn: () -> Void
-    let onCollect: () -> Void
+final class GumballCrankRenderer {
+    private let back: UIImage
+    private let front: UIImage
+    private let ballSprites: [UIImage]
 
-    private let artwork = GumballCrankArtwork.shared
-    @State private var displayedCoins = GumballCrankMotion.coins.from
-
-    private var s: CGFloat { width / CGFloat(GumballCrankTheme.stageWidth) }
-    private var phase: Int { state.phase }
-    private var phaseT: Double { state.phaseT }
-    private var isReady: Bool { phase == GumballCrankPhase.ready }
-    private var isDispensing: Bool { phase == GumballCrankPhase.dispensing }
-    private var isReward: Bool { phase == GumballCrankPhase.reward }
-    private var isCollecting: Bool { phase == GumballCrankPhase.collecting }
-    /// The core owns the 350 ms manual-interruption return. It is normally 1,
-    /// so the approved RN formulae below are unchanged during ordinary play.
-    private var resumeFade: Double { 1 - state.resumeProgress }
-    private var visualTubOut: Double { tubOut * resumeFade }
-    private var reducedTubVisible: Double { isReady ? 0 : 1 }
-    // The batch's explicit accessibility contract uses a 200 ms fade-only
-    // outcome; the RN worklet's normal-motion transforms remain intact.
-    private var tubReveal: Double {
-        guard state.reduced else { return 1 }
-        if isDispensing { return clamp((phaseT - GumballCrankMotion.upT.out[0]) / GumballCrankMotion.reduced.fade) }
-        if isReward { return 1 }
-        if isCollecting { return 1 - clamp(phaseT / GumballCrankMotion.reduced.fade) }
-        return 0
+    init() {
+        GumballCrankFonts.register()
+        ballSprites = GumballCrankColor.balls.map(Self.makeBallSprite)
+        back = Self.renderStatic(Self.drawStaticBack)
+        front = Self.renderStatic(Self.drawStaticFront)
     }
-    private var cardReveal: Double {
-        guard state.reduced else { return morph }
-        if isReward { return clamp(phaseT / GumballCrankMotion.reduced.fade) }
-        if isCollecting { return 1 - clamp(phaseT / GumballCrankMotion.reduced.fade) }
-        return 0
-    }
-    private var visualMorph: Double { cardReveal * resumeFade }
 
-    var body: some View {
-        let scene = machineScene
-            .scaleEffect(
-                x: 1 + machineSquash * CGFloat(GumballCrankTheme.presentation.machineSquashX),
-                y: 1 - machineSquash,
-                anchor: UnitPoint(
-                    x: 0,
-                    y: CGFloat(GumballCrankTheme.presentation.machineAnchorY) * s / max(height, 1)
-                )
-            )
-            .scaleEffect(cameraScale, anchor: .topLeading)
-            .offset(cameraOffset)
+    func draw(in context: CGContext, model: GumballCrankSimulation, layout: GumballCrankLayout) {
+        context.saveGState()
+        context.translateBy(x: layout.origin.x, y: layout.origin.y)
+        context.scaleBy(x: layout.scale, y: layout.scale)
+        back.draw(in: CGRect(origin: .zero, size: GumballCrankMetrics.stage))
 
-        ZStack(alignment: .topLeading) {
-            scene
-            shadowLayer
-            potLayer(fullOpacity: false)
-
-            // GumballUpgrade.tsx:264-272: fixed-radius duplicate, then cross-fade.
-            ZStack(alignment: .topLeading) {
-                scene
-                potLayer(fullOpacity: true)
-            }
-            .blur(radius: CGFloat(GumballCrankTheme.up.blur) * s, opaque: false)
-            .opacity(visualMorph)
-            .allowsHitTesting(false)
-
-            GumballCrankColor.hex(GumballCrankTheme.up.scrimColor)
-                .opacity(GumballCrankTheme.up.scrim * visualMorph)
-            confettiLayer
-            couponLayer
-            hudLayer
-            flyingCoinsLayer
+        context.saveGState()
+        context.addEllipse(in: CGRect(x: 80, y: 133, width: 242, height: 242))
+        context.clip()
+        for i in model.ballX.indices {
+            let r = model.ballR[i]
+            ballSprites[model.ballColor[i]].draw(in: CGRect(x: model.ballX[i] - r, y: model.ballY[i] - r, width: r * 2, height: r * 2))
         }
-        .frame(width: width, height: height, alignment: .topLeading)
-        .clipped()
-        .accessibilityElement(children: .contain)
-        .task(id: state.coins) { await updateDisplayedCoins() }
-    }
+        context.restoreGState()
 
-    // MARK: - GumballUpgrade.tsx:156-219
-
-    private var machineSquash: CGFloat {
-        guard isDispensing, phaseT < GumballCrankMotion.upT.squash, !state.reduced else { return 0 }
-        return CGFloat(
-            sin(.pi * phaseT / GumballCrankMotion.upT.squash)
-                * GumballCrankTheme.presentation.machineSquash
-        )
-    }
-
-    private var tubOut: Double {
-        if isDispensing {
-            guard !state.reduced else { return phaseT > GumballCrankMotion.upT.out[0] ? 1 : 0 }
-            return easeOutBack(clamp((phaseT - GumballCrankMotion.upT.out[0]) /
-                (GumballCrankMotion.upT.out[1] - GumballCrankMotion.upT.out[0])))
+        front.draw(in: CGRect(origin: .zero, size: GumballCrankMetrics.stage))
+        Self.drawHandle(context, model)
+        Self.drawCapsule(context, model)
+        Self.drawFlap(context, model)
+        if model.scrim > 0.005 {
+            context.setFillColor(GumballCrankColor.ink.withAlphaComponent(model.scrim * 0.42).cgColor)
+            context.fill(CGRect(x: -layout.origin.x / layout.scale, y: -layout.origin.y / layout.scale, width: layout.width / layout.scale, height: layout.height / layout.scale))
+            Self.drawCapsule(context, model)
         }
-        if isReward { return 1 }
-        if isCollecting {
-            if phaseT < GumballCrankMotion.upT.collect { return 1 }
-            return 1 - easeOutCubic(clamp((phaseT - GumballCrankMotion.upT.collect) / GumballCrankMotion.upT.back))
+        Self.drawCard(context, model)
+        Self.drawFlyingCoins(context, model)
+        Self.drawWallet(context, model)
+        Self.drawHint(context, model)
+        if model.ghostAlpha > 0.01 {
+            let radius = 22 * (1 - 0.12 * model.ghostPress)
+            Self.circle(context, x: model.ghostX, y: model.ghostY, r: radius, color: GumballCrankColor.ink.withAlphaComponent(0.14 * model.ghostAlpha))
+            Self.strokeCircle(context, x: model.ghostX, y: model.ghostY, r: radius - 0.5, color: GumballCrankColor.ink.withAlphaComponent(0.36 * model.ghostAlpha), width: 1)
         }
-        return 0
+        context.restoreGState()
     }
 
-    private var morph: Double {
-        if isDispensing {
-            guard !state.reduced else { return 0 }
-            return easeOutCubic(clamp((phaseT - GumballCrankMotion.upT.morph[0]) /
-                (GumballCrankMotion.upT.morph[1] - GumballCrankMotion.upT.morph[0])))
+    private static func renderStatic(_ drawing: (CGContext) -> Void) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: GumballCrankMetrics.stage, format: format).image { drawing($0.cgContext) }
+    }
+
+    private static func drawStaticBack(_ context: CGContext) {
+        linearGradient(context, rect: CGRect(x: -200, y: -200, width: 802, height: 814), colors: [GumballCrankColor.wallTop, GumballCrankColor.wallBottom], locations: [0, 1], start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: 614))
+        radialGradient(context, rect: CGRect(x: -200, y: -200, width: 802, height: 1014), colors: [UIColor(rgb: 0xFFFAEE, alpha: 0.75), UIColor(rgb: 0xFFFAEE, alpha: 0)], locations: [0, 1], center: CGPoint(x: 60, y: 120), radius: 420)
+        linearGradient(context, rect: CGRect(x: -200, y: 614, width: 802, height: 486), colors: [GumballCrankColor.tableEdge, GumballCrankColor.tableTop, GumballCrankColor.tableFront], locations: [0, 0.18, 1], start: CGPoint(x: 0, y: 614), end: CGPoint(x: 0, y: 778))
+        for k in 0 ..< 26 {
+            let alpha = 0.05 + 0.06 * CGFloat((k * 37) % 5) / 5
+            let y = 622 + CGFloat(k) * 6.3 + sin(CGFloat(k) * 1.7) * 2
+            let path = UIBezierPath(); path.move(to: CGPoint(x: -20, y: y)); var x: CGFloat = 0
+            while x <= 442 { path.addQuadCurve(to: CGPoint(x: x + 40, y: y + sin(CGFloat(k) * 0.6 + x * 0.02) * 1.2), controlPoint: CGPoint(x: x + 20, y: y + sin(CGFloat(k) * 0.9 + x * 0.013) * 2.4)); x += 40 }
+            context.setStrokeColor(GumballCrankColor.tableDeep.withAlphaComponent(alpha).cgColor); context.setLineWidth(0.8); context.addPath(path.cgPath); context.strokePath()
         }
-        if isReward { return 1 }
-        if isCollecting {
-            return 1 - easeInOut(clamp((phaseT - GumballCrankMotion.upT.couponOut[0]) /
-                (GumballCrankMotion.upT.couponOut[1] - GumballCrankMotion.upT.couponOut[0])))
-        }
-        return 0
+        shadowShape(context, color: UIColor(rgb: 0x5B3A1C, alpha: 0.22), blur: 3) { context.fill(CGRect(x: -200, y: 612, width: 802, height: 10)) }
+        shadowShape(context, color: UIColor(rgb: 0x3D2410, alpha: 0.38), blur: 9) { context.fillEllipse(in: CGRect(x: 69, y: 604, width: 290, height: 30)) }
+        drawBody(context)
+        radialGradient(context, path: UIBezierPath(ovalIn: CGRect(x: 79, y: 132, width: 244, height: 244)).cgPath, colors: [UIColor.white.withAlphaComponent(0.10), UIColor(rgb: 0x786450, alpha: 0.10), UIColor(rgb: 0x784623, alpha: 0.28)], locations: [0, 0.75, 1], center: CGPoint(x: 181, y: 224), radius: 128)
+        drawText(context, GumballCrankCopy.title, x: 16, baseline: 40, font: GumballCrankFonts.serif(34), color: GumballCrankColor.ink)
+        drawText(context, GumballCrankCopy.subtitle, x: 16, baseline: 64, font: GumballCrankFonts.regular(15), color: GumballCrankColor.mute)
     }
 
-    private var cameraScale: CGFloat {
-        guard !state.reduced else { return 1 }
-        let u = smooth01(clamp(visualTubOut))
-        return 1 + CGFloat(GumballCrankMotion.replicaCamera.b[0] - 1) * u
+    private static func drawBody(_ context: CGContext) {
+        let body = UIBezierPath(); body.move(to: CGPoint(x: 115, y: 392)); body.addLine(to: CGPoint(x: 287, y: 392)); body.addCurve(to: CGPoint(x: 315, y: 588), controlPoint1: CGPoint(x: 293, y: 472), controlPoint2: CGPoint(x: 315, y: 530)); body.addQuadCurve(to: CGPoint(x: 303, y: 600), controlPoint: CGPoint(x: 315, y: 600)); body.addLine(to: CGPoint(x: 99, y: 600)); body.addQuadCurve(to: CGPoint(x: 87, y: 588), controlPoint: CGPoint(x: 87, y: 600)); body.addCurve(to: CGPoint(x: 115, y: 392), controlPoint1: CGPoint(x: 87, y: 530), controlPoint2: CGPoint(x: 109, y: 472)); body.close()
+        linearGradient(context, path: body.cgPath, colors: [GumballCrankColor.enamelDeep, GumballCrankColor.enamel, GumballCrankColor.enamelLight, GumballCrankColor.enamel, UIColor(rgb: 0x9E1C25), GumballCrankColor.enamelDeep], locations: [0, 0.1, 0.27, 0.48, 0.8, 1], start: CGPoint(x: 87, y: 0), end: CGPoint(x: 315, y: 0))
+        context.saveGState(); context.addPath(body.cgPath); context.clip()
+        context.setShadow(offset: .zero, blur: 7, color: UIColor.white.withAlphaComponent(0.28).cgColor); context.setFillColor(UIColor.white.withAlphaComponent(0.28).cgColor); context.fill(CGRect(x: 139, y: 386, width: 22, height: 220)); context.setShadow(offset: .zero, blur: 0)
+        linearGradient(context, rect: CGRect(x: 87, y: 560, width: 228, height: 40), colors: [UIColor(rgb: 0x280004, alpha: 0), UIColor(rgb: 0x280004, alpha: 0.35)], locations: [0, 1], start: CGPoint(x: 0, y: 560), end: CGPoint(x: 0, y: 600)); context.restoreGState()
+        radialGradient(context, path: UIBezierPath(ovalIn: CGRect(x: 159, y: 420, width: 84, height: 84)).cgPath, colors: [GumballCrankColor.chromeHi, GumballCrankColor.chromeMid, GumballCrankColor.chromeLow, GumballCrankColor.chromeDeep], locations: [0, 0.35, 0.75, 1], center: CGPoint(x: 184, y: 441), radius: 76)
+        roundRect(context, CGRect(x: 198, y: 430, width: 6, height: 18), radius: 3, color: GumballCrankColor.slot)
+        linearGradient(context, path: UIBezierPath(roundedRect: CGRect(x: 146, y: 527, width: 110, height: 60), cornerRadius: 23).cgPath, colors: [GumballCrankColor.chromeHi, GumballCrankColor.chromeMid, GumballCrankColor.chromeDeep], locations: [0, 0.5, 1], start: CGPoint(x: 0, y: 527), end: CGPoint(x: 0, y: 587))
+        linearGradient(context, path: UIBezierPath(roundedRect: CGRect(x: 151, y: 532, width: 100, height: 50), cornerRadius: 18).cgPath, colors: [UIColor(rgb: 0x140A08), UIColor(rgb: 0x2B1612), UIColor(rgb: 0x3A1E17)], locations: [0, 0.5, 1], start: CGPoint(x: 0, y: 532), end: CGPoint(x: 0, y: 582))
+        chrome(context, path: UIBezierPath(roundedRect: CGRect(x: 79, y: 600, width: 244, height: 14), cornerRadius: 6).cgPath, start: 79, end: 323)
     }
 
-    private var cameraOffset: CGSize {
-        guard !state.reduced else { return .zero }
-        let u = smooth01(clamp(visualTubOut))
-        let screenPixel = width / CGFloat(GumballCrankTheme.presentation.cameraReferenceWidth)
-        return CGSize(
-            width: CGFloat(GumballCrankMotion.replicaCamera.b[1]) * screenPixel * u,
-            height: CGFloat(GumballCrankMotion.replicaCamera.b[2]) * screenPixel * u
-        )
+    private static func drawStaticFront(_ context: CGContext) {
+        context.saveGState(); context.setStrokeColor(UIColor.white.withAlphaComponent(0.5).cgColor); context.setLineWidth(16); context.setLineCap(.round); context.setShadow(offset: .zero, blur: 5, color: UIColor.white.withAlphaComponent(0.5).cgColor); context.addArc(center: CGPoint(x: 201, y: 254), radius: 108, startAngle: .pi * 1.09, endAngle: .pi * 1.43, clockwise: false); context.strokePath(); context.restoreGState()
+        context.saveGState(); context.setStrokeColor(UIColor.white.withAlphaComponent(0.85).cgColor); context.setLineWidth(3); context.setLineCap(.round); context.addArc(center: CGPoint(x: 201, y: 254), radius: 112, startAngle: .pi * 1.12, endAngle: .pi * 1.34, clockwise: false); context.strokePath(); context.restoreGState()
+        strokeCircle(context, x: 201, y: 254, r: 121.2, color: UIColor.white.withAlphaComponent(0.55), width: 1.6)
+        chrome(context, path: UIBezierPath(roundedRect: CGRect(x: 103, y: 370, width: 196, height: 22), cornerRadius: 8).cgPath, start: 103, end: 299)
+        let lid = UIBezierPath(); lid.move(to: CGPoint(x: 126, y: 144)); lid.addCurve(to: CGPoint(x: 201, y: 110), controlPoint1: CGPoint(x: 126, y: 114), controlPoint2: CGPoint(x: 163, y: 110)); lid.addCurve(to: CGPoint(x: 276, y: 144), controlPoint1: CGPoint(x: 239, y: 110), controlPoint2: CGPoint(x: 276, y: 114)); lid.close()
+        chrome(context, path: lid.cgPath, start: 126, end: 276)
+        chrome(context, path: UIBezierPath(roundedRect: CGRect(x: 122, y: 138, width: 158, height: 9), cornerRadius: 4.5).cgPath, start: 122, end: 280)
+        radialGradient(context, path: UIBezierPath(ovalIn: CGRect(x: 189, y: 89, width: 24, height: 24)).cgPath, colors: [GumballCrankColor.chromeHi, GumballCrankColor.chromeMid, GumballCrankColor.chromeDeep], locations: [0, 0.4, 1], center: CGPoint(x: 197, y: 91), radius: 19)
+        circle(context, x: 197, y: 97, r: 3, color: UIColor.white.withAlphaComponent(0.9))
     }
 
-    // MARK: - Replica scene retained by the active upgrade
-
-    private var machineScene: some View {
-        ZStack(alignment: .topLeading) {
-            asset("room.jpg").frame(width: width, height: height)
-            doorLayer
-            globeLayer
-            knobLayer
-        }
-        .frame(width: width, height: height, alignment: .topLeading)
+    private static func drawHandle(_ context: CGContext, _ model: GumballCrankSimulation) {
+        let a = model.angle + model.wobble * 0.06, gx = 201 + 34 * sin(a), gy = 462 - 34 * cos(a)
+        context.saveGState(); context.setLineCap(.round); context.setLineWidth(9); context.setStrokeColor(UIColor(rgb: 0x1A0A06, alpha: 0.32).cgColor); context.setShadow(offset: .zero, blur: 2.5, color: UIColor(rgb: 0x1A0A06, alpha: 0.32).cgColor); context.move(to: CGPoint(x: 204, y: 466)); context.addLine(to: CGPoint(x: gx + 3, y: gy + 4)); context.strokePath(); context.restoreGState()
+        context.setLineCap(.round); context.setLineWidth(9); context.setStrokeColor(GumballCrankColor.chromeMid.cgColor); context.move(to: CGPoint(x: 201, y: 462)); context.addLine(to: CGPoint(x: gx, y: gy)); context.strokePath()
+        context.setLineWidth(2.2); context.setStrokeColor(UIColor.white.withAlphaComponent(0.85).cgColor); context.move(to: CGPoint(x: 201 - cos(a) * 2.2, y: 462 - sin(a) * 2.2)); context.addLine(to: CGPoint(x: gx - cos(a) * 2.2, y: gy - sin(a) * 2.2)); context.strokePath()
+        radialGradient(context, path: UIBezierPath(ovalIn: CGRect(x: 188, y: 449, width: 26, height: 26)).cgPath, colors: [GumballCrankColor.chromeHi, GumballCrankColor.chromeMid, GumballCrankColor.chromeDeep], locations: [0, 0.4, 1], center: CGPoint(x: 197, y: 457), radius: 23)
+        circle(context, x: 201, y: 462, r: 3.5, color: GumballCrankColor.chromeDeep)
+        radialGradient(context, path: UIBezierPath(ovalIn: CGRect(x: gx - 10, y: gy - 10, width: 20, height: 20)).cgPath, colors: [UIColor(rgb: 0xFF8A84), GumballCrankColor.enamelLight, GumballCrankColor.enamel, GumballCrankColor.enamelDeep], locations: [0, 0.2, 0.55, 1], center: CGPoint(x: gx - 4, y: gy - 4.5), radius: 17)
+        circle(context, x: gx - 3.6, y: gy - 4, r: 2.2, color: UIColor.white.withAlphaComponent(0.85))
     }
 
-    private var doorLayer: some View {
-        let door = GumballCrankTheme.replicaArt.door
-        return RoundedRectangle(cornerRadius: CGFloat(door.r) * s)
-            .fill(LinearGradient(
-                colors: [GumballCrankColor.hex(door.top), GumballCrankColor.hex(door.bottom)],
-                startPoint: .top,
-                endPoint: .bottom
-            ))
-            .frame(width: CGFloat(door.w) * s, height: CGFloat(door.h) * s)
-            .overlay {
-                RoundedRectangle(cornerRadius: CGFloat(door.r) * s)
-                    .stroke(
-                        GumballCrankColor.rgba(door.shade),
-                        lineWidth: CGFloat(GumballCrankTheme.presentation.doorStroke) * s
-                    )
-                    .blur(radius: CGFloat(GumballCrankTheme.presentation.doorInnerBlur) * s)
-                    .clipShape(RoundedRectangle(cornerRadius: CGFloat(door.r) * s))
-            }
-            .position(x: CGFloat(door.x + door.w / 2) * s, y: CGFloat(door.y + door.h / 2) * s)
+    private static func drawFlap(_ context: CGContext, _ model: GumballCrankSimulation) {
+        var open = 0.0
+        if model.phase == .dispensing, !model.reduced { open = model.phaseTime < 0.5 ? gumballCrankEase(gumballCrankUnitSpan(model.phaseTime, 0.22, 0.5)) : 1 - gumballCrankEase(gumballCrankUnitSpan(model.phaseTime, 0.75, 1.15)) }
+        let height = max(2, 50 * cos(open * 1.25) - 4)
+        linearGradient(context, path: UIBezierPath(roundedRect: CGRect(x: 154, y: 534, width: 94, height: height), cornerRadius: min(15, height / 2)).cgPath, colors: [GumballCrankColor.chromeHi, GumballCrankColor.chromeMid, GumballCrankColor.chromeLow], locations: [0, 0.5, 1], start: CGPoint(x: 0, y: 534), end: CGPoint(x: 0, y: 534 + height))
     }
 
-    private var globeLayer: some View {
-        let art = GumballCrankTheme.replicaArt
-        let jostle = CGSize(
-            width: CGFloat(state.jx * GumballCrankTheme.presentation.jostleScale) * s,
-            height: CGFloat(state.jy * GumballCrankTheme.presentation.jostleScale) * s
-        )
-        let sweepU = isDispensing
-            ? phaseT / GumballCrankMotion.upT.sweep
-            : state.clock.truncatingRemainder(dividingBy: GumballCrankMotion.upT.idleSweep) / GumballCrankMotion.upT.sweep
-        let sweepX = sweepU < 1
-            ? (art.globe.x - art.globe.r - GumballCrankTheme.presentation.sweepPadding
-                + (art.globe.r * 2 + GumballCrankTheme.presentation.sweepTravelPadding) * sweepU) * Double(s)
-            : -999.0
-
-        return ZStack(alignment: .topLeading) {
-            asset("globe-fill.png")
-                .frame(width: width, height: height)
-                .offset(jostle)
-                .overlay(Color.white.opacity(GumballCrankTheme.presentation.globeHazeOpacity))
-                .mask(GumballCrankGlobeMask(scale: s))
-
-            Rectangle()
-                .fill(GumballCrankColor.rgba(GumballCrankTheme.up.sweep))
-                .frame(width: CGFloat(GumballCrankTheme.up.sweepW) * s, height: CGFloat(art.globe.r * 2) * s)
-                .blur(radius: CGFloat(GumballCrankTheme.presentation.sweepBlur) * s)
-                .projectionEffect(ProjectionTransform(CGAffineTransform(
-                    a: 1,
-                    b: 0,
-                    c: CGFloat(tan(GumballCrankTheme.presentation.sweepSkew)),
-                    d: 1,
-                    tx: 0,
-                    ty: 0
-                )))
-                .offset(x: CGFloat(sweepX), y: CGFloat(art.globe.y - art.globe.r) * s)
-                .frame(width: width, height: height, alignment: .topLeading)
-                .mask(GumballCrankGlobeMask(scale: s))
-
-            asset("globe-glass.png").frame(width: width, height: height)
-        }
-        .frame(width: width, height: height, alignment: .topLeading)
+    private static func drawCapsule(_ context: CGContext, _ model: GumballCrankSimulation) {
+        let pose = model.capsulePose(); guard pose.alpha > 0.01 else { return }
+        let radius = 30 * pose.scale, alpha = pose.alpha
+        if pose.y > 600 { shadowShape(context, color: UIColor(rgb: 0x3D2410, alpha: 0.4 * alpha), blur: 4) { context.fillEllipse(in: CGRect(x: pose.x - radius * 1.1 + 4, y: pose.y + radius * 0.62, width: radius * 2.4, height: radius * 0.55)) } }
+        context.saveGState(); context.translateBy(x: pose.x, y: pose.y); context.rotate(by: pose.rotation)
+        let lower = halfCircle(radius: radius, top: false)
+        radialGradient(context, path: lower.cgPath, colors: [GumballCrankColor.mintLight.withAlphaComponent(alpha), GumballCrankColor.mint.withAlphaComponent(alpha), GumballCrankColor.mintDeep.withAlphaComponent(alpha)], locations: [0, 0.45, 1], center: CGPoint(x: -radius * 0.4, y: radius * 0.1), radius: radius * 1.8)
+        drawCoin(context, x: 0, y: -radius * 0.08, r: radius * 0.42, alpha: alpha)
+        context.saveGState(); context.translateBy(x: -pose.split * 62 * pose.scale, y: (-sin(pose.split * .pi) * 34 + pose.split * 4) * pose.scale); context.rotate(by: -pose.split * 2.75)
+        let upper = halfCircle(radius: radius, top: true)
+        radialGradient(context, path: upper.cgPath, colors: [UIColor.white.withAlphaComponent(0.18 * alpha), UIColor.white.withAlphaComponent(0.1 * alpha), UIColor(rgb: 0x7A3C28, alpha: 0.28 * alpha)], locations: [0, 0.6, 1], center: CGPoint(x: -radius * 0.2, y: -radius * 0.35), radius: radius * 1.2)
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.8 * alpha).cgColor); context.setLineWidth(1.2); context.addPath(upper.cgPath); context.strokePath(); context.restoreGState(); context.restoreGState()
     }
 
-    private var knobLayer: some View {
-        let knob = GumballCrankTheme.replicaArt.knob
-        let center = CGPoint(x: CGFloat(knob.x + knob.size / 2) * s, y: CGFloat(knob.y + knob.size / 2) * s)
-        let presentation = GumballCrankTheme.presentation
-        let rawRingOpacity = presentation.ringBaseOpacity
-            + presentation.ringOpacityAmplitude * sin(state.clock * presentation.ringFrequency)
-        // The raw RN sine does not land on its rest value at 12 s. For the
-        // recording seam, the final 350 ms reaches the same 0.35 as t = 0.
-        let seamStart = GumballCrank.loop - presentation.seamEase
-        let seam = state.demoOn ? clamp((state.demoT - seamStart) / presentation.seamEase) : 0
-        let ringOpacity = isReady && !state.reduced
-            ? rawRingOpacity + (presentation.ringBaseOpacity - rawRingOpacity) * easeOutCubic(seam)
-            : 0
-        let angle = state.reduced ? 0 : state.angle
-            + state.wob * presentation.knobWobbleWeight
-            + state.back * presentation.knobBackWeight
-        let pressScale = state.reduced ? 1 : 1 + (GumballCrankMotion.knob.press - 1) * state.press
-
-        return ZStack {
-            Circle()
-                .stroke(
-                    GumballCrankColor.rgba(GumballCrankTheme.up.ringColor),
-                    lineWidth: CGFloat(presentation.ringLineWidth) * s
-                )
-                .frame(width: CGFloat(GumballCrankTheme.up.ring * 2) * s, height: CGFloat(GumballCrankTheme.up.ring * 2) * s)
-                .blur(radius: CGFloat(presentation.ringBlur))
-                .opacity(ringOpacity)
-
-            asset("knob.png", processed: true)
-                .frame(width: CGFloat(knob.size) * s, height: CGFloat(knob.size) * s)
-                .blur(radius: CGFloat(GumballCrankTheme.replicaArt.knobBlur) * s)
-                .rotationEffect(.radians(knob.tilt + angle))
-                .scaleEffect(CGFloat(pressScale))
-
-            Button(action: onTurn) { Color.clear }
-                .buttonStyle(.plain)
-                .frame(
-                    width: CGFloat(presentation.knobHitSize) * s,
-                    height: CGFloat(presentation.knobHitSize) * s
-                )
-                .contentShape(Circle())
-                .accessibilityLabel(GumballCrankTheme.copy.knob)
-                .accessibilityHint(GumballCrankTheme.copy.knobHint)
-                .disabled(!isReady)
-                .opacity(isReady ? 1 : 0)
-        }
-        .position(center)
+    private static func drawCard(_ context: CGContext, _ model: GumballCrankSimulation) {
+        var progress = model.card, alpha = min(1, progress * 1.6), drop = 0.0
+        if model.phase == .collecting { let u = gumballCrankUnitSpan(model.phaseTime, 0.35, 0.75); alpha = 1 - u; drop = model.reduced ? 0 : 50 * gumballCrankEase(u); progress = 1 }
+        guard alpha > 0.01 else { return }
+        let rise = model.reduced ? 0 : (1 - progress) * 120, scale = model.reduced ? 1 : 0.72 + 0.28 * progress
+        context.saveGState(); context.translateBy(x: 201, y: 656 + rise + drop); context.scaleBy(x: scale, y: scale); context.translateBy(x: -201, y: -656)
+        context.saveGState(); context.setShadow(offset: CGSize(width: 4, height: 10), blur: 18, color: UIColor(rgb: 0x1A0C04, alpha: 0.35 * alpha).cgColor); roundRect(context, CGRect(x: 42, y: 420, width: 318, height: 236), radius: 24, color: GumballCrankColor.card.withAlphaComponent(alpha)); context.restoreGState()
+        linearGradient(context, path: UIBezierPath(roundedRect: CGRect(x: 42, y: 420, width: 318, height: 236), cornerRadius: 24).cgPath, colors: [GumballCrankColor.card.withAlphaComponent(alpha), UIColor(rgb: 0xFBF4E8, alpha: alpha)], locations: [0, 1], start: CGPoint(x: 0, y: 420), end: CGPoint(x: 0, y: 656))
+        drawSpaced(context, GumballCrankCopy.eyebrow, center: 201, baseline: 454, font: GumballCrankFonts.semibold(11), color: GumballCrankColor.mute.withAlphaComponent(alpha), tracking: 1.6)
+        let prizeFont = GumballCrankFonts.serif(64), unitFont = GumballCrankFonts.serif(26), prizeWidth = measure(GumballCrankCopy.prize, font: prizeFont), unitWidth = measure(GumballCrankCopy.unit, font: unitFont), total = 30 + 10 + prizeWidth + 8 + unitWidth, start = 201 - total / 2
+        drawCoin(context, x: start + 15, y: 504, r: 15, alpha: alpha)
+        drawText(context, GumballCrankCopy.prize, x: start + 40, baseline: 524, font: prizeFont, color: GumballCrankColor.ink.withAlphaComponent(alpha))
+        drawText(context, GumballCrankCopy.unit, x: start + 40 + prizeWidth + 8, baseline: 524, font: unitFont, color: GumballCrankColor.ink.withAlphaComponent(alpha))
+        drawText(context, GumballCrankCopy.cardSubtitle, x: 201, baseline: 554, font: GumballCrankFonts.regular(14), color: GumballCrankColor.mute.withAlphaComponent(alpha), alignment: .center)
+        let buttonScale = 1 - 0.03 * model.press; context.saveGState(); context.translateBy(x: 201, y: 606); context.scaleBy(x: buttonScale, y: buttonScale); context.translateBy(x: -201, y: -606)
+        roundRect(context, CGRect(x: 66, y: 580, width: 270, height: 52), radius: 26, color: GumballCrankColor.ink.withAlphaComponent(alpha * (1 - 0.12 * model.press)))
+        drawText(context, GumballCrankCopy.collect, x: 201, baseline: 612, font: GumballCrankFonts.semibold(16), color: GumballCrankColor.card.withAlphaComponent(alpha), alignment: .center)
+        context.restoreGState(); context.restoreGState()
     }
 
-    // MARK: - Hero layers
-
-    private var shadowLayer: some View {
-        Ellipse()
-            .fill(GumballCrankColor.rgba(GumballCrankTheme.up.shadow))
-            .frame(
-                width: CGFloat(GumballCrankTheme.presentation.shadowWidth) * s,
-                height: CGFloat(GumballCrankTheme.presentation.shadowHeight) * s
-            )
-            .blur(radius: CGFloat(GumballCrankTheme.presentation.shadowBlur) * s)
-            .scaleEffect(state.reduced ? 1 : CGFloat(
-                GumballCrankTheme.presentation.initialTubScale
-                    + (1 - GumballCrankTheme.presentation.initialTubScale) * clamp(visualTubOut)
-            ))
-            .opacity(
-                GumballCrankTheme.presentation.shadowOpacity
-                    * (state.reduced ? reducedTubVisible : clamp(visualTubOut)) * tubReveal
-            )
-            .position(x: CGFloat(GumballCrankTheme.replicaArt.pot.cx) * s, y: CGFloat(GumballCrankTheme.up.shadowY) * s)
-    }
-
-    private func potLayer(fullOpacity: Bool) -> some View {
-        let art = GumballCrankTheme.replicaArt
-        // Reduced Motion uses only a fade at the final tub pose; neither
-        // translate nor scale is animated.
-        let u = state.reduced ? reducedTubVisible : visualTubOut
-        let x = CGFloat(art.exit.x + (art.pot.cx - art.exit.x) * u) * s
-        let y = CGFloat(art.exit.y + (art.pot.cy - art.exit.y) * u) * s
-        let back = state.reduced
-            ? GumballCrankTheme.up.tubBack
-            : 1 - (1 - GumballCrankTheme.up.tubBack) * visualMorph
-        let potScale = (
-            GumballCrankTheme.presentation.initialTubScale
-                + (1 - GumballCrankTheme.presentation.initialTubScale) * u
-        ) * back
-
-        return asset("pot.png")
-            .frame(width: CGFloat(art.pot.w) * s, height: CGFloat(art.pot.h) * s)
-            .scaleEffect(CGFloat(potScale))
-            .opacity(fullOpacity ? 1 : clamp(u / GumballCrankTheme.presentation.tubFadeFraction) * tubReveal)
-            .position(x: x, y: y)
-    }
-
-    private var confettiLayer: some View {
-        ZStack {
-            ForEach(state.px.indices, id: \.self) { index in
-                if index < state.py.count, index < state.prot.count {
-                    asset(confettiName(for: index))
-                        .scaledToFit()
-                        .frame(width: confettiSize(index), height: confettiSize(index))
-                        .rotationEffect(.radians(state.prot[index]))
-                        .position(x: CGFloat(state.px[index]), y: CGFloat(state.py[index]))
-                }
-            }
-        }
-        .opacity(state.reduced ? 0 : clamp(
-            GumballCrankTheme.presentation.confettiOpacityBase
-                - phaseT * GumballCrankTheme.presentation.confettiOpacityRate
-        ) * resumeFade)
-        .allowsHitTesting(false)
-    }
-
-    private var couponLayer: some View {
-        let panel = scaledRect(GumballCrankTheme.up.panel)
-        let card = scaledRect(GumballCrankTheme.up.card)
-        // Normal motion follows RN couponT: its centre follows morph, while
-        // its size holds at card dimensions during collection. Reduce Motion
-        // holds final card geometry and only fades it over 200 ms.
-        let centerProgress = CGFloat(state.reduced ? 1 : visualMorph)
-        let sizeProgress = CGFloat(state.reduced ? 1 : (isCollecting ? 1 : visualMorph))
-        let center = CGPoint(
-            x: panel.midX + (card.midX - panel.midX) * centerProgress,
-            y: panel.midY + (card.midY - panel.midY) * centerProgress + (state.reduced ? 0 : (
-                isCollecting
-                    ? CGFloat((1 - visualMorph) * GumballCrankTheme.presentation.collectingCouponDrop) * s
-                    : 0
-            ))
-        )
-        let size = CGSize(
-            width: panel.width + (card.width - panel.width) * sizeProgress,
-            height: panel.height + (card.height - panel.height) * sizeProgress
-        )
-        let presentation = GumballCrankTheme.presentation
-        let panelOpacity = state.reduced ? 0 : (
-            visualMorph > 0.001 ? 1 - clamp(visualMorph / presentation.panelFadeSpan) : 0
-        )
-        let couponOpacity = state.reduced ? visualMorph : (
-            isCollecting
-                ? visualMorph
-                : clamp((visualMorph - presentation.couponFadeStart) / presentation.couponFadeSpan)
-        )
-        let stubOpacity = state.reduced ? 0 : (
-            isCollecting
-                ? 0
-                : clamp((visualMorph - presentation.stubFadeStart) / presentation.stubFadeSpan)
-        )
-        let textOpacity = state.reduced ? visualMorph : (
-            isCollecting
-                ? visualMorph
-                : clamp((visualMorph - presentation.textFadeStart) / presentation.textFadeSpan)
-        )
-
-        return ZStack(alignment: .topLeading) {
-            ZStack {
-                RoundedRectangle(cornerRadius: CGFloat(GumballCrankTheme.up.card.r) * s)
-                    .fill(GumballCrankColor.hex(GumballCrankTheme.up.navy))
-                    .opacity(panelOpacity)
-                asset("coupon.png").frame(width: size.width, height: size.height).opacity(couponOpacity)
-                asset("coin.png")
-                    .frame(
-                        width: CGFloat(GumballCrankTheme.presentation.stubCoinSize) * s,
-                        height: CGFloat(GumballCrankTheme.presentation.stubCoinSize) * s
-                    )
-                    .position(
-                        x: size.width / 2 + CGFloat(GumballCrankTheme.up.card.w * (GumballCrankTheme.up.stub.x - 0.5)) * s,
-                        y: size.height / 2
-                    )
-                    .opacity(couponOpacity * stubOpacity)
-            }
-            .frame(width: size.width, height: size.height)
-            .rotationEffect(.radians(state.reduced ? 0 : GumballCrankTheme.up.peel * sin(.pi * visualMorph)))
-            .position(center)
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(GumballCrankTheme.copy.prize.uppercased())
-                    .font(.system(size: CGFloat(GumballCrankTheme.presentation.eyebrowSize), weight: .bold))
-                    .tracking(CGFloat(GumballCrankTheme.presentation.eyebrowTracking))
-                    .foregroundStyle(GumballCrankColor.hex(GumballCrankTheme.presentation.eyebrowColor))
-                Text(GumballCrankTheme.copy.amount)
-                    .font(.system(size: CGFloat(GumballCrankTheme.presentation.amountSize), weight: .heavy))
-                    .monospacedDigit()
-                    .tracking(CGFloat(GumballCrankTheme.presentation.amountTracking))
-                    .frame(height: CGFloat(GumballCrankTheme.presentation.amountLineHeight))
-                    .foregroundStyle(.white)
-                Text(GumballCrankTheme.copy.cardMeta)
-                    .font(.system(size: CGFloat(GumballCrankTheme.presentation.metaSize)))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(GumballCrankTheme.presentation.metaOpacity))
-            }
-            .frame(width: CGFloat(GumballCrankTheme.up.card.w * GumballCrankTheme.up.couponText.w) * s, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .offset(
-                x: CGFloat(GumballCrankTheme.up.card.x + GumballCrankTheme.up.card.w * GumballCrankTheme.up.couponText.x) * s,
-                y: CGFloat(GumballCrankTheme.up.card.y + GumballCrankTheme.up.card.h * GumballCrankTheme.up.couponText.y) * s
-            )
-            .opacity(textOpacity)
-        }
-        .frame(width: width, height: height, alignment: .topLeading)
-    }
-
-    private var hudLayer: some View {
-        let card = GumballCrankTheme.up.card
-        let textOpacity = state.reduced ? visualMorph : (
-            isCollecting
-                ? visualMorph
-                : clamp((visualMorph - GumballCrankTheme.presentation.textFadeStart)
-                    / GumballCrankTheme.presentation.textFadeSpan)
-        )
-        let counterOpacity = 1 - GumballCrankTheme.presentation.counterScrimFade
-            * (isCollecting ? 0 : clamp(visualMorph))
-
-        return ZStack(alignment: .topLeading) {
-            HStack(spacing: 0) {
-                asset("coin.png")
-                    .frame(
-                        width: CGFloat(GumballCrankTheme.presentation.counterCoinSize),
-                        height: CGFloat(GumballCrankTheme.presentation.counterCoinSize)
-                    )
-                    .padding(.trailing, CGFloat(GumballCrankTheme.presentation.counterCoinGap))
-                ZStack {
-                    Text(displayedCoins.formatted(.number.locale(Locale(
-                        identifier: GumballCrankTheme.presentation.counterLocale
-                    )).grouping(.automatic)))
-                        .font(.system(size: CGFloat(GumballCrankTheme.presentation.counterNumberSize), weight: .bold))
-                        .monospacedDigit()
-                        .tracking(CGFloat(GumballCrankTheme.presentation.counterTracking))
-                        .foregroundStyle(GumballCrankColor.hex(GumballCrankTheme.colors.ink))
-                        .id(displayedCoins)
-                        .transition(state.reduced ? .identity : .asymmetric(
-                            insertion: .opacity.combined(with: .offset(
-                                y: CGFloat(GumballCrankTheme.presentation.odometerOffset)
-                            )).animation(.easeInOut(duration: GumballCrankTheme.presentation.odometerIn)),
-                            removal: .opacity.combined(with: .offset(
-                                y: -CGFloat(GumballCrankTheme.presentation.odometerOffset)
-                            )).animation(.easeInOut(duration: GumballCrankTheme.presentation.odometerOut))
-                        ))
-                }
-                .frame(height: CGFloat(GumballCrankTheme.presentation.counterNumberLineHeight))
-                .clipped()
-                Text(GumballCrankTheme.copy.coinsWord)
-                    .font(.system(size: CGFloat(GumballCrankTheme.presentation.counterWordSize)))
-                    .foregroundStyle(GumballCrankColor.hex(GumballCrankTheme.colors.ink).opacity(
-                        GumballCrankTheme.presentation.counterInkOpacity
-                    ))
-                    .padding(.leading, CGFloat(GumballCrankTheme.presentation.counterWordGap))
-            }
-            .padding(.horizontal, CGFloat(GumballCrankTheme.presentation.counterPadding))
-            .frame(height: CGFloat(GumballCrankTheme.presentation.counterHeight))
-            .background(.white.opacity(GumballCrankTheme.presentation.counterBackgroundOpacity), in: Capsule())
-            .scaleEffect(state.reduced ? 1 : CGFloat(
-                1 + GumballCrankTheme.presentation.counterBumpScale * state.bump
-            ))
-            .opacity(counterOpacity)
-            .offset(x: CGFloat(GumballCrankTheme.up.counter.left), y: safeTop + CGFloat(GumballCrankTheme.up.counter.top))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(Int(state.coins)) \(GumballCrankTheme.copy.coinsWord)")
-
-            Button(action: onCollect) {
-                HStack(spacing: CGFloat(GumballCrankTheme.presentation.collectGap)) {
-                    asset("coin.png").frame(
-                        width: CGFloat(GumballCrankTheme.presentation.collectCoinSize),
-                        height: CGFloat(GumballCrankTheme.presentation.collectCoinSize)
-                    )
-                    Text(GumballCrankTheme.copy.collect)
-                        .font(.system(size: CGFloat(GumballCrankTheme.presentation.collectSize), weight: .bold))
-                }
-                .foregroundStyle(GumballCrankColor.hex(GumballCrankTheme.presentation.collectInk))
-                .padding(.horizontal, CGFloat(GumballCrankTheme.presentation.collectPadding))
-                .frame(height: CGFloat(GumballCrankTheme.presentation.collectHeight))
-                .background(GumballCrankColor.hex(GumballCrankTheme.presentation.collectBackground), in: Capsule())
-            }
-            .buttonStyle(GumballCrankCollectStyle()).disabled(!isReward).opacity(textOpacity)
-            .position(
-                x: width / 2,
-                y: CGFloat(card.y + card.h + GumballCrankTheme.presentation.collectTopGap) * s
-                    + CGFloat(GumballCrankTheme.presentation.collectHeight / 2)
-            )
-            .accessibilityLabel(GumballCrankTheme.copy.collect)
-        }
-        .frame(width: width, height: height, alignment: .topLeading)
-    }
-
-    private var flyingCoinsLayer: some View {
-        let card = GumballCrankTheme.up.card
-        let from = CGPoint(
-            x: CGFloat(card.x + card.w * GumballCrankTheme.up.stub.x) * s,
-            y: CGFloat(card.y + card.h * GumballCrankTheme.up.stub.y) * s
-        )
-        let to = CGPoint(
-            x: CGFloat(
-                GumballCrankTheme.up.counter.left + GumballCrankTheme.presentation.counterTargetX
-            ) * s,
-            y: safeTop + CGFloat(
-                GumballCrankTheme.up.counter.top + GumballCrankTheme.presentation.counterTargetY
-            ) * s
-        )
-        return ZStack {
-            if !state.reduced {
-                ForEach(0..<GumballCrankMotion.upT.coins, id: \.self) { index in
-                let u = isCollecting
-                    ? clamp((phaseT - Double(index) * GumballCrankMotion.upT.coinStagger) / GumballCrankMotion.upT.coinFly)
-                    : 0
-                if u > 0, u < 1 {
-                    let e = easeInOut(u)
-                    let control = CGPoint(
-                        x: (from.x + to.x) / 2 + (
-                            CGFloat(GumballCrankTheme.presentation.flyingCoinControlX)
-                                - CGFloat(index) * CGFloat(GumballCrankTheme.presentation.flyingCoinControlXStep)
-                        ) * s,
-                        y: min(from.y, to.y) - (
-                            CGFloat(GumballCrankTheme.presentation.flyingCoinControlY)
-                                - CGFloat(index) * CGFloat(GumballCrankTheme.presentation.flyingCoinControlYStep)
-                        ) * s
-                    )
-                    asset("coin.png")
-                        .frame(
-                            width: CGFloat(GumballCrankTheme.presentation.flyingCoinSize) * s,
-                            height: CGFloat(GumballCrankTheme.presentation.flyingCoinSize) * s
-                        )
-                        .scaleEffect(CGFloat(1 - GumballCrankTheme.presentation.flyingCoinShrink * e))
-                        .position(quadratic(from, control, to, e))
-                }
-                }
-            }
-        }
-        .opacity(resumeFade)
-        .allowsHitTesting(false)
-    }
-
-    // MARK: - Helpers
-
-    private func updateDisplayedCoins() async {
-        let next = state.coins
-        guard next != displayedCoins else { return }
-        guard next > displayedCoins, !state.reduced else {
-            displayedCoins = next
-            return
-        }
-        let increment = ceil(GumballCrankMotion.coins.add / Double(GumballCrankMotion.coins.countSteps))
-        while displayedCoins < next, !Task.isCancelled {
-            do { try await Task.sleep(for: .milliseconds(Int(GumballCrankMotion.coins.countStep))) }
-            catch { return }
-            withAnimation(.easeInOut(duration: GumballCrankTheme.presentation.odometerIn)) {
-                displayedCoins = min(next, displayedCoins + increment)
-            }
+    private static func drawFlyingCoins(_ context: CGContext, _ model: GumballCrankSimulation) {
+        guard model.phase == .collecting, !model.reduced else { return }
+        for i in 0 ..< 8 {
+            let u = gumballCrankUnitSpan(model.phaseTime, Double(i) * 0.05, Double(i) * 0.05 + 0.5)
+            if u > 0, u < 1 { let eased = gumballCrankEase(u), x = 131 + (313 - 131) * eased + sin(u * .pi) * (i.isMultiple(of: 2) ? -10 : 18), y = 504 + (32 - 504) * eased - sin(u * .pi) * (70 + Double(i) * 6); drawCoin(context, x: x, y: y, r: 13 - 4 * eased, alpha: 1) }
         }
     }
 
-    private func asset(_ name: String, processed: Bool = false) -> Image {
-        Image(uiImage: processed ? artwork.knob : artwork.image(name))
-            .resizable().interpolation(.high)
+    private static func drawWallet(_ context: CGContext, _ model: GumballCrankSimulation) {
+        let scale = 1 + 0.06 * model.walletBump; context.saveGState(); context.translateBy(x: 340, y: 32); context.scaleBy(x: scale, y: scale); context.translateBy(x: -340, y: -32)
+        context.saveGState(); context.setShadow(offset: CGSize(width: 0, height: 3), blur: 5, color: UIColor(rgb: 0x5B3A1C, alpha: 0.18).cgColor); roundRect(context, CGRect(x: 294, y: 12, width: 92, height: 40), radius: 20, color: GumballCrankColor.card.withAlphaComponent(0.86)); context.restoreGState()
+        strokeRoundRect(context, CGRect(x: 294.5, y: 12.5, width: 91, height: 39), radius: 19.5, color: .white, width: 1); drawCoin(context, x: 315, y: 32, r: 9, alpha: 1)
+        context.saveGState(); context.clip(to: CGRect(x: 294, y: 12, width: 92, height: 40))
+        if model.walletMix < 1 { drawText(context, grouped(model.walletPrevious), x: 374, baseline: 37 - 10 * model.walletMix, font: GumballCrankFonts.semibold(15), color: GumballCrankColor.ink.withAlphaComponent(1 - model.walletMix), alignment: .right) }
+        drawText(context, grouped(model.wallet), x: 374, baseline: 37 + 10 * (1 - model.walletMix), font: GumballCrankFonts.semibold(15), color: GumballCrankColor.ink.withAlphaComponent(model.walletMix), alignment: .right)
+        context.restoreGState(); context.restoreGState()
     }
 
-    private func scaledRect(_ token: GumballCrankTheme.Up.Panel) -> CGRect {
-        CGRect(x: token.x * s, y: token.y * s, width: token.w * s, height: token.h * s)
+    private static func drawHint(_ context: CGContext, _ model: GumballCrankSimulation) {
+        let copy = [GumballCrankCopy.hint, GumballCrankCopy.busy, GumballCrankCopy.done], under = 1 - model.scrim
+        if model.hintMix < 1 { drawText(context, copy[model.hintFrom], x: 201, baseline: 752, font: GumballCrankFonts.medium(15), color: GumballCrankColor.ink.withAlphaComponent((1 - model.hintMix) * 0.85 * under), alignment: .center) }
+        drawText(context, copy[model.hint], x: 201, baseline: 752, font: GumballCrankFonts.medium(15), color: GumballCrankColor.ink.withAlphaComponent(model.hintMix * 0.85 * under), alignment: .center)
+        let show = model.hint == 0 ? model.hintMix : (model.hintFrom == 0 ? 1 - model.hintMix : 0)
+        for i in 0 ..< 4 { circle(context, x: 201 + (Double(i) - 1.5) * 14, y: 722, r: 3.5, color: (i < model.detent ? GumballCrankColor.enamel : GumballCrankColor.ink).withAlphaComponent((i < model.detent ? 1 : 0.2) * show)) }
     }
 
-    private func scaledRect(_ token: GumballCrankTheme.Up.Card) -> CGRect {
-        CGRect(x: token.x * s, y: token.y * s, width: token.w * s, height: token.h * s)
-    }
-
-    private func confettiName(for index: Int) -> String {
-        ["slice-peach.png", "slice-passion.png", "peel.png"][index % GumballCrankTheme.up.confettiKinds]
-    }
-
-    private func confettiSize(_ index: Int) -> CGFloat {
-        let size = GumballCrankMotion.confetti.size
-        return CGFloat(size[0] + Double((index * 7) % 9) * (size[1] - size[0]) / 8)
-            * s * CGFloat(GumballCrankTheme.presentation.confettiSpriteScale)
-    }
-
-    private func quadratic(_ start: CGPoint, _ control: CGPoint, _ end: CGPoint, _ t: Double) -> CGPoint {
-        let p = CGFloat(t); let q = 1 - p
-        return CGPoint(
-            x: q * q * start.x + 2 * q * p * control.x + p * p * end.x,
-            y: q * q * start.y + 2 * q * p * control.y + p * p * end.y
-        )
-    }
-
-    private func clamp(_ value: Double) -> Double { min(1, max(0, value)) }
-    private func smooth01(_ value: Double) -> CGFloat {
-        let u = CGFloat(value)
-        return u * u * (3 - 2 * u)
-    }
-    private func easeOutBack(_ value: Double) -> Double {
-        let c = GumballCrankTheme.presentation.easeOutBackOvershoot
-        return 1 + (c + 1) * pow(value - 1, 3) + c * pow(value - 1, 2)
-    }
-    private func easeOutCubic(_ value: Double) -> Double { 1 - pow(1 - value, 3) }
-    private func easeInOut(_ value: Double) -> Double {
-        value < 0.5 ? 8 * pow(value, 4) : 1 - pow(-2 * value + 2, 4) / 2
-    }
-}
-
-/// Pre-decodes static textures and applies RN's knob matrix once.
-private final class GumballCrankArtwork {
-    static let shared = GumballCrankArtwork()
-
-    private let images: [String: UIImage]
-    let knob: UIImage
-
-    private init() {
-        let names = ["room.jpg", "globe-fill.png", "globe-glass.png", "knob.png", "pot.png", "coupon.png", "coin.png", "slice-peach.png", "slice-passion.png", "peel.png"]
-        var decoded: [String: UIImage] = [:]
-        for name in names { decoded[name] = Self.load(name) }
-        images = decoded
-        knob = Self.colorMatrix(decoded["knob.png"] ?? UIImage())
-    }
-
-    func image(_ name: String) -> UIImage { images[name] ?? UIImage() }
-
-    private static func load(_ name: String) -> UIImage {
-        let pieces = name.split(separator: ".", maxSplits: 1).map(String.init)
-        let base = "GumballCrank-" + pieces[0]
-        let ext = pieces.count == 2 ? pieces[1] : nil
-        let url = Bundle.main.url(forResource: base, withExtension: ext)
-            ?? Bundle.main.url(forResource: base, withExtension: ext, subdirectory: "Assets")
-        guard let url, let image = UIImage(contentsOfFile: url.path) else {
-            assertionFailure("Missing Gumball Crank asset: \(base).\(ext ?? "")")
-            return UIImage()
+    private static func makeBallSprite(_ color: UIColor) -> UIImage {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96), format: format).image { renderer in
+            radialGradient(renderer.cgContext, path: UIBezierPath(ovalIn: CGRect(x: 0.5, y: 0.5, width: 95, height: 95)).cgPath, colors: [.white, color, color, .black], locations: [0, 0.22, 0.62, 1], center: CGPoint(x: 30, y: 26), radius: 84)
+            renderer.cgContext.setFillColor(UIColor.white.withAlphaComponent(0.85).cgColor); renderer.cgContext.fillEllipse(in: CGRect(x: 22, y: 18, width: 18, height: 12))
         }
-        return image.preparingForDisplay() ?? image
     }
 
-    private static func colorMatrix(_ image: UIImage) -> UIImage {
-        guard let cgImage = image.cgImage else { return image }
-        let source = CIImage(cgImage: cgImage)
-        let filter = CIFilter(name: "CIColorMatrix")!
-        let matrix = GumballCrankTheme.replicaArt.knobMatrix
-        filter.setValue(source, forKey: kCIInputImageKey)
-        filter.setValue(CIVector(
-            x: CGFloat(matrix[0]), y: CGFloat(matrix[1]), z: CGFloat(matrix[2]), w: CGFloat(matrix[3])
-        ), forKey: "inputRVector")
-        filter.setValue(CIVector(
-            x: CGFloat(matrix[5]), y: CGFloat(matrix[6]), z: CGFloat(matrix[7]), w: CGFloat(matrix[8])
-        ), forKey: "inputGVector")
-        filter.setValue(CIVector(
-            x: CGFloat(matrix[10]), y: CGFloat(matrix[11]), z: CGFloat(matrix[12]), w: CGFloat(matrix[13])
-        ), forKey: "inputBVector")
-        filter.setValue(CIVector(
-            x: CGFloat(matrix[15]), y: CGFloat(matrix[16]), z: CGFloat(matrix[17]), w: CGFloat(matrix[18])
-        ), forKey: "inputAVector")
-        filter.setValue(CIVector(
-            x: CGFloat(matrix[4]), y: CGFloat(matrix[9]), z: CGFloat(matrix[14]), w: CGFloat(matrix[19])
-        ), forKey: "inputBiasVector")
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
-        let context = CIContext(options: [.cacheIntermediates: false, .workingColorSpace: colorSpace])
-        guard let output = filter.outputImage, let result = context.createCGImage(output, from: source.extent) else { return image }
-        return UIImage(cgImage: result, scale: image.scale, orientation: image.imageOrientation).preparingForDisplay() ?? image
-    }
-}
-
-enum GumballCrankColor {
-    static func hex(_ literal: String) -> Color {
-        let value = UInt64(literal.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0
-        return Color(
-            red: Double((value >> 16) & 0xFF) / 255,
-            green: Double((value >> 8) & 0xFF) / 255,
-            blue: Double(value & 0xFF) / 255
-        )
+    private static func drawCoin(_ context: CGContext, x: Double, y: Double, r: Double, alpha: Double) {
+        guard alpha > 0.01 else { return }
+        radialGradient(context, path: UIBezierPath(ovalIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)).cgPath, colors: [GumballCrankColor.coinLight.withAlphaComponent(alpha), GumballCrankColor.coin.withAlphaComponent(alpha), GumballCrankColor.coinDeep.withAlphaComponent(alpha)], locations: [0, 0.55, 1], center: CGPoint(x: x - r * 0.35, y: y - r * 0.4), radius: r * 1.5)
+        strokeCircle(context, x: x, y: y, r: r * 0.72, color: GumballCrankColor.coinDeep.withAlphaComponent(0.7 * alpha), width: max(1, r * 0.12)); circle(context, x: x - r * 0.3, y: y - r * 0.32, r: r * 0.18, color: UIColor.white.withAlphaComponent(0.7 * alpha))
     }
 
-    static func rgba(_ literal: String) -> Color {
-        guard literal.hasPrefix("rgba(") else { return hex(literal) }
-        let values = literal.dropFirst(5).dropLast().split(separator: ",").map { Double($0.trimmingCharacters(in: .whitespaces)) ?? 0 }
-        guard values.count == 4 else { return .clear }
-        return Color(red: values[0] / 255, green: values[1] / 255, blue: values[2] / 255, opacity: values[3])
+    private enum TextAlignment { case left, center, right }
+    private static func drawText(_ context: CGContext, _ value: String, x: Double, baseline: Double, font: UIFont, color: UIColor, alignment: TextAlignment = .left) {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let width = measure(value, font: font), start = alignment == .center ? x - width / 2 : alignment == .right ? x - width : x
+        NSString(string: value).draw(at: CGPoint(x: start, y: baseline - Double(font.ascender)), withAttributes: attributes)
     }
-}
-
-/// RN's globeClip: the radius-156 globe intersected with the area above y=462.
-private struct GumballCrankGlobeMask: Shape {
-    let scale: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let globe = GumballCrankTheme.replicaArt.globe
-        let radius = CGFloat(globe.r - GumballCrankTheme.presentation.globeClipInset) * scale
-        let circle = Path(ellipseIn: CGRect(
-            x: CGFloat(globe.x) * scale - radius,
-            y: CGFloat(globe.y) * scale - radius,
-            width: radius * 2,
-            height: radius * 2
-        ))
-        return circle.intersection(Path(CGRect(x: 0, y: 0, width: rect.width, height: CGFloat(globe.floor) * scale)))
+    private static func drawSpaced(_ context: CGContext, _ value: String, center: Double, baseline: Double, font: UIFont, color: UIColor, tracking: Double) {
+        let widths = value.map { measure(String($0), font: font) }, total = widths.reduce(0, +) + tracking * Double(max(0, value.count - 1)); var x = center - total / 2
+        for (index, character) in value.enumerated() { drawText(context, String(character), x: x, baseline: baseline, font: font, color: color); x += widths[index] + tracking }
     }
-}
+    private static func measure(_ value: String, font: UIFont) -> Double { Double(NSString(string: value).size(withAttributes: [.font: font]).width) }
+    private static func grouped(_ value: Double) -> String { let formatter = NumberFormatter(); formatter.numberStyle = .decimal; formatter.groupingSeparator = ","; return formatter.string(from: NSNumber(value: value.rounded())) ?? String(Int(value.rounded())) }
+    private static func halfCircle(radius: Double, top: Bool) -> UIBezierPath { let path = UIBezierPath(); path.move(to: CGPoint(x: -radius, y: 0)); path.addArc(withCenter: .zero, radius: radius, startAngle: .pi, endAngle: top ? .pi * 2 : 0, clockwise: top); path.close(); return path }
 
-private struct GumballCrankCollectStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed
-                ? CGFloat(GumballCrankTheme.presentation.collectPressedScale)
-                : 1)
-            .animation(
-                .timingCurve(
-                    0.23,
-                    1,
-                    0.32,
-                    1,
-                    duration: configuration.isPressed
-                        ? GumballCrankTheme.presentation.collectPressDuration
-                        : GumballCrankTheme.presentation.collectReleaseDuration
-                ),
-                value: configuration.isPressed
-            )
+    private static func linearGradient(_ context: CGContext, rect: CGRect? = nil, path: CGPath? = nil, colors: [UIColor], locations: [CGFloat], start: CGPoint, end: CGPoint) {
+        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors.map(\.cgColor) as CFArray, locations: locations) else { return }
+        context.saveGState(); if let path { context.addPath(path); context.clip() } else if let rect { context.clip(to: rect) }; context.drawLinearGradient(gradient, start: start, end: end, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]); context.restoreGState()
     }
+    private static func radialGradient(_ context: CGContext, rect: CGRect? = nil, path: CGPath? = nil, colors: [UIColor], locations: [CGFloat], center: CGPoint, radius: CGFloat) {
+        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors.map(\.cgColor) as CFArray, locations: locations) else { return }
+        context.saveGState(); if let path { context.addPath(path); context.clip() } else if let rect { context.clip(to: rect) }; context.drawRadialGradient(gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: radius, options: [.drawsAfterEndLocation]); context.restoreGState()
+    }
+    private static func chrome(_ context: CGContext, path: CGPath, start: CGFloat, end: CGFloat) { linearGradient(context, path: path, colors: [GumballCrankColor.chromeLow, GumballCrankColor.chromeHi, GumballCrankColor.chromeMid, GumballCrankColor.chromeDeep, GumballCrankColor.chromeMid, GumballCrankColor.chromeHi, GumballCrankColor.chromeLow], locations: [0, 0.16, 0.34, 0.52, 0.72, 0.88, 1], start: CGPoint(x: start, y: 0), end: CGPoint(x: end, y: 0)) }
+    private static func circle(_ context: CGContext, x: Double, y: Double, r: Double, color: UIColor) { context.setFillColor(color.cgColor); context.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)) }
+    private static func strokeCircle(_ context: CGContext, x: Double, y: Double, r: Double, color: UIColor, width: Double) { context.setStrokeColor(color.cgColor); context.setLineWidth(width); context.strokeEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)) }
+    private static func roundRect(_ context: CGContext, _ rect: CGRect, radius: CGFloat, color: UIColor) { context.setFillColor(color.cgColor); context.addPath(UIBezierPath(roundedRect: rect, cornerRadius: radius).cgPath); context.fillPath() }
+    private static func strokeRoundRect(_ context: CGContext, _ rect: CGRect, radius: CGFloat, color: UIColor, width: CGFloat) { context.setStrokeColor(color.cgColor); context.setLineWidth(width); context.addPath(UIBezierPath(roundedRect: rect, cornerRadius: radius).cgPath); context.strokePath() }
+    private static func shadowShape(_ context: CGContext, color: UIColor, blur: CGFloat, drawing: () -> Void) { context.saveGState(); context.setShadow(offset: .zero, blur: blur, color: color.cgColor); context.setFillColor(color.cgColor); drawing(); context.restoreGState() }
 }

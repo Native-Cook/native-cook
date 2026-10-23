@@ -1,71 +1,112 @@
 import { Easing } from 'react-native-reanimated';
 
 /** Every motion value of the block. Distances in pt, velocities in pt/s, times in ms unless named in seconds. */
-// animate-expo: never ease-in on UI.
+// Never ease-in on UI.
 export const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 export const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1);
+export const SHEET = [0.32, 0.72, 0, 1] as const; // iOS sheet curve: things that travel across the screen
+export const EASE_SHEET = Easing.bezier(...SHEET);
 
+/** Right swipe: pull a transaction and it breaks into equal shares, one detent per person. */
+export const SPLIT = {
+  detentStart: 72, // pull that makes two people
+  detentStep: 60, // each further person
+  hysteresis: 8, // pull back this far past a detent before it un-breaks
+  follow: 0.6, // the row's content follows the finger at 0.6× before the first break
+  // The row's content is gone before the pieces' content arrives, so no frame shows both (design.md started at
+  // 24–72 / 48–84, which crossed the two texts at mid-pull).
+  contentFade: [20, 56] as const, // pull over which the row's content fades out
+  piecesIn: [56, 84] as const, // pull over which the pieces' content comes in
+  dimIn: [24, 52] as const, // pull over which the other rows dim to 30 %
+  hudIn: 160, // ms: the HUD arrives with the first break, over a row that is already dimmed
+  overRubber: 0.35, // past the last detent
+  lift: { duration: 120 }, // touch-down
+  barIn: 20, // pt of pull over which the strip of paper lifts out of the ledger
+  // Luxury restyle (luxury-design.md §H–W): expensive objects overshoot less.
+  count: { duration: 300, dampingRatio: 0.82 }, // the bar re-flows to the new number of pieces
+  snap: 60, // pt of seam opening per unit of the count spring's overshoot: the seams snap, then settle
+  gapRest: 6,
+  gapStretch: 0.07, // pt of seam per pt pulled past the current detent
+  gapMax: 8,
+  trailMax: 3, // the mock's far share trails 3 pt // the far piece trails toward the finger by up to 3 pt
+  trailPer: 0.08,
+  trail: { duration: 180, dampingRatio: 0.9 },
+  close: { duration: 480, dampingRatio: 0.86 }, // release: the seams heal
+  cancel: { duration: 360, dampingRatio: 1 },
+  avatarFrom: 0.8,
+  ink: 140, // your share turns to ink (and back)
+  roll: 180, // a piece's amount rolls in when the count changes
+  rollRise: 6,
+  contentOut: 120, // the pieces' content fades as the seams heal
+  dimTo: 0.28,
+  settle: 220,
+} as const;
+
+/** Left swipe: Flag and Delete, iOS Mail's behaviour with every spring tuned. */
 export const SWIPE = {
-  activeOffsetX: 12, // horizontal travel before a row takes the touch
-  failOffsetY: 10, // vertical travel that hands the touch to the list
-  fullAt: 0.55, // fraction of the width that arms a full-swipe delete
-  fullRubber: 0.35, // finger-to-row ratio past the full-swipe line
-  rightRubber: 0.25, // resistance when dragging the wrong way
+  activeOffsetX: 12,
+  failOffsetY: 10,
+  tapSlop: 8, // a touch that moves further is not a tap on Flag, Delete or the row
   openAt: 78, // strip width that opens on release
   openFlick: -500, // velocity that opens from any distance
+  fullAt: 0.55, // fraction of the row's width that arms Delete
+  fullRubber: 0.35, // past 85 % of the width
+  rightRubber: 0.25, // dragging an open row right, past rest
   deleteFlick: -1400, // velocity that deletes when the strip is past deleteFlickAt
   deleteFlickAt: 0.4,
-} as const;
-
-export const TILT = {
-  perVelocity: 0.018, // degrees per pt/s
-  max: 14,
-  perspective: 700,
-  lift: 1.02, // scale while the finger holds the row
-} as const;
-
-export const SPRING = {
-  follow: { damping: 18, stiffness: 220, mass: 0.6 }, // tilt chasing the velocity
-  snap: { damping: 26, stiffness: 300, mass: 1 }, // open and close, takes the finger's velocity
-  lift: { damping: 20, stiffness: 320, mass: 0.8 },
-  tileStretch: { damping: 22, stiffness: 420, mass: 0.7 },
-  collapse: { damping: 28, stiffness: 260, mass: 1 },
-  restore: { damping: 24, stiffness: 230, mass: 1 },
-  pill: { damping: 20, stiffness: 260, mass: 1 },
-  lens: { damping: 18, stiffness: 260, mass: 0.8 },
-  menu: { damping: 24, stiffness: 300, mass: 0.8 }, // ζ ≈ 0.77: settles with a hint of overshoot, no wobble
+  open: { duration: 420, dampingRatio: 0.8 },
+  close: { duration: 360, dampingRatio: 1 },
+  arm: { duration: 220, dampingRatio: 0.75 }, // Delete stretches across the strip
+  pillFrom: 0.6, // a pill's scale when it is born
+  slideOut: 260, // the deleted row leaves (ease-out, with the finger's velocity)
+  fold: 280, // the slot folds (ease-out)
 } as const;
 
 export const TIMING = {
-  flyOut: 260, // deleted row leaves the screen
-  tileFade: 120,
-  colour: 160, // Delete tile white → pink
+  roll: 300, // a row's amount and the week total roll to their new value (UI budget)
+  rollRise: 8,
   undoVisible: 4000,
+  toastIn: 280, // sheet curve
+  toastOut: 140, // gone before the sheet, growing back, reaches it
+  toastRise: 16,
+  toastContent: 0.55, // the toast's text comes in over the last 45 % of its rise
+  flight: 360, // the requested people's avatars fly from the pieces to the toast (sheet curve)
+  flightStagger: 60,
+  flightDelay: 160, // they leave once the seams have started to heal
+  sheet: 280, // the sheet's height when a row or the toast takes or gives room
   reduced: 180,
-  reducedGap: 200,
-  pressScale: 0.94,
-  pressIn: 100, // press feedback, asymmetric (review-animations)
+  reducedSwap: 150,
+  pressScale: 0.97, // press feedback: subtle, it is tens of presses a day
+  pressIn: 100,
   pressOut: 160,
-  menuStagger: 0.12, // fraction of the menu's spring between its rows
-  tab: 260, // tab content cross-fade (ease-out, under 300 ms)
-  roll: 700, // the balance rolls to its new value
-  breath: 3.33, // s; the FAB's glow, three per 10 s loop
-  sheen: 0.6, // the slab's specular moves this much against the row
+  menuIn: 200, // the FAB's menu: a popover from its trigger, ease-out, no overshoot (nothing was flung)
+  menuOut: 150, // closes faster than it opened
+  menuStagger: 0.12,
+  flagIn: 160, // the flag mark next to a title
+  reducedCount: 150, // Reduce Motion: the shares re-flow without a spring
+  tab: 260,
   tabSlide: 24,
 } as const;
 
-/** QA only (pixel gate): freeze the demo's clock at this second; open the FAB menu or show the Overview cards. Ship null. */
+
+/** QA only: freeze the demo's clock at this second; open the FAB menu or show the Overview card. Ship null. */
 export const QA_HOLD_AT: number | null = null;
 export const QA_STATE: 'menu' | 'cards' | null = null;
 
-/** Autoplay: one scripted finger on one clock, seconds. */
+/**
+ * Autoplay: one scripted finger on one clock (seconds). Split last night's dinner three ways (two breaks, a beat on
+ * each) and let go; while the request shows, swipe Metro card open (the mock's third frame), Undo the request, then
+ * tap the open row shut. Rest at both ends.
+ */
 export const LOOP_MS = 10_000;
 export const RESUME_MS = 3_500;
 export const DEMO = {
   fingerFade: 0.15,
-  open: { row: 1, down: 0.6, moveEnd: 1.5, up: 1.7, x: 300, to: -170 },
-  remove: { row: 0, down: 2.5, moveEnd: 2.95, up: 3.25, x: 320, to: -290 },
-  undo: { down: 5.5, up: 5.62 },
-  lean: { row: 2, down: 7.2, turn: 7.55, moveEnd: 7.9, up: 7.95, x: 300, to: -96 },
+  // x: where the finger lands, from the ledger's left edge; y: below the row's centre (the mock's finger sits on
+  // the bar's trailing corner, off the amounts). Each move eases between its keys.
+  split: { row: 2, down: 0.7, up: 2.9, x: 193, y: 24, keys: [[0.7, 0], [1.25, 100], [1.6, 100], [2.1, 170], [2.9, 170]] as const },
+  open: { row: 3, down: 3.7, up: 4.25, x: 300, y: 0, keys: [[3.7, 0], [4.25, -150]] as const },
+  undo: { down: 5.6, up: 5.75 },
+  close: { row: 3, x: 120, down: 7.1, up: 7.22 },
   tidy: 0.8,
 } as const;

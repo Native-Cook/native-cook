@@ -11,12 +11,14 @@ struct MoodOrbJarGhostLayer: View {
         let scale = geometry.scale
         Canvas { context, _ in
             guard let ghost else { return }
-            let d = MoodOrbJarTokens.Layout.orb * 2 * scale * MoodOrbJarTokens.orbImageScale
-            let image = context.resolve(Image(uiImage: MoodOrbJarAssets.orbs[ghost.mood]))
             var orb = context
             orb.translateBy(x: ghost.x, y: ghost.y)
             orb.scaleBy(x: ghost.scale, y: ghost.scale)
-            orb.draw(image, in: CGRect(x: -d / 2, y: -d / 2, width: d, height: d))
+            MoodOrbJarBeadPainter.draw(
+                in: orb,
+                radius: MoodOrbJarTokens.Layout.orb * scale,
+                mood: ghost.mood
+            )
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

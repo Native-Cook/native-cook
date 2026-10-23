@@ -212,8 +212,7 @@ final class SlideToAnswerCordSimulation {
             Self.preroll(state: &nextState, geometry: nextGeometry)
         }
 
-        // The RN pre-roll ends at the loop boundary with phaseElapsed ~= 1.6
-        // and clock ~= 36. Preserve those values because they drive the ring;
+        // Preserve the pre-roll clock because it drives the deterministic ring;
         // normalize only script time so live playback starts at loop time zero.
         nextState.demoTime = 0
         nextState.events.removeAll(keepingCapacity: true)
@@ -271,7 +270,6 @@ final class SlideToAnswerCordSimulation {
     @discardableResult
     func touchBegan(at point: CGPoint) -> Bool {
         guard let geometry, var state,
-              !state.reducedMotion,
               Self.hitsHandset(point: point, state: state, geometry: geometry)
         else { return false }
 
@@ -489,8 +487,7 @@ private extension SlideToAnswerCordSimulation {
             }
             state.isScripted = false
             if !wasScripted {
-                // The two-second interruption window starts at the user's
-                // release, even if another command arrived during the drag.
+                // The resume window starts at the user's release.
                 state.quietTime = 0
             }
         }
@@ -619,30 +616,20 @@ private extension SlideToAnswerCordSimulation {
                     return
                 }
                 // Pre-roll has no saved seam yet, but its script still repeats
-                // on the same 12 s clock as the live loop.
+                // on the same clock as the live loop.
                 state.demoTime = endTime - SlideToAnswerCordMotion.loopMS / 1_000
             } else {
                 state.demoTime = endTime
             }
         } else if autoPlay, !state.isGrabbed {
             state.quietTime += deltaTime
-            // The RN fidelity token remains resumeMS = 3_500. The Swift port
-            // intentionally follows the owner's two-second interruption rule,
-            // then eases to the saved rest seam before restarting autoplay.
-            if !state.isReturningToRest,
-               state.quietTime >= SlideToAnswerCordMotion.interactiveIdleBeforeReturn {
-                beginReturnToRest(state: &state, geometry: geometry)
+            if state.quietTime * 1_000 >= SlideToAnswerCordMotion.resumeMS,
+               state.phase == .ringing || state.phase == .connected {
+                state.isDemoRunning = true
+                state.demoTime = state.phase == .connected
+                    ? SlideToAnswerCordMotion.resumeInCall
+                    : 0
             }
-        }
-
-        if state.isReturningToRest, let loopSeam {
-            returnToRestStep(
-                state: &state,
-                seam: loopSeam,
-                autoPlay: autoPlay,
-                deltaTime: deltaTime
-            )
-            return
         }
 
         state.phaseElapsed += deltaTime
@@ -1143,9 +1130,7 @@ private extension SlideToAnswerCordSimulation {
             wash: wash,
             chevronProgress: chevron,
             pulse: pulse,
-            acceptGlow: state.phase == .ringing
-                ? clamp(-drag / (SlideToAnswerCordMotion.Drag.answer * geometry.scale))
-                : 0,
+            acceptGlow: ring.pulse ?? -1,
             declineGlow: clamp(drag / (SlideToAnswerCordMotion.Drag.decline * geometry.scale)),
             glowOn: 1 - 0.8 * state.offMix,
             isGrabbed: state.isGrabbed,

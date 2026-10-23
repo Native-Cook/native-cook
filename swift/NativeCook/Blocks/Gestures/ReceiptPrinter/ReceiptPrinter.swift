@@ -29,6 +29,7 @@ struct ReceiptPrinter: View {
                 model: model,
                 size: size,
                 safeTop: insets.top,
+                safeBottom: insets.bottom,
                 autoPlay: autoPlay
             )
             .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -67,8 +68,6 @@ private enum ReceiptPrinterCoreMetrics {
     static let paperShadowY = 4.0
     static let slotShadowOpacity = 0.22
     static let morphForwardFade = 0.30
-    static let morphBackStartFade = 0.15
-    static let morphBackEndFade = 0.25
     static let morphColorStart = 0.55
     static let morphColorEnd = 0.95
     static let menuStartScale = 0.95
@@ -100,6 +99,7 @@ private struct ReceiptPrinterStageView: View {
     let model: ReceiptPrinterModel
     let size: CGSize
     let safeTop: Double
+    let safeBottom: Double
     let autoPlay: Bool
 
     private let t = ReceiptPrinterTokens.self
@@ -139,7 +139,9 @@ private struct ReceiptPrinterStageView: View {
             ReceiptPrinterMenu(
                 state: state,
                 screenWidth: size.width,
+                screenHeight: size.height,
                 shift: shift,
+                safeBottom: safeBottom,
                 onChoose: { model.printReceipt(scripted: false) }
             )
             .allowsHitTesting(state.stage == .menu)
@@ -204,7 +206,9 @@ private struct ReceiptPrinterStageView: View {
 private struct ReceiptPrinterMenu: View {
     let state: ReceiptPrinterViewState
     let screenWidth: Double
+    let screenHeight: Double
     let shift: Double
+    let safeBottom: Double
     let onChoose: () -> Void
 
     @Environment(\.displayScale) private var displayScale
@@ -216,6 +220,11 @@ private struct ReceiptPrinterMenu: View {
         let cardX = t.GRID.gutter + Double(index % 3) * (t.GRID.cardW + t.GRID.gap)
         let x = min(cardX, screenWidth - t.GRID.gutter - menu.w)
         let anchorX = min(1, max(0, (cardX - x) / menu.w))
+        let tileTop = Double(index / 3) * t.GRID.rowPitch
+        let below = tileTop + t.GRID.cardH + t.SPACE.sm
+        let fitsBelow = menu.y + shift + below + menu.h
+            < screenHeight - safeBottom - t.SPACE.lg
+        let verticalOffset = fitsBelow ? below : tileTop - menu.h - t.SPACE.sm
         let scale = state.reducedMotion
             ? 1
             : ReceiptPrinterCoreMetrics.menuStartScale
@@ -239,11 +248,11 @@ private struct ReceiptPrinterMenu: View {
             x: 0,
             y: ReceiptPrinterCoreMetrics.menuShadowY
         )
-        .scaleEffect(scale, anchor: UnitPoint(x: anchorX, y: 0))
+        .scaleEffect(scale, anchor: UnitPoint(x: anchorX, y: fitsBelow ? 0 : 1))
         .opacity(state.menuIn)
         .offset(
             x: x,
-            y: menu.y + shift + Double(index / 3) * t.GRID.rowPitch
+            y: menu.y + shift + verticalOffset
         )
         .accessibilityElement(children: .contain)
     }
@@ -418,28 +427,19 @@ private struct ReceiptPrinterMorph: View {
 
     private func morphOpacity(_ progress: Double) -> Double {
         guard progress > 0, progress < 1 else { return 0 }
-        if state.morphBack {
-            return min(
-                1,
-                (1 - progress) / ReceiptPrinterCoreMetrics.morphBackStartFade,
-                progress / ReceiptPrinterCoreMetrics.morphBackEndFade
-            )
-        }
         return min(1, (1 - progress) / ReceiptPrinterCoreMetrics.morphForwardFade)
     }
 
     private func morphColor(_ progress: Double) -> Color {
-        let unit = state.morphBack
-            ? min(1, max(0, (progress - 0.85) / 0.15))
-            : min(
-                1,
-                max(
-                    0,
-                    (progress - ReceiptPrinterCoreMetrics.morphColorStart)
-                        / (ReceiptPrinterCoreMetrics.morphColorEnd - ReceiptPrinterCoreMetrics.morphColorStart)
-                )
+        let unit = min(
+            1,
+            max(
+                0,
+                (progress - ReceiptPrinterCoreMetrics.morphColorStart)
+                    / (ReceiptPrinterCoreMetrics.morphColorEnd - ReceiptPrinterCoreMetrics.morphColorStart)
             )
-        let start = state.morphBack ? 229.0 / 255.0 : 1.0
+        )
+        let start = 1.0
         let end = 0.0
         let gamma = 2.2
         let channel = pow((1 - unit) * pow(start, gamma) + unit * pow(end, gamma), 1 / gamma)
@@ -507,6 +507,7 @@ private struct ReceiptPrinterPaperLayer: View {
         .frame(width: ReceiptPrinterCoreMetrics.stageWidth, height: outerHeight, alignment: .topLeading)
         .clipped()
         .offset(y: paperTop)
+        .opacity(state.paperOpacity)
         .allowsHitTesting(false)
     }
 }

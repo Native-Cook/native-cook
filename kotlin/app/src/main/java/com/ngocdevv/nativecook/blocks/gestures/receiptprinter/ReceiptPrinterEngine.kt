@@ -37,7 +37,6 @@ internal class ReceiptPrinterEngine(
     private var buttonPressedIndex = -1
     private var buttonInside = false
     private var morphFrom = 0
-    private var morphBack = false
     private var fed = 0f
     private var bar = 0f
     private var clockMs = 0f
@@ -52,6 +51,7 @@ internal class ReceiptPrinterEngine(
     private var retractElapsed = 0f
     private var retractStart = 0f
     private var retractDone = false
+    private var gridReturnStarted = false
     private var gridReturnPending = false
     private var cutSpringPending = false
     private var scriptTime = 0f
@@ -59,7 +59,6 @@ internal class ReceiptPrinterEngine(
     private var scriptPaused = false
     private var quietMs = 0f
     private var realDown = false
-    private var resumePending = false
     private var armed = false
     private var touch = Touch.NONE
     private var touchIndex = -1
@@ -103,7 +102,6 @@ internal class ReceiptPrinterEngine(
         reduced = next
         if (next) {
             scriptPaused = true
-            resumePending = false
             if (phase == ReceiptPrinterPhase.PRINTING) finishFeed()
             morph.snap(0f)
             cut.snap(0f)
@@ -117,7 +115,6 @@ internal class ReceiptPrinterEngine(
         scriptPaused = true
         realDown = true
         quietMs = 0f
-        resumePending = false
         downX = x
         downY = y
         lastY = y
@@ -309,7 +306,6 @@ internal class ReceiptPrinterEngine(
         if (phase != ReceiptPrinterPhase.GRID && phase != ReceiptPrinterPhase.MENU) return
         if (tile >= 0) pressedIndex = tile
         morphFrom = max(0, pressedIndex)
-        morphBack = false
         morph.snap(0f)
         if (!reduced) morph.to(1f, ReceiptPrinterMotion.MORPH_MS * ReceiptPrinterMotion.QA_SLOWMO)
         develop.to(1f, ReceiptPrinterMotion.DEVELOP_FADE_MS)
@@ -360,11 +356,17 @@ internal class ReceiptPrinterEngine(
         retractStart = scroll.value
         retractElapsed = 0f
         retractDone = false
+        gridReturnStarted = false
         if (!scripted) haptic(Kind.TEAR)
-        if (reduced) paperAlpha.to(0f, ReceiptPrinterMotion.BAR_MS, ReceiptPrinterValue.Easing.IN_OUT_QUAD)
+        if (reduced) {
+            paperAlpha.to(0f, ReceiptPrinterMotion.REDUCED_RETRACT_MS, ReceiptPrinterValue.Easing.OUT)
+            grid.to(1f, ReceiptPrinterMotion.REDUCED_RETRACT_MS, ReceiptPrinterValue.Easing.OUT)
+            gridReturnStarted = true
+            gridReturnPending = true
+        }
     }
 
-    private fun finishRetract() {
+    private fun finishRetractPaper() {
         if (retractDone) return
         retractDone = true
         fed = 0f
@@ -376,11 +378,7 @@ internal class ReceiptPrinterEngine(
             val spring = Tokens.ISLAND_SPRING
             island.springTo(0f, spring.stiffness, spring.damping, spring.mass)
         }
-        morph.snap(if (reduced) 0f else 1f)
-        morphBack = true
-        if (!reduced) morph.to(0f, ReceiptPrinterMotion.RETURN_MS * ReceiptPrinterMotion.QA_SLOWMO)
-        grid.to(1f, ReceiptPrinterMotion.GRID_IN_MS)
-        gridReturnPending = true
+        morph.snap(0f)
     }
 
     private fun beginDrag(scripted: Boolean) {
@@ -469,24 +467,32 @@ internal class ReceiptPrinterEngine(
             cut.springTo(0f, spring.stiffness, spring.damping, spring.mass)
         }
         if (phase == ReceiptPrinterPhase.RETRACTING && reduced && !retractDone) {
-            if (paperAlpha.settled) finishRetract()
+            if (paperAlpha.settled) finishRetractPaper()
         } else if (phase == ReceiptPrinterPhase.RETRACTING && !retractDone) {
             retractElapsed += dt
+            val gridStart = ReceiptPrinterMotion.TUG_MS + ReceiptPrinterMotion.GRID_LEAD_MS
+            if (!gridReturnStarted && retractElapsed >= gridStart * ReceiptPrinterMotion.QA_SLOWMO) {
+                gridReturnStarted = true
+                gridReturnPending = true
+                grid.to(
+                    1f,
+                    ReceiptPrinterMotion.GRID_IN_MS * ReceiptPrinterMotion.QA_SLOWMO,
+                )
+            }
             if (retractElapsed <= ReceiptPrinterMotion.TUG_MS) {
                 val p = (retractElapsed / ReceiptPrinterMotion.TUG_MS).coerceIn(0f, 1f)
                 scroll.snap(retractStart - ReceiptPrinterMotion.TUG * (1f - (1f - p) * (1f - p)))
             } else {
                 val p = ((retractElapsed - ReceiptPrinterMotion.TUG_MS) / ReceiptPrinterMotion.RETRACT_MS).coerceIn(0f, 1f)
                 scroll.snap(retractStart - ReceiptPrinterMotion.TUG +
-                    (paperTop + ReceiptPrinterMotion.PAPER_LENGTH - retractStart + ReceiptPrinterMotion.TUG) *
+                    (ReceiptPrinterMotion.PAPER_TOTAL - retractStart + ReceiptPrinterMotion.TUG) *
                     easeInOut(p))
-                if (p >= 1f) finishRetract()
+                if (p >= 1f) finishRetractPaper()
             }
         }
         if (gridReturnPending && grid.settled && grid.value >= 1f) {
             gridReturnPending = false
             phase = ReceiptPrinterPhase.GRID
-            if (resumePending && autoPlay && !reduced) restartScript()
         }
         if (scrollDecay && phase == ReceiptPrinterPhase.READING) stepDecay(dt)
         if (buttonPressedIndex >= 0 && touch != Touch.BAR && buttonScale.settled) buttonPressedIndex = -1
@@ -527,27 +533,8 @@ internal class ReceiptPrinterEngine(
 
     private fun stepScript(dt: Float) {
         if (scriptPaused) {
-            if (resumePending && phase == ReceiptPrinterPhase.GRID) {
-                restartScript()
-                return
-            }
             if (!realDown) quietMs += dt
-            if (quietMs >= ReceiptPrinterMotion.RESUME_DELAY_MS) {
-                when (phase) {
-                    ReceiptPrinterPhase.GRID -> restartScript()
-                    ReceiptPrinterPhase.MENU -> {
-                        closeMenu()
-                        resumePending = true
-                    }
-                    ReceiptPrinterPhase.READING -> {
-                        retract(true)
-                        resumePending = true
-                    }
-                    ReceiptPrinterPhase.PRINTING, ReceiptPrinterPhase.RETRACTING -> resumePending = true
-                }
-                quietMs = -1_000_000f
-            }
-            if (resumePending && phase == ReceiptPrinterPhase.READING) retract(true)
+            if (quietMs >= ReceiptPrinterMotion.RESUME_DELAY_MS && phase == ReceiptPrinterPhase.GRID) restartScript()
             return
         }
         val previous = scriptTime
@@ -585,7 +572,6 @@ internal class ReceiptPrinterEngine(
         scriptSegment = -1
         scriptPaused = false
         quietMs = 0f
-        resumePending = false
     }
 
     private fun makeFrame(): ReceiptPrinterFrame {
@@ -623,6 +609,7 @@ internal class ReceiptPrinterEngine(
             menuY = menuY(),
             menuOriginX = Tokens.GRID.gutter +
                 (max(0, pressedIndex) % 3) * (Tokens.GRID.cardW + Tokens.GRID.gap) - menuX(),
+            menuOriginY = menuOriginY(),
             menuPressedRow = menuPressedRow,
             pressedIndex = pressedIndex,
             holdIndex = holdIndex,
@@ -641,7 +628,6 @@ internal class ReceiptPrinterEngine(
             buttonPressedIndex = buttonPressedIndex,
             buttonPressScale = buttonScale.value,
             morphProgress = morph.value,
-            morphBack = morphBack,
             morphFrom = morphFrom,
             developOpacity = develop.value,
             indicatorOpacity = indicator.value,
@@ -702,8 +688,22 @@ internal class ReceiptPrinterEngine(
         return min(cardX, screenWidth - grid.gutter - grid.menu.w)
     }
 
-    private fun menuY(): Float = Tokens.GRID.rowTop +
-        (max(0, pressedIndex) / 3) * Tokens.GRID.rowPitch
+    private fun menuY(): Float {
+        val rowTop = max(0, pressedIndex) / 3 * Tokens.GRID.rowPitch
+        val below = rowTop + Tokens.GRID.cardH + Tokens.SPACE.sm
+        val fitsBelow = Tokens.GRID.menu.y + below + Tokens.GRID.menu.h <
+            screenHeight - Tokens.SPACE.lg
+        val offset = if (fitsBelow) below else rowTop - Tokens.GRID.menu.h - Tokens.SPACE.sm
+        return Tokens.GRID.menu.y + offset
+    }
+
+    private fun menuOriginY(): Float {
+        val rowTop = max(0, pressedIndex) / 3 * Tokens.GRID.rowPitch
+        val below = rowTop + Tokens.GRID.cardH + Tokens.SPACE.sm
+        val fitsBelow = Tokens.GRID.menu.y + below + Tokens.GRID.menu.h <
+            screenHeight - Tokens.SPACE.lg
+        return if (fitsBelow) 0f else Tokens.GRID.menu.h
+    }
 
     private fun stepped(progress: Float): Float {
         val n = ReceiptPrinterMotion.FEED_STEPS
@@ -714,10 +714,19 @@ internal class ReceiptPrinterEngine(
     }
 
     private fun easeInOut(progress: Float): Float {
-        val easing = ReceiptPrinterValue(0f)
-        easing.to(1f, 1000f, ReceiptPrinterValue.Easing.IN_OUT)
-        easing.step(progress * 1000f)
-        return easing.value
+        val targetX = progress.coerceIn(0f, 1f)
+        var low = 0f
+        var high = 1f
+        repeat(12) {
+            val time = (low + high) / 2f
+            val inverse = 1f - time
+            val x = 3f * inverse * inverse * time * 0.77f +
+                3f * inverse * time * time * 0.175f + time * time * time
+            if (x < targetX) low = time else high = time
+        }
+        val time = (low + high) / 2f
+        val inverse = 1f - time
+        return 3f * inverse * time * time + time * time * time
     }
 
     private fun crossed(from: Float, to: Float, threshold: Float) = from < threshold && to >= threshold

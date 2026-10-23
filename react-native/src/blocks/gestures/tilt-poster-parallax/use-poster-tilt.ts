@@ -32,7 +32,10 @@ type Options = {
   reduceMotion: boolean;
   // The Watchlist button's centre in the card's coordinates, and what the scripted finger's tap on it does.
   watchPoint: { x: number; y: number };
-  onScriptWatch: () => void;
+  /** The scripted finger's tap on Watchlist: the first adds, the second removes, so the loop ends unsaved. */
+  onScriptWatch: (on: boolean) => void;
+  /** The demo starts again after a touch: the page goes back to how it began (not saved). */
+  onResume: () => void;
 };
 const never = ReduceMotion.Never;
 
@@ -43,7 +46,7 @@ function soften(v: number, max: number, rubber: number): number {
   return Math.sign(v) * (max + (a - max) * rubber);
 }
 
-export function usePosterTilt({ half, ready, autoPlay, reduceMotion, watchPoint, onScriptWatch }: Options) {
+export function usePosterTilt({ half, ready, autoPlay, reduceMotion, watchPoint, onScriptWatch, onResume }: Options) {
   const sensor = useAnimatedSensor(SensorType.ROTATION, { interval: 'auto' });
   const tiltX = useSharedValue(0);
   const tiltY = useSharedValue(0);
@@ -197,7 +200,7 @@ export function usePosterTilt({ half, ready, autoPlay, reduceMotion, watchPoint,
         if (tap.on === 'card' && t < up && t + dt >= up) {
           holdEnd(0, 0, tap.at === AUTOPLAY.taps[0].at);
         }
-        if (tap.on === 'watch' && t < tap.at && t + dt >= tap.at) scheduleOnRN(onScriptWatch);
+        if (tap.on === 'watch' && t < tap.at && t + dt >= tap.at) scheduleOnRN(onScriptWatch, tap.at === AUTOPLAY.taps[2].at);
       }
       if (target) finger.set(target);
       else if (finger.get().alpha > 0) finger.set({ ...finger.get(), alpha: Math.max(0, finger.get().alpha - dt / 140) });
@@ -252,7 +255,12 @@ export function usePosterTilt({ half, ready, autoPlay, reduceMotion, watchPoint,
     const s = script.get();
     if (s.paused) {
       const quiet = s.realDown ? 0 : s.quiet + dt;
-      if (quiet >= AUTOPLAY.resumeDelayMs) script.set({ time: 0, paused: false, realDown: false, quiet: 0, down: false });
+      if (quiet >= AUTOPLAY.resumeDelayMs) {
+        // Two seconds after the last touch: face up, not saved, and the demo starts again from rest.
+        if (flipped.get()) setFlip(false);
+        scheduleOnRN(onResume);
+        script.set({ time: 0, paused: false, realDown: false, quiet: 0, down: false });
+      }
       else script.set({ ...s, quiet });
       return;
     }

@@ -1,4 +1,4 @@
-/** Habit icons as real vector glyphs over the canvas, each riding its bubble's position and size. */
+/** Habit icons as vector glyphs over the canvas, each riding its bubble's position and size; done, a check in the liquid's ink. */
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
@@ -16,7 +16,8 @@ function BubbleIcon({ i, sim, originX, originY }: { i: number; sim: SharedValue<
     const s = sim.get();
     const k = s.r[i] / e.r;
     return {
-      opacity: Math.min(1, s.r[i] / 8) * (1 - s.done[i]),
+      // The icon goes under as the liquid rises past it.
+      opacity: Math.min(1, s.r[i] / 8) * (1 - s.done[i]) * (s.ring === i ? 1 - 0.6 * s.charge : 1),
       transform: [{ translateX: originX + s.x[i] - BOX / 2 }, { translateY: originY + s.y[i] - BOX / 2 }, { scale: base * k }],
     };
   });
@@ -29,8 +30,8 @@ function BubbleIcon({ i, sim, originX, originY }: { i: number; sim: SharedValue<
     };
   });
   return <>
-    <Animated.View style={[styles.box, icon]}><Ionicons name={e.icon} size={BOX} color={h.icon} style={{ textShadowColor: h.rim, textShadowRadius: LAYOUT.iconGlow / Math.max(0.2, base) }} /></Animated.View>
-    <Animated.View style={[styles.box, check]}><Ionicons name="checkmark" size={BOX} color={h.core} /></Animated.View>
+    <Animated.View style={[styles.box, icon]}><Ionicons name={e.icon} size={BOX} color={h.icon} /></Animated.View>
+    <Animated.View style={[styles.box, check]}><Ionicons name="checkmark" size={BOX} color={h.ink} /></Animated.View>
   </>;
 }
 

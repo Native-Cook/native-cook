@@ -1,312 +1,379 @@
 import SwiftUI
+import UIKit
 
 struct GiftSlotDropScene: View {
     let model: GiftSlotDropModel
-    let size: CGSize
+    let layout: GiftSlotDropTokens.ScreenLayout
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            GiftSlotDropBackdrop(model: model, size: size)
-            GiftSlotDropChevron(model: model, width: size.width)
-            GiftSlotDropPlaceholder(opacity: model.placeholderOpacity, width: size.width)
-            GiftSlotDropCards(model: model, size: size)
-                .mask(alignment: .top) { Rectangle().frame(height: GiftSlotDropTokens.Layout.slotY) }
-            GiftSlotDropConfetti(model: model)
+            Image(uiImage: GiftSlotDropBackdropCache.image(for: layout))
+                .resizable().frame(width: layout.width, height: layout.height)
+            GiftSlotDropHeader(model: model, layout: layout)
+            GiftSlotDropTitle(model: model, layout: layout)
+            GiftSlotDropCarousel(model: model, layout: layout)
+            GiftSlotDropShelf(model: model, layout: layout)
+            GiftSlotDropOffer(model: model, layout: layout)
+            GiftSlotDropFinger(model: model)
         }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
+        .clipped()
+        .accessibilityHidden(true)
     }
 }
 
-private struct GiftSlotDropBackdrop: View {
+@MainActor
+private enum GiftSlotDropBackdropCache {
+    private static var cache: [String: UIImage] = [:]
+
+    static func image(for layout: GiftSlotDropTokens.ScreenLayout) -> UIImage {
+        let key = "\(Int(layout.width))x\(Int(layout.height))-\(Int(layout.top))"
+        if let image = cache[key] { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = true
+        format.scale = UIScreen.main.scale
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: layout.width, height: layout.height), format: format)
+        let image = renderer.image { output in
+            let context = output.cgContext
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            let base = CGGradient(colorsSpace: colorSpace, colors: [
+                UIColor(giftSlotHex: "#100D0A").cgColor,
+                UIColor(giftSlotHex: "#0C0A08").cgColor,
+                UIColor(giftSlotHex: "#120E0A").cgColor,
+            ] as CFArray, locations: [0, 0.5, 1])!
+            context.drawLinearGradient(base, start: .zero, end: CGPoint(x: 0, y: layout.height), options: [])
+
+            context.saveGState()
+            context.translateBy(x: layout.cx, y: layout.slotY + 10)
+            context.scaleBy(x: 1, y: 0.78 / 0.95)
+            context.translateBy(x: -layout.cx, y: -(layout.slotY + 10))
+            let warm = CGGradient(colorsSpace: colorSpace, colors: [
+                UIColor(red: 1, green: 170 / 255, blue: 80 / 255, alpha: 0.34).cgColor,
+                UIColor(red: 230 / 255, green: 110 / 255, blue: 50 / 255, alpha: 0.14).cgColor,
+                UIColor(red: 90 / 255, green: 40 / 255, blue: 20 / 255, alpha: 0.05).cgColor,
+                UIColor.clear.cgColor,
+            ] as CFArray, locations: [0, 0.35, 0.7, 1])!
+            context.drawRadialGradient(warm, startCenter: CGPoint(x: layout.cx, y: layout.slotY + 10), startRadius: 0,
+                endCenter: CGPoint(x: layout.cx, y: layout.slotY + 10), endRadius: layout.width * 0.95,
+                options: [.drawsAfterEndLocation])
+            context.restoreGState()
+
+            context.saveGState()
+            context.translateBy(x: layout.width * 0.15, y: layout.top)
+            context.scaleBy(x: 1, y: 0.75)
+            context.translateBy(x: -layout.width * 0.15, y: -layout.top)
+            let cool = CGGradient(colorsSpace: colorSpace, colors: [
+                UIColor(red: 120 / 255, green: 140 / 255, blue: 190 / 255, alpha: 0.08).cgColor,
+                UIColor.clear.cgColor,
+            ] as CFArray, locations: [0, 1])!
+            context.drawRadialGradient(cool, startCenter: CGPoint(x: layout.width * 0.15, y: layout.top), startRadius: 0,
+                endCenter: CGPoint(x: layout.width * 0.15, y: layout.top), endRadius: layout.width * 0.8,
+                options: [.drawsAfterEndLocation])
+            context.restoreGState()
+
+            var seed: UInt64 = 0xC001_CAFE
+            for _ in 0..<Int(layout.width * layout.height / 9) {
+                seed = seed &* 6_364_136_223_846_793_005 &+ 1
+                let x = CGFloat((seed >> 33) % UInt64(max(1, Int(layout.width))))
+                seed = seed &* 6_364_136_223_846_793_005 &+ 1
+                let y = CGFloat((seed >> 33) % UInt64(max(1, Int(layout.height))))
+                seed = seed &* 6_364_136_223_846_793_005 &+ 1
+                let white = CGFloat((seed >> 48) & 0xFF) / 255
+                context.setFillColor(UIColor(white: white, alpha: 0.025).cgColor)
+                context.fill(CGRect(x: x, y: y, width: 0.55, height: 0.55))
+            }
+        }
+        cache[key] = image
+        return image
+    }
+}
+
+private struct GiftSlotDropHeader: View {
     let model: GiftSlotDropModel
-    let size: CGSize
+    let layout: GiftSlotDropTokens.ScreenLayout
 
     var body: some View {
-        let layout = GiftSlotDropTokens.Layout.self
-        let colors = GiftSlotDropTokens.Colors.self
-        let glow = GiftSlotDropTokens.color(GiftSlotDropTokens.gifts[model.selected].glow)
-        let slotGlow = model.slotGlow
+        let offer = model.offerOpacity
         ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(RadialGradient(colors: [GiftSlotDropTokens.color(colors.stage), GiftSlotDropTokens.color(colors.stageEdge)], center: UnitPoint(x: 0.5, y: 0.08), startRadius: 0, endRadius: size.height * 0.85))
-            Rectangle()
-                .fill(GiftSlotDropTokens.color(colors.stageWarmInk))
-                .frame(height: layout.floorY)
-                .opacity(model.warmOpacity)
-                .blendMode(.multiply)
-            Ellipse()
-                .fill(glow)
-                .frame(width: 400, height: 440)
-                .position(x: size.width / 2, y: layout.cardY)
-                .blur(radius: 60)
-                .opacity(colors.hueTint)
-            Rectangle()
-                .fill(LinearGradient(colors: [GiftSlotDropTokens.color(colors.floor), GiftSlotDropTokens.color(colors.floorLow)], startPoint: .top, endPoint: .bottom))
-                .frame(width: size.width, height: max(0, size.height - layout.floorY))
-                .offset(y: layout.floorY)
-            Rectangle().fill(GiftSlotDropTokens.color(colors.floorLine)).frame(width: size.width, height: 1).offset(y: layout.floorY)
-            RoundedRectangle(cornerRadius: 16)
-                .fill(LinearGradient(stops: [
-                    .init(color: GiftSlotDropTokens.color(colors.pocketFade), location: 0),
-                    .init(color: GiftSlotDropTokens.color(colors.pocketFade), location: 0.35),
-                    .init(color: GiftSlotDropTokens.color(colors.pocketLow), location: 1)
-                ], startPoint: .top, endPoint: .bottom))
-                .frame(width: layout.pocketW, height: layout.floorY - layout.pocketTop + layout.pocketDepth)
-                .position(x: size.width / 2, y: layout.pocketTop + (layout.floorY - layout.pocketTop + layout.pocketDepth) / 2)
-            GiftSlotDropSlotGlow(glow: slotGlow)
-                .position(x: size.width / 2, y: layout.slotY)
+            GiftSlotDropGlass(cornerRadius: 22).frame(width: 44, height: 44).offset(x: 16, y: layout.top)
+            Image(systemName: "chevron.left").font(.system(size: 16, weight: .semibold))
+                .position(x: 38, y: layout.top + 22).opacity(1 - offer)
+            Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
+                .position(x: 38, y: layout.top + 22).opacity(offer)
+            GiftSlotDropGlass(cornerRadius: 18).frame(width: 79, height: 36)
+                .offset(x: layout.width - 95, y: layout.top + 4)
+            Text("Terms").font(GiftSlotDropFonts.font(GiftSlotDropFonts.medium, size: 15))
+                .position(x: layout.width - 55.5, y: layout.top + 22)
+            Text("ORRA PAY  ·  NEW MEMBER")
+                .font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 11)).tracking(1.4)
+                .foregroundStyle(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.faint))
+                .position(x: layout.cx, y: layout.top + GiftSlotDropTokens.Layout.eyebrowY - 5)
         }
+        .foregroundStyle(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.ink))
     }
 }
 
-private struct GiftSlotDropSlotGlow: View {
-    let glow: Double
+private struct GiftSlotDropTitle: View {
+    let model: GiftSlotDropModel
+    let layout: GiftSlotDropTokens.ScreenLayout
+    private let titles = [["Choose your", "welcome gift"], ["Let go to", "activate it"], ["Activating", "your gift…"], ["Your gift", "is ready"]]
 
     var body: some View {
-        let layout = GiftSlotDropTokens.Layout.self
+        let progress = model.titleProgress()
         ZStack {
-            Ellipse()
-                .fill(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.yellowDeep))
-                .frame(width: layout.slotW + 48, height: layout.slotH + 26)
-                .blur(radius: 20)
-                .opacity(0.2)
-                .offset(y: -layout.slotH / 2 - 10 + layout.glowDrop)
-            Ellipse()
-                .fill(RadialGradient(colors: [
-                    GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.glowCore),
-                    GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.yellowDeep),
-                    GiftSlotDropTokens.color("rgba(242,169,0,0)")
-                ], center: UnitPoint(x: 0.5, y: 0.33), startRadius: 0, endRadius: layout.pocketW * 0.45))
-                .frame(width: layout.pocketW * 1.2, height: layout.glowH)
-                .blur(radius: 6)
-                .opacity(0.72)
-                .offset(y: layout.glowTop)
-                .mask(RoundedRectangle(cornerRadius: 16).frame(width: layout.pocketW, height: layout.floorY + layout.pocketDepth - layout.pocketTop).offset(y: layout.pocketTop - layout.slotY))
+            title(model.titleWas).opacity(progress.old).offset(y: progress.oldY)
+            title(model.titleIndex).opacity(progress.current).offset(y: progress.currentY)
         }
-        .scaleEffect(x: CGFloat(0.9 + 0.12 * min(1.2, glow)), y: 1)
-        .opacity(min(1, glow))
+        .frame(width: layout.width, height: 72)
+        .position(x: layout.cx, y: layout.top + GiftSlotDropTokens.Layout.titleY + 5)
+    }
+
+    private func title(_ index: Int) -> some View {
+        VStack(spacing: 0) {
+            Text(titles[index][0]).frame(height: GiftSlotDropTokens.Layout.titleLine)
+            Text(titles[index][1]).frame(height: GiftSlotDropTokens.Layout.titleLine)
+        }
+        .font(GiftSlotDropFonts.font(GiftSlotDropFonts.semibold, size: 28))
+        .multilineTextAlignment(.center)
+        .foregroundStyle(GiftSlotDropTokens.color(index == 1 ? GiftSlotDropTokens.Colors.amberInk : GiftSlotDropTokens.Colors.ink))
     }
 }
 
-private struct GiftSlotDropChevron: View {
+private struct GiftSlotDropCarousel: View {
     let model: GiftSlotDropModel
-    let width: CGFloat
-
-    var body: some View {
-        let pose = chevronPose
-        Path { path in
-            path.move(to: CGPoint(x: -11.5, y: -7.5)); path.addLine(to: CGPoint(x: 0, y: 1)); path.addLine(to: CGPoint(x: 11.5, y: -7.5))
-            path.move(to: CGPoint(x: -11.5, y: 2.5)); path.addLine(to: CGPoint(x: 0, y: 11)); path.addLine(to: CGPoint(x: 11.5, y: 2.5))
-        }
-        .stroke(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.mute), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-        .frame(width: 23, height: 19)
-        .position(x: width / 2, y: pose.y)
-        .scaleEffect(pose.visible ? 1 : 0)
-    }
-
-    private var chevronPose: (y: CGFloat, visible: Bool) {
-        let layout = GiftSlotDropTokens.Layout.self
-        let reduced = model.reducedMotion
-        let base = layout.chevronY + (reduced ? 0 : GiftSlotDropTokens.Chevron.bobPt * sin(CGFloat(model.clock / GiftSlotDropTokens.Chevron.bobMs * 2 * .pi)))
-        guard model.releasedAt < 0 else { return (base, false) }
-        let progress = min(1, max(0, model.pullY / Double(GiftSlotDropTokens.Drag.full)))
-        let half = Double(layout.cardH) * (1 - (1 - GiftSlotDropTokens.Drag.minScale) * progress) * cos(progress * Double(GiftSlotDropTokens.Drag.leanDeg) * .pi / 180) / 2
-        let top = Double(layout.cardY) + model.pullY - half
-        let bottom = Double(layout.cardY) + model.pullY + half
-        if bottom > Double(base - GiftSlotDropTokens.Chevron.gap) {
-            if top < Double(base - GiftSlotDropTokens.Chevron.gap) { return (base, false) }
-            return (CGFloat(top) - GiftSlotDropTokens.Chevron.gap, true)
-        }
-        return (base, true)
-    }
-}
-
-private struct GiftSlotDropPlaceholder: View {
-    let opacity: Double
-    let width: CGFloat
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR + 6)
-            .stroke(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.outline), lineWidth: 1.2)
-            .frame(width: GiftSlotDropTokens.Layout.cardW + 14, height: GiftSlotDropTokens.Layout.cardH + 14)
-            .position(x: width / 2, y: GiftSlotDropTokens.Layout.cardY)
-            .opacity(opacity)
-    }
-}
-
-private struct GiftSlotDropCards: View {
-    let model: GiftSlotDropModel
-    let size: CGSize
+    let layout: GiftSlotDropTokens.ScreenLayout
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(GiftSlotDropTokens.gifts.enumerated()), id: \.element.id) { index, gift in
-                GiftSlotDropCarouselCard(model: model, gift: gift, index: index)
+                let pose = model.cardPose(index: index)
+                GiftSlotDropCard(gift: gift, back: false)
+                    .shadow(color: .black.opacity(index == model.selected ? 0.46 : 0), radius: 18, y: 18)
+                    .overlay {
+                        if index != model.selected {
+                            RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR)
+                                .fill(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.page).opacity(0.5))
+                        }
+                    }
+                    .rotation3DEffect(.degrees(pose.turn), axis: (x: 0, y: 1, z: 0), perspective: 1 / 900)
+                    .rotation3DEffect(.degrees(pose.lean), axis: (x: 1, y: 0, z: 0), perspective: 1 / 900)
+                    .scaleEffect(pose.scale)
+                    .position(x: pose.x, y: pose.y)
+                    .opacity(pose.opacity)
             }
-            GiftSlotDropOfferCard(model: model, gift: model.gift, width: size.width)
+            Text("Drag a gift into the slot")
+                .font(GiftSlotDropFonts.font(GiftSlotDropFonts.medium, size: 13))
+                .foregroundStyle(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.mute))
+                .position(x: layout.cx, y: layout.hintY - 5)
+                .opacity(model.phase == .choosing || model.phase == .swiping ? 1 : 0)
+            GiftSlotDropDots(model: model).position(x: layout.cx, y: layout.dotsY).opacity(model.carouselOpacity)
+            Text("One welcome gift per member  ·  valid 30 days")
+                .font(GiftSlotDropFonts.font(GiftSlotDropFonts.regular, size: 13))
+                .foregroundStyle(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.faint))
+                .position(x: layout.cx, y: layout.printY - 5).opacity(model.carouselOpacity)
         }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
+        .mask(alignment: .top) { Rectangle().frame(width: layout.width, height: layout.slotY) }
     }
 }
 
-private struct GiftSlotDropCarouselCard: View {
+private struct GiftSlotDropShelf: View {
     let model: GiftSlotDropModel
-    let gift: GiftSlotDropTokens.Gift
-    let index: Int
+    let layout: GiftSlotDropTokens.ScreenLayout
 
     var body: some View {
-        let pose = model.cardPose(index: index)
-        let light = abs(Double(index) - model.offset) < 0.5 ? min(1, max(0, (model.pullY - 50) / 100)) : 0
-        let bandPhase = (Double(index) - model.offset) * -0.9 + model.pullX / 120 + 0.25 * sin(2 * .pi * model.clock / GiftSlotDropTokens.Ambient.bandMs + Double(index))
-        let bandOffset = CGFloat(bandPhase * Double(GiftSlotDropTokens.Layout.cardW))
+        let pose = model.shelfPose
         ZStack {
-            if index == model.selected {
-                RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR + 6)
-                    .stroke(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.yellow).opacity(0.55), lineWidth: 6)
-                    .frame(width: GiftSlotDropTokens.Layout.cardW + 14, height: GiftSlotDropTokens.Layout.cardH + 14)
-                    .blur(radius: 10)
-                    .opacity(model.selectionFrameOpacity)
-                RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR + 5)
-                    .stroke(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.yellow), lineWidth: 3)
-                    .frame(width: GiftSlotDropTokens.Layout.cardW + 12, height: GiftSlotDropTokens.Layout.cardH + 12)
-                    .opacity(model.selectionFrameOpacity)
-            }
-            GiftSlotDropCardArtwork(gift: gift)
-                .overlay {
-                    LinearGradient(colors: [.clear, .white.opacity(model.reducedMotion ? 0 : GiftSlotDropTokens.Ambient.band), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .offset(x: bandOffset)
-                        .blendMode(.softLight)
+            Ellipse()
+                .fill(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.amber).opacity(0.22 + 0.4 * model.slotGlow))
+                .frame(width: GiftSlotDropTokens.Layout.slotW * 1.4, height: 80).blur(radius: 22).blendMode(.plusLighter)
+            GiftSlotDropGlass(cornerRadius: GiftSlotDropTokens.Layout.shelfH / 2, warm: true)
+                .frame(width: GiftSlotDropTokens.Layout.shelfW, height: GiftSlotDropTokens.Layout.shelfH)
+            Capsule()
+                .fill(LinearGradient(colors: [
+                    GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.slotDeep),
+                    GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.slotDeep),
+                    GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.amber).opacity(0.35 + 0.65 * model.slotGlow),
+                ], startPoint: .top, endPoint: .bottom))
+                .frame(width: GiftSlotDropTokens.Layout.slotW, height: GiftSlotDropTokens.Layout.slotH)
+                .overlay(alignment: .top) {
+                    LinearGradient(colors: [.clear, GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.lip), .clear], startPoint: .leading, endPoint: .trailing).frame(height: 1)
                 }
-                .overlay(Color.white.opacity(light * GiftSlotDropTokens.Colors.cardLift))
-                .overlay(LinearGradient(colors: [.clear, GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.pocketLight).opacity(light)], startPoint: .top, endPoint: .bottom))
-                .compositingGroup()
-                .clipShape(RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR))
         }
-        .rotation3DEffect(.degrees(pose.turn), axis: (x: 0, y: 1, z: 0), perspective: 1 / 700)
-        .rotation3DEffect(.degrees(pose.lean), axis: (x: 1, y: 0, z: 0), perspective: 1 / 700)
-        .rotationEffect(.degrees(pose.roll))
-        .scaleEffect(CGFloat(pose.scale))
-        .position(x: CGFloat(pose.x), y: CGFloat(pose.y))
-        .opacity(pose.opacity)
+        .position(x: layout.cx, y: layout.slotY + pose.y).opacity(pose.opacity)
     }
 }
 
-private struct GiftSlotDropCardArtwork: View {
-    let gift: GiftSlotDropTokens.Gift
-
-    var body: some View {
-        let layout = GiftSlotDropTokens.Layout.self
-        ZStack {
-            GiftSlotDropTokens.color(gift.glow)
-            GiftSlotDropAssetImage(name: "GiftSlotDrop-card-\(gift.id).jpg")
-                .scaledToFill()
-            GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.cardShadeInk).opacity(GiftSlotDropTokens.Colors.cardShade.base)
-            GiftSlotDropTokens.color(gift.glow).opacity(GiftSlotDropTokens.Colors.cardShade.multiply).blendMode(.multiply)
-            VStack(spacing: 0) {
-                GiftSlotDropWordmark(gift: gift, offer: false)
-                    .frame(height: 49, alignment: .bottom)
-                Text(gift.headline).font(.custom("Avenir Next", size: GiftSlotDropTokens.TypeStyle.cardBig).weight(.bold)).padding(.top, 24)
-                Text(gift.line).font(.custom("Avenir Next", size: GiftSlotDropTokens.TypeStyle.cardLine).weight(.bold))
-                Text(gift.cap).font(.custom("Avenir Next", size: GiftSlotDropTokens.TypeStyle.cardLine).weight(.bold)).padding(.top, 2)
-                Spacer()
-            }
-            .foregroundStyle(GiftSlotDropTokens.color(gift.ink))
-        }
-        .frame(width: layout.cardW, height: layout.cardH)
-    }
-}
-
-private struct GiftSlotDropWordmark: View {
-    let gift: GiftSlotDropTokens.Gift
-    let offer: Bool
-
-    var body: some View {
-        let size: CGFloat = offer ? 22.4 : 16
-        let fontSize = offer ? GiftSlotDropTokens.TypeStyle.offerMark : GiftSlotDropTokens.TypeStyle.mark
-        if gift.id == "parcels" {
-            VStack(spacing: 0) {
-                Text(gift.wordmark)
-                GiftSlotDropAssetImage(name: "GiftSlotDrop-mark-arrow.png").scaledToFit().frame(height: size * 0.9)
-            }
-            .font(.custom("Avenir Next", size: fontSize).weight(.bold))
-        } else {
-            HStack(spacing: offer ? 7 : 5) {
-                if gift.id != "white" {
-                    GiftSlotDropAssetImage(name: gift.id == "burger" ? "GiftSlotDrop-mark-bun.png" : "GiftSlotDrop-mark-swirl.png")
-                        .scaledToFit().frame(width: size, height: size)
-                }
-                Text(gift.wordmark)
-            }
-            .font(.custom("Avenir Next", size: fontSize).weight(.bold))
-        }
-    }
-}
-
-private struct GiftSlotDropOfferCard: View {
+private struct GiftSlotDropOffer: View {
     let model: GiftSlotDropModel
-    let gift: GiftSlotDropTokens.Gift
-    let width: CGFloat
+    let layout: GiftSlotDropTokens.ScreenLayout
 
     var body: some View {
         let pose = model.offerPose()
-        let words = gift.use.split(separator: " ")
-        let half = Int(ceil(Double(words.count) / 2))
-        let first = words[..<half].joined(separator: " ")
-        let second = words[half...].joined(separator: " ")
-        let ink = GiftSlotDropTokens.color(gift.id == "parcels" ? "#FFFFFF" : gift.ink)
-        ZStack {
-            GiftSlotDropTokens.color(gift.glow)
-            GiftSlotDropAssetImage(name: gift.id == "parcels" ? "GiftSlotDrop-offer-bg.jpg" : "GiftSlotDrop-card-\(gift.id).jpg").scaledToFill().saturation(0.75).brightness(-0.04)
-            GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.offerWarm)
-            VStack(spacing: 0) {
-                GiftSlotDropWordmark(gift: gift, offer: true).frame(height: 64, alignment: .bottom)
-                Text("\(model.offerPercent)%").font(.custom("Avenir Next", size: GiftSlotDropTokens.TypeStyle.offerBig).weight(.bold)).padding(.top, 73)
-                Text(gift.line).font(.custom("Avenir Next", size: GiftSlotDropTokens.TypeStyle.offerLine).weight(.medium)).offset(y: -5)
-                Text(first).padding(.top, 29)
-                Text(second).padding(.top, 2)
-                Spacer()
-                Text(gift.expires).padding(.bottom, 39)
+        let back = pose.angle > .pi / 2
+        let angle = back ? pose.angle - .pi : pose.angle
+        ZStack(alignment: .topLeading) {
+            GiftSlotDropCard(gift: model.gift, back: back)
+                .shadow(color: .black.opacity(0.5), radius: 18, y: 20)
+                .rotation3DEffect(.radians(angle), axis: (x: 0, y: 1, z: 0), perspective: 1 / 900)
+                .scaleEffect(pose.scale).position(x: layout.cx, y: pose.y).opacity(pose.opacity)
+            ForEach(0..<2, id: \.self) { index in
+                let progress = model.detailProgress(index)
+                HStack(spacing: 19) {
+                    Text(String(format: "0%d", index + 1))
+                        .font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 13))
+                        .foregroundStyle(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.amberInk))
+                        .frame(width: 21, alignment: .leading)
+                    Text(model.gift.steps[index])
+                        .font(GiftSlotDropFonts.font(GiftSlotDropFonts.regular, size: 15))
+                        .foregroundStyle(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.ink))
+                }
+                .offset(x: 40, y: layout.stepsY - 13 + CGFloat(index * 32) + (model.reducedMotion ? 0 : 8 * CGFloat(1 - progress)))
+                .opacity(progress)
             }
-            .font(.custom("Avenir Next", size: GiftSlotDropTokens.TypeStyle.offerSmall).weight(.medium))
-            .foregroundStyle(ink)
         }
-        .frame(width: GiftSlotDropTokens.Layout.offerW, height: GiftSlotDropTokens.Layout.offerH)
-        .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .scaleEffect(CGFloat(pose.scale))
-        .position(x: width / 2, y: CGFloat(pose.y))
-        .opacity(pose.opacity)
+        .frame(width: layout.width, height: layout.height, alignment: .topLeading)
+        .mask(alignment: .top) { Rectangle().frame(width: layout.width, height: pose.rising ? layout.slotY : layout.height) }
     }
 }
 
-private struct GiftSlotDropConfetti: View {
+private struct GiftSlotDropCard: View {
+    let gift: GiftSlotDropTokens.Gift
+    let back: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR)
+                .fill(LinearGradient(colors: [GiftSlotDropTokens.color(back ? gift.bg2 : gift.bg), GiftSlotDropTokens.color(back ? gift.bg : gift.bg2)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            if !back {
+                GiftSlotDropMark(kind: gift.mark)
+                    .stroke(GiftSlotDropTokens.color(gift.ink).opacity(0.07), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                    .frame(width: 168, height: 168).offset(x: 84, y: 148)
+                LinearGradient(colors: [.white.opacity(0.09), .clear], startPoint: .topLeading, endPoint: .center)
+                    .clipShape(RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR))
+            }
+            RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR - 0.5)
+                .stroke(.white.opacity(0.16), lineWidth: 1).padding(0.5)
+            GiftSlotDropMark(kind: gift.mark)
+                .stroke(GiftSlotDropTokens.color(gift.ink), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                .frame(width: 16, height: 16).offset(x: 20, y: 22)
+            Text(gift.shop)
+                .font(GiftSlotDropFonts.font(GiftSlotDropFonts.semibold, size: 14))
+                .foregroundStyle(GiftSlotDropTokens.color(gift.ink)).offset(x: 44, y: 20)
+            if back { backContents } else { frontContents }
+        }
+        .frame(width: GiftSlotDropTokens.Layout.cardW, height: GiftSlotDropTokens.Layout.cardH)
+        .clipShape(RoundedRectangle(cornerRadius: GiftSlotDropTokens.Layout.cardR))
+    }
+
+    private var frontContents: some View {
+        ZStack(alignment: .topLeading) {
+            Text("GIFT")
+                .font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 10)).tracking(1.2)
+                .foregroundStyle(GiftSlotDropTokens.color(gift.ink).opacity(0.85)).padding(.horizontal, 7).frame(height: 18)
+                .overlay(Capsule().stroke(GiftSlotDropTokens.color(gift.ink).opacity(0.4), lineWidth: 1)).offset(x: 143, y: 22)
+            Text(gift.offer).font(GiftSlotDropFonts.font(GiftSlotDropFonts.semibold, size: 54))
+                .foregroundStyle(GiftSlotDropTokens.color(gift.ink)).offset(x: 18, y: 91)
+            Text(gift.line).font(GiftSlotDropFonts.font(GiftSlotDropFonts.medium, size: 15))
+                .foregroundStyle(GiftSlotDropTokens.color(gift.ink)).offset(x: 20, y: 157)
+            Text(gift.cap).font(GiftSlotDropFonts.font(GiftSlotDropFonts.regular, size: 13))
+                .foregroundStyle(GiftSlotDropTokens.color(gift.sub)).offset(x: 20, y: 181)
+            footer(left: "WELCOME GIFT", right: "ORRA PAY", rightBright: false)
+        }
+    }
+
+    private var backContents: some View {
+        ZStack(alignment: .topLeading) {
+            Circle().stroke(GiftSlotDropTokens.color(gift.ink).opacity(0.5), lineWidth: 1.2).frame(width: 18, height: 18)
+                .overlay(Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(GiftSlotDropTokens.color(gift.ink)))
+                .offset(x: 174, y: 22)
+            Text("YOUR CODE").font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 11)).tracking(1.4)
+                .foregroundStyle(GiftSlotDropTokens.color(gift.sub)).offset(x: 20, y: 86)
+            Text(gift.code).font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 19)).minimumScaleFactor(0.75).lineLimit(1)
+                .foregroundStyle(GiftSlotDropTokens.color(gift.ink)).frame(width: 144, height: 52)
+                .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(GiftSlotDropTokens.color(gift.ink).opacity(0.14), lineWidth: 1))
+                .offset(x: 20, y: 116)
+            Text("\(gift.offer) \(gift.line)").font(GiftSlotDropFonts.font(GiftSlotDropFonts.medium, size: 15)).minimumScaleFactor(0.72).lineLimit(1)
+                .foregroundStyle(GiftSlotDropTokens.color(gift.ink)).frame(width: 172, alignment: .leading).offset(x: 20, y: 184)
+            Text(gift.cap).font(GiftSlotDropFonts.font(GiftSlotDropFonts.regular, size: 13))
+                .foregroundStyle(GiftSlotDropTokens.color(gift.sub)).offset(x: 20, y: 211)
+            footer(left: "VALID TO 27 NOV", right: "ACTIVE", rightBright: true)
+        }
+    }
+
+    private func footer(left: String, right: String, rightBright: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(GiftSlotDropTokens.color(gift.ink).opacity(0.16)).frame(width: 172, height: 1).offset(x: 20, y: 226)
+            Text(left).font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 10)).tracking(1.2)
+                .foregroundStyle(GiftSlotDropTokens.color(gift.sub)).offset(x: 20, y: 244)
+            Text(right).font(GiftSlotDropFonts.font(GiftSlotDropFonts.mono, size: 10)).tracking(1.2)
+                .foregroundStyle(GiftSlotDropTokens.color(rightBright ? gift.ink : gift.sub))
+                .frame(width: 92, alignment: .trailing).offset(x: 100, y: 244)
+        }
+    }
+}
+
+private struct GiftSlotDropMark: Shape {
+    let kind: GiftSlotDropTokens.Gift.Mark
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 16, sy = rect.height / 16
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * sx, y: rect.minY + y * sy) }
+        var path = Path()
+        switch kind {
+        case .bowl:
+            path.move(to: p(1, 6.5)); path.addLine(to: p(15, 6.5)); path.addCurve(to: p(8, 14), control1: p(15, 10.9), control2: p(11.9, 14)); path.addCurve(to: p(1, 6.5), control1: p(4.1, 14), control2: p(1, 10.9)); path.move(to: p(3.2, 4.2)); path.addLine(to: p(12.8, 4.2))
+        case .rails:
+            path.move(to: p(4, 15)); path.addLine(to: p(7.5, 1)); path.move(to: p(8.5, 15)); path.addLine(to: p(12, 1)); path.move(to: p(3.9, 11.5)); path.addLine(to: p(10.9, 11.5)); path.move(to: p(4.8, 8)); path.addLine(to: p(11.8, 8)); path.move(to: p(5.7, 4.5)); path.addLine(to: p(12.7, 4.5))
+        case .leaf:
+            path.move(to: p(8, 1)); path.addCurve(to: p(8, 15), control1: p(13.2, 4.2), control2: p(14, 10.2)); path.addCurve(to: p(8, 1), control1: p(2, 10.2), control2: p(2.8, 4.2)); path.move(to: p(8, 4)); path.addLine(to: p(8, 15))
+        case .bean:
+            path.addEllipse(in: CGRect(x: rect.minX + 1.6 * sx, y: rect.minY + 1.2 * sy, width: 12.8 * sx, height: 13.6 * sy)); path.move(to: p(9.6, 2.4)); path.addCurve(to: p(6.4, 13.6), control1: p(6.2, 5.2), control2: p(9.8, 10.8))
+        }
+        return path
+    }
+}
+
+private struct GiftSlotDropDots: View {
     let model: GiftSlotDropModel
-
     var body: some View {
-        Canvas { context, _ in
-            let colors = [GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.yellow), Color.white, GiftSlotDropTokens.color(model.gift.glow)]
-            for piece in model.confetti where piece.life > 0 {
-                let fade = min(1, piece.life / 0.4)
-                let width = 10 * fade
-                let height = (5.2 * fade * abs(cos(piece.angle * 1.7)) + 1)
-                var context = context
-                context.translateBy(x: CGFloat(piece.x), y: CGFloat(piece.y))
-                context.rotate(by: .radians(piece.angle))
-                context.fill(Path(CGRect(x: CGFloat(-width / 2), y: CGFloat(-height / 2), width: CGFloat(width), height: CGFloat(height))), with: .color(colors[piece.color]))
+        HStack(spacing: 6) {
+            ForEach(0..<GiftSlotDropTokens.gifts.count, id: \.self) { index in
+                let active = max(0, 1 - abs(Double(index) - model.offset))
+                Capsule().fill(GiftSlotDropTokens.color(GiftSlotDropTokens.Colors.ink).opacity(0.22 + 0.68 * active))
+                    .frame(width: 6 + 12 * active, height: 6)
             }
         }
-        .allowsHitTesting(false)
     }
 }
 
-private struct GiftSlotDropAssetImage: View {
-    let name: String
-
+private struct GiftSlotDropGlass: View {
+    let cornerRadius: CGFloat
+    var warm = false
     var body: some View {
-        if let image = UIImage(named: name) {
-            Image(uiImage: image).resizable()
-        } else {
-            Color.clear.onAppear { assertionFailure("Missing GiftSlotDrop asset: \(name)") }
-        }
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill((warm ? Color(red: 0.16, green: 0.105, blue: 0.07) : Color(red: 0.11, green: 0.10, blue: 0.09)).opacity(0.76))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(LinearGradient(colors: [.white.opacity(warm ? 0.10 : 0.08), .clear, .black.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(.white.opacity(0.24), lineWidth: 0.8))
+            .shadow(color: .black.opacity(0.22), radius: 12, y: 7)
+    }
+}
+
+private struct GiftSlotDropFinger: View {
+    let model: GiftSlotDropModel
+    var body: some View {
+        Circle().fill(.white.opacity(0.14)).overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 1))
+            .frame(width: 40, height: 40).position(x: model.ghost.x, y: model.ghost.y).opacity(model.ghost.opacity)
+    }
+}
+
+private extension UIColor {
+    convenience init(giftSlotHex: String) {
+        let value = UInt64(giftSlotHex.dropFirst(), radix: 16) ?? 0
+        self.init(red: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255, alpha: 1)
     }
 }

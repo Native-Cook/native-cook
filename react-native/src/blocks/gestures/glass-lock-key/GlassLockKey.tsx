@@ -1,4 +1,5 @@
 import { Canvas, type Transforms3d } from '@shopify/react-native-skia';
+import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useMemo, useState } from 'react';
@@ -8,6 +9,7 @@ import Animated, {
   useAnimatedStyle, useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue, type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle as SvgCircle, Path as SvgPath, Rect as SvgRect } from 'react-native-svg';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { LockScene, type LockValues } from './LockScene';
@@ -34,9 +36,16 @@ export function GlassLockKey({ autoPlay = false }: Props) {
   const paths = useMemo(() => makeLockPaths(), []);
   const [open, setOpen] = useState(false);
   const [wrong, setWrong] = useState(false);
-  const [debug, setDebug] = useState('');
+  const [fonts] = useFonts({
+    [TYPE.titleFamily]: require('./assets/InstrumentSerif-Regular.ttf'),
+    [TYPE.ui]: require('./assets/Inter-Regular.ttf'),
+    [TYPE.uiMedium]: require('./assets/Inter-Medium.ttf'),
+    [TYPE.uiBold]: require('./assets/Inter-SemiBold.ttf'),
+  });
+  // Reduce Motion: no demo; the vault waits locked and a finger still opens it.
+  const demo = autoPlay && !reduced;
 
-  const sim = useSharedValue(initialSim(g, reduced, autoPlay));
+  const sim = useSharedValue(initialSim(g, reduced, demo));
   const kx = useSharedValue(g.restX);
   const ky = useSharedValue(g.restY);
   const tilt = useSharedValue(0);
@@ -85,7 +94,6 @@ export function GlassLockKey({ autoPlay = false }: Props) {
     }
     for (let i = 0; i < s.events.length; i++) scheduleOnRN(playHaptic, s.events[i]);
     s.events = [];
-    if (Math.floor(s.clock * 4) !== Math.floor((s.clock - 0.02) * 4)) scheduleOnRN(setDebug, `m=${s.mode} demo=${s.demoOn} q=${s.quiet.toFixed(1)} g=${s.grab} au=${s.autoUnlock.toFixed(1)} t=${s.demoT.toFixed(1)}`);
   }, [sim, kx, ky, tilt, lift, inserted, turnCos, turnSin, shackle, bounce, shake, sheet, glint, holeGlow, bob, openNow, wrongNow, g]);
 
   useFrameCallback((frame) => {
@@ -93,7 +101,7 @@ export function GlassLockKey({ autoPlay = false }: Props) {
     if (frame.timeSincePreviousFrame === null) return;
     const s = sim.get();
     s.reduced = reduced;
-    stepSim(s, g, frame.timeSincePreviousFrame / 1000, autoPlay);
+    stepSim(s, g, frame.timeSincePreviousFrame / 1000, demo);
     sim.set(s);
     publish();
   });
@@ -148,14 +156,14 @@ export function GlassLockKey({ autoPlay = false }: Props) {
     ? { opacity: sheet.value, transform: [{ translateY: 0 }] }
     : { opacity: 1, transform: [{ translateY: (1 - sheet.value) * (sheetH + 40) }] }));
   // The title follows the shackle but ignores its overshoot, so neither word lingers at rest.
-  const lockedTitle = useAnimatedStyle(() => ({ opacity: 1 - clamp((shackle.value - 0.15) / 0.7) }));
-  const openTitle = useAnimatedStyle(() => ({ opacity: clamp((shackle.value - 0.15) / 0.7) }));
+  // One word at a time: the old one is gone before the new one starts, so they never overlap mid-fade.
+  const lockedTitle = useAnimatedStyle(() => ({ opacity: 1 - clamp((shackle.value - 0.1) / 0.3), transform: [{ translateY: (reduced ? 0 : -6) * clamp((shackle.value - 0.1) / 0.3) }] }));
+  const openTitle = useAnimatedStyle(() => ({ opacity: clamp((shackle.value - 0.5) / 0.3), transform: [{ translateY: (reduced ? 0 : 6) * (1 - clamp((shackle.value - 0.5) / 0.3)) }] }));
   const hintStyle = useAnimatedStyle(() => ({ opacity: 1 - clamp(sheet.value * 3) }));
 
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" />
-      {debug ? <Text style={{ position: 'absolute', top: 50, left: 10, color: 'red', fontSize: 10, zIndex: 9 }}>{debug}</Text> : null}
+      <StatusBar style="light" />
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill} collapsable={false}>
           <Canvas style={StyleSheet.absoluteFill}>
@@ -172,13 +180,13 @@ export function GlassLockKey({ autoPlay = false }: Props) {
         </View>
       </GestureDetector>
 
-      <View pointerEvents="none" style={[styles.head, { top: insets.top + TYPE.top, left: TYPE.side, right: TYPE.side }]}>
+      {fonts && <View pointerEvents="none" style={[styles.head, { top: insets.top + TYPE.top, left: TYPE.side, right: TYPE.side }]}>
         <Text style={styles.eyebrow}>{COPY.eyebrow}</Text>
         <View style={styles.titleBox} accessible accessibilityRole="header" accessibilityLabel={open ? COPY.unlocked : COPY.locked}>
           <Animated.Text style={[styles.title, lockedTitle]}>{COPY.locked}</Animated.Text>
           <Animated.Text style={[styles.title, styles.overlay, openTitle]}>{COPY.unlocked}</Animated.Text>
         </View>
-      </View>
+      </View>}
 
       <Animated.View pointerEvents="none" style={[styles.hintBox, { bottom: insets.bottom + TYPE.bottom }, hintStyle]}>
         <Text style={[styles.hint, wrong && styles.hintWrong]}>{wrong ? COPY.wrongWay : COPY.hint}</Text>
@@ -190,15 +198,26 @@ export function GlassLockKey({ autoPlay = false }: Props) {
         importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
         style={[styles.sheet, { height: sheetH, paddingBottom: insets.bottom + SHEET.pad }, sheetStyle]}
       >
-        <Text style={styles.sheetHead} accessibilityRole="header">{COPY.head}</Text>
-        <Text style={styles.sheetSub}>{`${COPY.rows.length} items`}</Text>
+        <View style={styles.grabber} />
+        <View style={styles.sheetTop}>
+          <Text style={styles.sheetHead} accessibilityRole="header">{COPY.head}</Text>
+          <Text style={styles.sheetSub}>{COPY.meta}</Text>
+        </View>
         <View style={styles.rows}>
           {COPY.rows.map((row, i) => (
             <SheetRow key={row.title} index={i} sheet={sheet} title={row.title} sub={row.sub} icon={row.icon} last={i === COPY.rows.length - 1} reduced={reduced} />
           ))}
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={COPY.lock} onPress={() => command('lock')} style={styles.button}>
-          <Text style={styles.buttonText}>{COPY.lock}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={COPY.lock} onPress={() => command('lock')}>
+          {({ pressed }) => (
+            <View style={[styles.button, { transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+              <Svg width={16} height={16} viewBox="0 0 16 16">
+                <SvgRect x={2.5} y={7} width={11} height={7.5} rx={2} fill={COLORS.buttonInk} />
+                <SvgPath d="M5 7V5a3 3 0 0 1 6 0v2" stroke={COLORS.buttonInk} strokeWidth={1.6} fill="none" />
+              </Svg>
+              <Text style={styles.buttonText}>{COPY.lock}</Text>
+            </View>
+          )}
         </Pressable>
       </Animated.View>
     </View>
@@ -218,13 +237,38 @@ function SheetRow({ index, sheet, title, sub, icon, last, reduced }: RowProps) {
   return (
     <Animated.View style={[styles.row, !last && styles.rowLine, style]}>
       <View style={styles.rowIcon}>
-        <Text style={styles.rowIconText}>{icon}</Text>
+        <RowGlyph kind={icon} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowSub}>{sub}</Text>
       </View>
+      <View style={styles.chevron} />
     </Animated.View>
+  );
+}
+
+/** The row's mark, drawn: a code grid, a document, the Wi-Fi arcs. */
+function RowGlyph({ kind }: { kind: string }) {
+  const c = COLORS.rowIconInk;
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20">
+      {kind === 'codes' && [0, 1, 2].map((r) => [0, 1, 2].map((k) => (
+        <SvgRect key={`${r}${k}`} x={3 + k * 5.2} y={3 + r * 5.2} width={3.6} height={3.6} rx={1} fill={c} opacity={(r + k) % 2 ? 0.55 : 1} />
+      )))}
+      {kind === 'doc' && (
+        <>
+          <SvgPath d="M5 2.5h6.5L15 6v11.5H5z" stroke={c} strokeWidth={1.5} fill="none" strokeLinejoin="round" />
+          <SvgPath d="M8 10h4.5M8 13h4.5" stroke={c} strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )}
+      {kind === 'wifi' && (
+        <>
+          <SvgPath d="M3 8a10 10 0 0 1 14 0M5.5 10.8a6.4 6.4 0 0 1 9 0M8 13.5a2.8 2.8 0 0 1 4 0" stroke={c} strokeWidth={1.6} fill="none" strokeLinecap="round" />
+          <SvgCircle cx={10} cy={16} r={1.3} fill={c} />
+        </>
+      )}
+    </Svg>
   );
 }
 
@@ -232,32 +276,35 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bgTop },
   keyTarget: { position: 'absolute' },
   head: { position: 'absolute' },
-  eyebrow: { color: COLORS.mute, fontSize: TYPE.eyebrowSize, letterSpacing: TYPE.eyebrowTracking, fontWeight: '600' },
+  eyebrow: { color: COLORS.mute, fontFamily: TYPE.uiMedium, fontSize: 11, lineHeight: 16, letterSpacing: TYPE.eyebrowTracking },
   titleBox: { marginTop: TYPE.gap, height: TYPE.titleLine },
-  title: { color: COLORS.ink, fontFamily: TYPE.titleFamily, fontSize: TYPE.titleSize, lineHeight: TYPE.titleLine },
+  title: { color: COLORS.ink, fontFamily: TYPE.titleFamily, fontSize: TYPE.titleSize, lineHeight: TYPE.titleLine, letterSpacing: -0.5 },
   overlay: { position: 'absolute', left: 0, top: 0 },
   hintBox: { position: 'absolute', left: TYPE.side, right: TYPE.side, alignItems: 'center' },
-  hint: { color: COLORS.mute, fontSize: TYPE.hintSize, lineHeight: TYPE.hintLine },
+  hint: { color: COLORS.mute, fontFamily: TYPE.ui, fontSize: TYPE.hintSize, lineHeight: TYPE.hintLine },
   hintWrong: { color: COLORS.error },
   sheet: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.sheet,
-    borderTopLeftRadius: SHEET.radius, borderTopRightRadius: SHEET.radius, paddingHorizontal: SHEET.pad, paddingTop: SHEET.pad,
+    position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.sheet, borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.sheetEdge, borderTopLeftRadius: SHEET.radius, borderTopRightRadius: SHEET.radius, paddingHorizontal: SHEET.pad, paddingTop: 8,
   },
-  sheetHead: { color: COLORS.ink, fontSize: SHEET.headSize, fontWeight: '600' },
-  sheetSub: { color: COLORS.mute, fontSize: SHEET.subSize, marginTop: 4 },
-  rows: { marginTop: 16, flex: 1 },
+  grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.16)', marginBottom: 16 },
+  sheetTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  sheetHead: { color: COLORS.ink, fontFamily: TYPE.uiBold, fontSize: 17, lineHeight: 22 },
+  sheetSub: { color: COLORS.mute, fontFamily: TYPE.ui, fontSize: 13, lineHeight: 18 },
+  rows: { marginTop: 8, flex: 1 },
   row: { height: SHEET.row, flexDirection: 'row', alignItems: 'center' },
   rowLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.sheetLine },
   rowIcon: {
     width: SHEET.icon, height: SHEET.icon, borderRadius: SHEET.iconRadius, backgroundColor: COLORS.rowIcon,
     alignItems: 'center', justifyContent: 'center',
   },
-  rowIconText: { color: COLORS.rowIconInk, fontSize: 16, fontWeight: '700' },
   rowText: { marginLeft: 12, flex: 1 },
-  rowTitle: { color: COLORS.ink, fontSize: SHEET.titleSize, fontWeight: '500' },
-  rowSub: { color: COLORS.mute, fontSize: SHEET.subSize, marginTop: 2 },
+  rowTitle: { color: COLORS.ink, fontFamily: TYPE.uiMedium, fontSize: 16, lineHeight: 21 },
+  rowSub: { color: COLORS.mute, fontFamily: TYPE.ui, fontSize: 13, lineHeight: 18, marginTop: 1 },
+  chevron: { width: 8, height: 8, borderRightWidth: 1.5, borderTopWidth: 1.5, borderColor: COLORS.faint, transform: [{ rotate: '45deg' }], marginRight: 4 },
   button: {
     height: SHEET.button, borderRadius: SHEET.button / 2, backgroundColor: COLORS.button, alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', gap: 8,
   },
-  buttonText: { color: COLORS.buttonInk, fontSize: 17, fontWeight: '600' },
+  buttonText: { color: COLORS.buttonInk, fontFamily: TYPE.uiBold, fontSize: 16, lineHeight: 20 },
 });

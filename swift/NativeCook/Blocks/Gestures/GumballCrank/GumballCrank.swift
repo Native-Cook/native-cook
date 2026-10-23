@@ -1,264 +1,146 @@
-import Observation
-import QuartzCore
 import SwiftUI
 import UIKit
 
 struct GumballCrank: View {
-    /// LOOP_MS / 1000 = UP_LOOP_MS / 1000; literal required by scripts/catalog.mjs.
-    static let loop: Double = 12
+    static let loop: Double = 10
 
     var autoPlay = false
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var model: GumballCrankModel
-
-    init(autoPlay: Bool = false) {
-        self.autoPlay = autoPlay
-        _model = State(initialValue: GumballCrankModel(autoPlay: autoPlay))
-    }
 
     var body: some View {
         GeometryReader { proxy in
             let insets = proxy.safeAreaInsets
-            let size = CGSize(
-                width: proxy.size.width + insets.leading + insets.trailing,
-                height: proxy.size.height + insets.top + insets.bottom
-            )
-
-            stage(size: size, safeTop: insets.top)
+            let size = CGSize(width: proxy.size.width + insets.leading + insets.trailing, height: proxy.size.height + insets.top + insets.bottom)
+            GumballCrankSurface(autoPlay: autoPlay, reduceMotion: reduceMotion, safeTop: insets.top, safeBottom: insets.bottom)
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
                 .offset(x: -insets.leading, y: -insets.top)
         }
-        .background(GumballCrankColor.hex(GumballCrankTheme.replicaArt.wallFill).ignoresSafeArea())
+        .background(Color(uiColor: GumballCrankColor.wallTop).ignoresSafeArea())
         .preferredColorScheme(.light)
-        .onChange(of: reduceMotion) { _, reduced in
-            model.configure(autoPlay: autoPlay, reduced: reduced)
-        }
-        .onChange(of: autoPlay) { _, enabled in
-            model.configure(autoPlay: enabled, reduced: reduceMotion)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                model.startClockIfNeeded()
-            } else {
-                model.stopClock()
-            }
-        }
-        .onDisappear { model.stopClock() }
-    }
-
-    private func stage(size: CGSize, safeTop: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            GumballCrankScene(
-                state: model.state,
-                width: size.width,
-                height: size.height,
-                safeTop: safeTop,
-                onTurn: { model.command(.turn) },
-                onCollect: { model.command(.collect) }
-            )
-
-            GumballCrankTouch(model: model)
-        }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .clipped()
-        .onAppear {
-            model.layout(width: size.width)
-            model.configure(autoPlay: autoPlay, reduced: reduceMotion)
-            model.startClockIfNeeded()
-        }
-        .onChange(of: size) { _, newSize in
-            model.layout(width: newSize.width)
-        }
     }
 }
 
-@MainActor
-@Observable
-final class GumballCrankModel {
-    private(set) var state: GumballCrankState
+private struct GumballCrankSurface: UIViewRepresentable {
+    let autoPlay: Bool
+    let reduceMotion: Bool
+    let safeTop: CGFloat
+    let safeBottom: CGFloat
 
-    @ObservationIgnored private var geometry: GumballCrankGeometry
-    @ObservationIgnored private var autoPlay: Bool
-    @ObservationIgnored private var displayLink: CADisplayLink?
-    @ObservationIgnored private var previousTimestamp: CFTimeInterval?
-    @ObservationIgnored private lazy var displayLinkTarget = GumballCrankDisplayLinkTarget(model: self)
+    func makeUIView(context: Context) -> GumballCrankCanvasView {
+        let view = GumballCrankCanvasView()
+        view.configure(autoPlay: autoPlay, reduceMotion: reduceMotion, safeTop: safeTop, safeBottom: safeBottom)
+        return view
+    }
 
+    func updateUIView(_ view: GumballCrankCanvasView, context: Context) {
+        view.configure(autoPlay: autoPlay, reduceMotion: reduceMotion, safeTop: safeTop, safeBottom: safeBottom)
+    }
+}
+
+private final class GumballCrankCanvasView: UIView {
+    private let model = GumballCrankSimulation(reduced: false)
+    private let renderer = GumballCrankRenderer()
+    private var stageLayout = GumballCrankLayout.make(width: 402, height: 852, top: 0, bottom: 0)
+    private var autoPlay = false
+    private var reduceMotion = false
+    private var safeTop: CGFloat = 0
+    private var safeBottom: CGFloat = 0
+    private var configured = false
+    private var displayLink: CADisplayLink?
+    private var previousTimestamp: CFTimeInterval?
     private let selectionFeedback = UISelectionFeedbackGenerator()
-    private let rigidFeedback = UIImpactFeedbackGenerator(style: .rigid)
     private let softFeedback = UIImpactFeedbackGenerator(style: .soft)
     private let heavyFeedback = UIImpactFeedbackGenerator(style: .heavy)
     private let lightFeedback = UIImpactFeedbackGenerator(style: .light)
     private let notificationFeedback = UINotificationFeedbackGenerator()
 
-    init(autoPlay: Bool) {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = true
+        backgroundColor = GumballCrankColor.wallTop
+        isMultipleTouchEnabled = false
+        isAccessibilityElement = true
+        accessibilityTraits = .adjustable
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(autoPlay: Bool, reduceMotion: Bool, safeTop: CGFloat, safeBottom: CGFloat) {
+        let behaviorChanged = !configured || self.autoPlay != autoPlay || self.reduceMotion != reduceMotion
         self.autoPlay = autoPlay
-        state = GumballCrankSimulation.initialState(reduced: false, autoPlay: autoPlay)
-        geometry = GumballCrankSimulation.geometry(width: GumballCrankTheme.stageWidth)
+        self.reduceMotion = reduceMotion
+        self.safeTop = safeTop
+        self.safeBottom = safeBottom
+        if behaviorChanged { configured = true; model.start(autoPlay: autoPlay, reduceMotion: reduceMotion) }
+        setNeedsLayout(); setNeedsDisplay(); ensureClock()
     }
 
-    func layout(width: CGFloat) {
-        guard width > 0 else { return }
-        geometry = GumballCrankSimulation.geometry(width: Double(width))
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        stageLayout = .make(width: bounds.width, height: bounds.height, top: safeTop, bottom: safeBottom)
     }
 
-    func configure(autoPlay: Bool, reduced: Bool) {
-        let reducedChanged = state.reduced != reduced
-        self.autoPlay = autoPlay
-        state.reduced = reduced
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        window == nil ? stopClock() : ensureClock()
+    }
 
-        if reduced {
-            if state.phase == GumballCrankPhase.ready {
-                state = GumballCrankSimulation.initialState(reduced: true, autoPlay: false)
-            }
-            state.demoOn = false
-            state.w = 0
-            state.wob = 0
-            state.wobV = 0
-            state.back = 0
-            state.strain = 0
-            state.jx = 0
-            state.jxv = 0
-            state.jy = 0
-            state.jyv = 0
-            state.px.removeAll(keepingCapacity: true)
-            state.py.removeAll(keepingCapacity: true)
-            state.pvx.removeAll(keepingCapacity: true)
-            state.pvy.removeAll(keepingCapacity: true)
-            state.prot.removeAll(keepingCapacity: true)
-            state.pcol.removeAll(keepingCapacity: true)
-            state.resumeT = 0
-        } else if autoPlay, reducedChanged, state.phase == GumballCrankPhase.ready {
-            state = GumballCrankSimulation.initialState(reduced: false, autoPlay: true)
-        } else if !autoPlay {
-            state.demoOn = false
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        context.setFillColor(GumballCrankColor.wallTop.cgColor); context.fill(bounds)
+        let tableBottom = stageLayout.origin.y + GumballCrankMetrics.stage.height * stageLayout.scale
+        if tableBottom < bounds.maxY {
+            context.setFillColor(GumballCrankColor.tableFront.cgColor)
+            context.fill(CGRect(x: 0, y: tableBottom - 1, width: bounds.width, height: bounds.maxY - tableBottom + 1))
         }
-
-        if needsClock {
-            startClockIfNeeded()
-        } else {
-            stopClock()
-        }
+        renderer.draw(in: context, model: model, layout: stageLayout)
     }
 
-    func containsKnob(_ point: CGPoint) -> Bool {
-        guard state.phase == GumballCrankPhase.ready else { return false }
-        let distance = hypot(Double(point.x) - geometry.knobX, Double(point.y) - geometry.knobY)
-        return distance < GumballCrankMotion.knob.grab * geometry.scale
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let point = touches.first?.location(in: self) else { return }
+        let stage = stagePoint(point); model.pointerDown(x: stage.x, y: stage.y); ensureClock(); setNeedsDisplay(); playHaptics()
+    }
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let point = touches.first?.location(in: self) else { return }
+        let stage = stagePoint(point); model.pointerMove(x: stage.x, y: stage.y); ensureClock(); setNeedsDisplay(); playHaptics()
+    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        let stage = stagePoint(touches.first?.location(in: self) ?? .zero); model.pointerUp(x: stage.x, y: stage.y); ensureClock(); setNeedsDisplay(); playHaptics()
+    }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        let stage = stagePoint(touches.first?.location(in: self) ?? .zero); model.pointerUp(x: stage.x, y: stage.y); ensureClock(); setNeedsDisplay()
     }
 
-    func pointerDown(at point: CGPoint) {
-        send(.down(x: Double(point.x), y: Double(point.y)))
-    }
+    override func accessibilityActivate() -> Bool { model.accessibilityActivate(); ensureClock(); setNeedsDisplay(); playHaptics(); return true }
+    override var accessibilityLabel: String? { get { model.accessibilityDescription } set {} }
+    override var accessibilityHint: String? { get { model.accessibilityAction } set {} }
 
-    func pointerMoved(to point: CGPoint) {
-        send(.move(x: Double(point.x), y: Double(point.y)))
-    }
+    private func stagePoint(_ point: CGPoint) -> CGPoint { CGPoint(x: (point.x - stageLayout.origin.x) / stageLayout.scale, y: (point.y - stageLayout.origin.y) / stageLayout.scale) }
 
-    func pointerEnded() {
-        send(.up)
+    private func ensureClock() {
+        guard displayLink == nil, autoPlay || model.moving else { return }
+        let link = CADisplayLink(target: self, selector: #selector(frame(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common); displayLink = link
     }
-
-    func command(_ action: GumballCrankInput.Action) {
-        send(.command(action))
+    private func stopClock() { displayLink?.invalidate(); displayLink = nil; previousTimestamp = nil }
+    @objc private func frame(_ link: CADisplayLink) {
+        guard let previousTimestamp else { self.previousTimestamp = link.targetTimestamp; return }
+        self.previousTimestamp = link.targetTimestamp
+        model.step(dt: min(0.05, max(0, link.targetTimestamp - previousTimestamp)), autoPlay: autoPlay)
+        playHaptics(); setNeedsDisplay()
+        if !autoPlay, !model.moving { stopClock() }
     }
-
-    func startClockIfNeeded() {
-        guard needsClock, displayLink == nil else { return }
-        let link = CADisplayLink(target: displayLinkTarget, selector: #selector(GumballCrankDisplayLinkTarget.frame(_:)))
-        link.preferredFrameRateRange = CAFrameRateRange(
-            minimum: GumballCrankMotion.dynamics.preferredMinimumFPS,
-            maximum: GumballCrankMotion.dynamics.preferredMaximumFPS,
-            preferred: GumballCrankMotion.dynamics.preferredFPS
-        )
-        link.add(to: .main, forMode: .common)
-        displayLink = link
-    }
-
-    func stopClock() {
-        displayLink?.invalidate()
-        displayLink = nil
-        previousTimestamp = nil
-    }
-
-    fileprivate func frame(at timestamp: CFTimeInterval) {
-        guard let previousTimestamp else {
-            self.previousTimestamp = timestamp
-            return
-        }
-        self.previousTimestamp = timestamp
-        GumballCrankSimulation.step(
-            &state,
-            geometry: geometry,
-            frameDelta: min(
-                GumballCrankMotion.dynamics.maximumFrameDelta,
-                max(0, timestamp - previousTimestamp)
-            ) * GumballCrankMotion.qaSpeed,
-            autoPlay: autoPlay
-        )
-        playPendingFeedback()
-        if !needsClock { stopClock() }
-    }
-
-    private func send(_ event: GumballCrankInput) {
-        GumballCrankSimulation.input(&state, geometry: geometry, event: event)
-        playPendingFeedback()
-        startClockIfNeeded()
-    }
-
-    private var needsClock: Bool {
-        if state.grab || state.w > 0 || state.autoTurn >= 0 { return true }
-        if state.phase == GumballCrankPhase.dispensing
-            || state.phase == GumballCrankPhase.collecting { return true }
-        // RN's ring and glass glint continue even without the scripted demonstration.
-        if !state.reduced { return true }
-        if state.phase == GumballCrankPhase.reward,
-           state.phaseT < GumballCrankMotion.reduced.fade { return true }
-        let threshold = GumballCrankMotion.dynamics.restingThreshold
-        return abs(state.wob) > threshold
-            || abs(state.wobV) > threshold
-            || abs(state.jx) > threshold
-            || abs(state.jxv) > threshold
-            || abs(state.jy) > threshold
-            || abs(state.jyv) > threshold
-            || state.press > threshold
-    }
-
-    private func playPendingFeedback() {
-        let events = state.events
-        state.events.removeAll(keepingCapacity: true)
-        guard !state.demoOn else { return }
+    private func playHaptics() {
+        let events = model.drainHaptics(); guard !model.demoRunning else { return }
         for event in events {
             switch event {
-            case GumballCrankMotion.haptic.grab:
-                selectionFeedback.selectionChanged()
-            case GumballCrankMotion.haptic.detent:
-                rigidFeedback.impactOccurred()
-            case GumballCrankMotion.haptic.ratchet:
-                softFeedback.impactOccurred()
-            case GumballCrankMotion.haptic.dispense:
-                heavyFeedback.impactOccurred()
-            case GumballCrankMotion.haptic.open:
-                notificationFeedback.notificationOccurred(.success)
-            case GumballCrankMotion.haptic.collect:
-                lightFeedback.impactOccurred()
-            default:
-                break
+            case .tick: selectionFeedback.selectionChanged()
+            case .strain: softFeedback.impactOccurred()
+            case .drop: heavyFeedback.impactOccurred()
+            case .open: notificationFeedback.notificationOccurred(.success)
+            case .collect: lightFeedback.impactOccurred()
             }
         }
-    }
-}
-
-@MainActor
-private final class GumballCrankDisplayLinkTarget: NSObject {
-    weak var model: GumballCrankModel?
-
-    init(model: GumballCrankModel) {
-        self.model = model
-    }
-
-    @objc func frame(_ link: CADisplayLink) {
-        model?.frame(at: link.targetTimestamp)
     }
 }

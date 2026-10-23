@@ -1,36 +1,45 @@
 // Every colour, size and string of the block. Sizes are points on a 402 pt wide screen, scaled by width / 402.
+// A solid brass padlock with a steel shackle and a nickel key, in a dark vault: Instrument Serif for the state, Inter
+// for the rest.
 
 export const STAGE_WIDTH = 402;
 
 export const COLORS = {
-  // Measured from the source: flat pale grey, frosted blue glass.
-  bgTop: '#EEEEF0',
-  bgBottom: '#F6F6F7',
-  shadow: 'rgba(40, 46, 120, 0.16)',
-  bodyTop: '#4A54EC',
-  bodyBottom: '#2F37C9',
-  bodyLight: 'rgba(150, 165, 255, 0.85)',
-  bodyLightFar: 'rgba(150, 165, 255, 0)',
-  side: '#7F8BFF',
-  sideDeep: '#5862F0',
-  rim: 'rgba(255, 255, 255, 0.85)',
-  rimSoft: 'rgba(255, 255, 255, 0.35)',
-  glass: 'rgba(132, 146, 255, 0.85)',
-  glassDeep: 'rgba(84, 98, 238, 0.9)',
-  glassEdge: 'rgba(255, 255, 255, 0.9)',
-  plug: '#2A31B0',
-  slot: '#151A6E',
-  glow: 'rgba(130, 150, 255, 0.9)',
-  glint: 'rgba(255, 255, 255, 0.75)',
-  ink: '#16182E',
-  mute: 'rgba(22, 24, 46, 0.55)',
-  error: '#D6304A',
-  sheet: '#FFFFFF',
-  sheetLine: 'rgba(22, 24, 46, 0.08)',
-  rowIcon: '#E9EBFF',
-  rowIconInk: '#3D46E0',
-  button: '#16182E',
-  buttonInk: '#FFFFFF',
+  // A dark vault, one cool light from above pooling where the padlock hangs.
+  bgTop: '#101614',
+  bgBottom: '#0A0D0C',
+  pool: 'rgba(206, 226, 214, 0.10)',
+  shadow: 'rgba(0, 0, 0, 0.7)',
+  // Solid brass: lit face, the side in its own shade, a warm specular.
+  brassHigh: '#F3D58C',
+  brass: '#C9973E',
+  brassDeep: '#8A5E1F',
+  brassSide: '#9A6A26',
+  brassSideDeep: '#5E3E12',
+  brassSpec: 'rgba(255, 246, 214, 0.9)',
+  brassEdge: 'rgba(255, 236, 190, 0.75)',
+  engrave: 'rgba(70, 44, 10, 0.55)',
+  engraveLight: 'rgba(255, 238, 196, 0.45)',
+  // Hardened steel shackle and a nickel key.
+  steelHigh: '#F4F6F8',
+  steel: '#A9B0B8',
+  steelDeep: '#596069',
+  steelEdge: 'rgba(255, 255, 255, 0.85)',
+  plug: '#B98A36',
+  slot: '#1A1208',
+  glow: 'rgba(255, 214, 140, 0.55)',
+  glint: 'rgba(255, 250, 230, 0.8)',
+  ink: '#ECF1EE',
+  mute: 'rgba(236, 241, 238, 0.56)',
+  faint: 'rgba(236, 241, 238, 0.34)',
+  error: '#F08A7A',
+  sheet: '#141A18',
+  sheetEdge: 'rgba(255, 255, 255, 0.08)',
+  sheetLine: 'rgba(255, 255, 255, 0.07)',
+  rowIcon: 'rgba(233, 205, 140, 0.12)',
+  rowIconInk: '#E9CD8C',
+  button: '#ECF1EE',
+  buttonInk: '#101614',
 };
 
 export const LOCK = {
@@ -38,7 +47,7 @@ export const LOCK = {
   face: 150,
   height: 180,
   side: 22, // the 3/4 side face, as in the source
-  radius: 26,
+  radius: 18,
   shackle: 30, // thickness: 0.2 of the face, as in the source
   opening: 68,
   shackleRise: 100, // locked: top of the shackle above the body
@@ -70,9 +79,12 @@ export const TYPE = {
   top: 24,
   eyebrowSize: 12,
   eyebrowTracking: 1.8,
-  titleSize: 40,
-  titleLine: 46,
-  titleFamily: 'Georgia',
+  titleSize: 44,
+  titleLine: 50, // Instrument Serif reaches above its size: 6 pt of room
+  titleFamily: 'VaultInstrumentSerif',
+  ui: 'VaultInter',
+  uiMedium: 'VaultInterMedium',
+  uiBold: 'VaultInterSemiBold',
   hintSize: 15,
   hintLine: 20,
   gap: 8,
@@ -99,18 +111,18 @@ export const SHEET = {
 export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
 export const COPY = {
-  eyebrow: 'VAULT',
+  eyebrow: 'PERSONAL VAULT · 3 ITEMS',
   locked: 'Locked',
   unlocked: 'Unlocked',
   hint: 'Slide the key in, then turn it right',
   wrongWay: 'The other way',
   meta: '3 items · end-to-end encrypted',
-  head: 'Personal vault',
+  head: 'Opened just now',
   sheetMeta: 'Opened just now',
   rows: [
-    { title: 'Recovery codes', sub: '12 codes · added 3 days ago', icon: '#', symbol: 'number' },
-    { title: 'Passport scan', sub: 'PDF · 2.4 MB', icon: 'P', symbol: 'doc.text' },
-    { title: 'Home Wi-Fi', sub: 'Password · shared with 2', icon: 'W', symbol: 'wifi' },
+    { title: 'Recovery codes', sub: '12 codes · added 3 days ago', icon: 'codes' },
+    { title: 'Passport scan', sub: 'PDF · 2.4 MB · expires 2031', icon: 'doc' },
+    { title: 'Home Wi-Fi', sub: 'Password · shared with 2', icon: 'wifi' },
   ],
   lock: 'Lock vault',
   unlock: 'Unlock vault',
@@ -118,35 +130,3 @@ export const COPY = {
   keyHint: 'Swipe up to insert and turn the key',
 };
 
-// Replica step (owner's fidelity gate): the source's render as Blender layers registered to the full screen
-// (1206 × 2622 px = the source frame scaled to the screen width, centred). Off after the lead accepts.
-export const REPLICA = false;
-export const REPLICA_BG = '#EFEFEF'; // the source's studio grey
-
-// Upgrade layout (points on a 402 pt wide screen) for the replica's registered layers.
-export const UPG = {
-  keyFront: { x: 200.7, y: 436.3 }, // the key-front layer's own centre (602, 1309 px)
-  keyRest: { x: 200.7, y: 436.3 }, // the loose key rests where the source shows it, alone (key-front's own centre)
-  plug: { x: 145.3, y: 461 }, // key-in's centre (436, 1383 px): carrying the key here seats it
-  ring: { x: 107, y: 443 }, // key-in's ring, the turn handle
-  insertAngle: -1.19, // rad: key-front turned into key-in's axis
-  lockCentre: { x: 201, y: 445 },
-  darkCentre: { x: 220, y: 470, r: 120 }, // the body's deep-blue centre (the source's)
-  darkColor: 'rgba(20, 24, 120, 0.55)',
-  glow: { r: 260, color: 'rgba(80, 96, 255, 0.35)' }, // Liquid Glass hue field behind the lock
-  bg: ['#F2F2F6', '#E6E8F3'],
-};
-
-// Per-layer registration to the source, in source px (1206 × 2622), fitted by edge chamfer against the reference
-// frames: [scaleX, scaleY, rotation° (counter-clockwise on screen), dx, dy] about a centre.
-export const REPLICA_FIT = {
-  lockCentre: [660, 1416] as const, // shadow, shackles and body
-  keyCentre: [436, 1383] as const, // the key in the keyhole
-  frontCentre: [602, 1309] as const, // the lone key
-  lock: [1.01, 1.01, 0, 0, 0] as const,
-  shackleClosed: [3, 0] as const, // px, on top of `lock`
-  shackleOpen: [-4, 1] as const,
-  keyClosed: [1, 1, 0, 0, 0, 0] as const, // assets/key-in-a.png: the key as in ref a, rendered in that pose
-  keyOpen: [0.95, 0.885, 0, 39, 25.5, -0.075] as const, // assets/key-in.png turned, shackle up (ref b); last value: shear x per y
-  front: [1.01, 0.99, 0, 0, 2] as const,
-};

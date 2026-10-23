@@ -1,272 +1,185 @@
-import { SymbolView } from 'expo-symbols';
+/**
+ * The four pages of the journal, set like a printed book: ivory stock with its grain, the binding's shade on the
+ * gutter side, a running head and a folio, Newsreader throughout (roman for the text, italic for the voice, spaced
+ * capitals for the furniture). Each page is laid out on the 402 × 874 reference and scaled by `s`; the curl snapshots
+ * them as textures, so everything a page shows is in its view.
+ */
+import { LinearGradient } from 'expo-linear-gradient';
 import { forwardRef, type ReactNode } from 'react';
-import { StyleSheet, Text, View, type TextStyle } from 'react-native';
-import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import Svg, { Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { Image, StyleSheet, Text, View, type TextStyle } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 
-import { TWINKLE } from './motion';
-import { BRAND, COPY, ICON, INK, LAYOUT, TYPE } from './theme';
+import { BOOK, COPY, PAPER, SERIF } from './theme';
 
-type Line = (typeof TYPE)[keyof typeof TYPE];
+type PageProps = { s: number; hidden: boolean; twinkle: SharedValue<number> };
 
-// Every page is drawn on the 402-pt reference grid and scaled by `s` (screen width / 402).
-function lineStyle(l: Line, s: number, color: string): TextStyle {
-  return { fontSize: l.size * s, lineHeight: l.line * s, fontWeight: l.weight, color };
+const PAPER_TILE = require('./assets/paper.jpg');
+
+function serif(size: number, line: number, s: number, color: string = PAPER.ink, italic = false): TextStyle {
+  return { fontFamily: italic ? SERIF.italic : SERIF.roman, fontSize: size * s, lineHeight: line * s, color };
 }
 
-const Sheet = forwardRef<View, { children: ReactNode; label: string; hidden: boolean }>(function Sheet(
-  { children, label, hidden },
-  ref,
-) {
-  return (
-    <View
-      ref={ref}
-      collapsable={false}
-      style={styles.sheet}
-      accessibilityLabel={label}
-      accessibilityElementsHidden={hidden}
-      importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
-    >
-      {children}
-    </View>
-  );
-});
-
-// A four-point sparkle; the source tints it with four hues around its centre.
-function sparklePath(r: number) {
-  const k = r * 0.17;
-  return `M0 ${-r} Q${k} ${-k} ${r} 0 Q${k} ${k} 0 ${r} Q${-k} ${k} ${-r} 0 Q${-k} ${-k} 0 ${-r} Z`;
+/** Spaced capitals: the running heads, the labels. */
+function caps(size: number, s: number, color: string = PAPER.mute): TextStyle {
+  return { fontFamily: SERIF.roman, fontSize: size * s, lineHeight: size * 1.4 * s, letterSpacing: size * 0.22 * s, color };
 }
 
-function Sparkle({ size, colored }: { size: number; colored?: boolean }) {
-  const r = size / 2;
-  return (
-    <Svg width={size} height={size} viewBox={`${-r} ${-r} ${size} ${size}`}>
-      {colored ? (
-        <>
-          <Defs>
-            <LinearGradient id="sv" x1="0" y1={-r} x2="0" y2={r} gradientUnits="userSpaceOnUse">
-              <Stop offset="0" stopColor={ICON.sparkle[0]} />
-              <Stop offset="0.5" stopColor="#F2A2B8" />
-              <Stop offset="1" stopColor={ICON.sparkle[2]} />
-            </LinearGradient>
-            <LinearGradient id="sh" x1={-r} y1="0" x2={r} y2="0" gradientUnits="userSpaceOnUse">
-              <Stop offset="0" stopColor={ICON.sparkle[3]} stopOpacity="0.9" />
-              <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0" />
-              <Stop offset="1" stopColor={ICON.sparkle[1]} stopOpacity="0.95" />
-            </LinearGradient>
-          </Defs>
-          <Path d={sparklePath(r)} fill="url(#sv)" />
-          <Path d={sparklePath(r)} fill="url(#sh)" />
-        </>
-      ) : (
-        <Path d={sparklePath(r)} fill={ICON.markInk} />
-      )}
-    </Svg>
-  );
+/** Spaced capitals inside a line of text: no line height of their own, so the line keeps the paragraph's. */
+function runIn(size: number, s: number, color: string = PAPER.ink): TextStyle {
+  return { fontFamily: SERIF.roman, fontSize: size * s, letterSpacing: size * 0.18 * s, color };
 }
 
-// A sparkle that twinkles once when `t` runs 0 → 1: it swells and turns a quarter (a four-point star looks the same
-// after 90°), so it rests exactly as drawn. `delay` staggers it, as a fraction of the run.
-function Twinkle({ t, delay, children }: { t: SharedValue<number>; delay: number; children: ReactNode }) {
-  const style = useAnimatedStyle(() => {
-    const u = Math.max(0, Math.min(1, (t.value - delay) / (1 - delay)));
-    const swell = Math.sin(Math.PI * u);
-    return { transform: [{ scale: 1 + (TWINKLE.scale - 1) * swell }, { rotate: `${TWINKLE.turnDeg * u}deg` }] };
-  });
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
-
-// "Ritualbook" with its i dotted by a sparkle, as the source's wordmark is.
-function Wordmark({ s, t }: { s: number; t: SharedValue<number> }) {
-  const l = TYPE.brand;
-  const st = [lineStyle(l, s, INK.text), { letterSpacing: -0.4 * s }];
-  const [head, tail] = [BRAND.name.slice(0, 1), BRAND.name.slice(2)];
-  return (
-    <View style={[styles.wordRow, { top: l.top * s, height: l.line * s }]} accessible accessibilityRole="header" accessibilityLabel={BRAND.name}>
-      <Text style={st}>{head}</Text>
-      <View>
-        <Text style={st}>{'ı'}</Text>
-        <View style={[styles.dot, { top: 4.6 * s, left: 0.3 * s }]}>
-          <Twinkle t={t} delay={TWINKLE.staggerMs / TWINKLE.durationMs}>
-            <Sparkle size={7 * s} />
-          </Twinkle>
-        </View>
+const Sheet = forwardRef<View, { children: ReactNode; label: string; hidden: boolean; s: number; head?: string; folio?: string }>(
+  function Sheet({ children, label, hidden, s, head, folio }, ref) {
+    return (
+      <View
+        ref={ref}
+        collapsable={false}
+        style={styles.sheet}
+        accessibilityLabel={label}
+        accessibilityElementsHidden={hidden}
+        importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
+      >
+        <Image source={PAPER_TILE} resizeMode="repeat" style={StyleSheet.absoluteFill} />
+        {/* The page bends into the binding on the left and its fore-edge catches a little light on the right. */}
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(70,48,24,0.24)', 'rgba(70,48,24,0.07)', 'rgba(70,48,24,0)']}
+          locations={[0, 0.35, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[styles.gutter, { width: BOOK.gutter * s }]}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(70,48,24,0)', 'rgba(70,48,24,0.06)']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[styles.foreEdge, { width: 14 * s }]}
+        />
+        {head ? <Text style={[styles.abs, styles.center, { top: BOOK.head * s }, caps(9.5, s)]}>{head}</Text> : null}
+        {children}
+        {folio ? <Text style={[styles.abs, styles.center, { top: BOOK.folio * s }, serif(13, 18, s, PAPER.mute, true)]}>{folio}</Text> : null}
       </View>
-      <Text style={st}>{tail}</Text>
-    </View>
-  );
-}
+    );
+  },
+);
 
-// The app mark: a white squircle with a heavy monogram and its bottom-left corner curling up like a page.
-function Mark({ s, t }: { s: number; t: SharedValue<number> }) {
-  const m = LAYOUT.mark;
-  const size = m.size * s;
+/** A printer's rule with a lozenge in the middle. */
+function Ornament({ s, top, width = 132 }: { s: number; top: number; width?: number }) {
+  const w = width * s;
+  const h = 10 * s;
   return (
-    <View style={[styles.mark, { left: m.left * s, top: m.top * s, width: size, height: size, borderRadius: m.radius * s }]}>
-      <View style={[styles.markLetters, { top: 18 * s }]}>
-        <Text style={[styles.markText, { fontSize: 62 * s, lineHeight: 74 * s }]}>R</Text>
-        <View>
-          <Text style={[styles.markText, { fontSize: 62 * s, lineHeight: 74 * s }]}>{'ı'}</Text>
-          <View style={[styles.dot, { top: 4 * s, left: -3 * s }]}>
-            <Twinkle t={t} delay={0}>
-              <Sparkle size={20 * s} />
-            </Twinkle>
-          </View>
-        </View>
-      </View>
-      <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 100">
-        <Defs>
-          <LinearGradient id="flap" x1="22" y1="78" x2="4" y2="96" gradientUnits="userSpaceOnUse">
-            <Stop offset="0" stopColor={ICON.curlDark} />
-            <Stop offset="0.45" stopColor={ICON.curlMid} />
-            <Stop offset="1" stopColor={ICON.curlLight} />
-          </LinearGradient>
-          <LinearGradient id="lip" x1="20" y1="80" x2="30" y2="90" gradientUnits="userSpaceOnUse">
-            <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
-            <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0.95" />
-          </LinearGradient>
-        </Defs>
-        <G>
-          <Path d="M0 60 C10 70 30 88 41 100 L0 100 Z" fill="url(#flap)" />
-          <Path d="M0 60 C10 70 30 88 41 100 L46 100 C34 88 14 70 0 57 Z" fill="url(#lip)" />
-        </G>
+    <View style={[styles.abs, { top: top * s, left: 0, right: 0, alignItems: 'center' }]}>
+      <Svg width={w} height={h} viewBox={`0 0 ${width} 10`}>
+        <Line x1="0" y1="5" x2={width / 2 - 10} y2="5" stroke={PAPER.rule} strokeWidth="0.8" />
+        <Line x1={width / 2 + 10} y1="5" x2={width} y2="5" stroke={PAPER.rule} strokeWidth="0.8" />
+        <Path d={`M${width / 2} 1 L${width / 2 + 4} 5 L${width / 2} 9 L${width / 2 - 4} 5 Z`} fill={PAPER.accent} />
+        <Circle cx={width / 2 - 7} cy="5" r="1" fill={PAPER.accent} />
+        <Circle cx={width / 2 + 7} cy="5" r="1" fill={PAPER.accent} />
       </Svg>
     </View>
   );
 }
 
-function CheckBadge({ size }: { size: number }) {
+/** The publisher's seal: a blind-stamped ring with the volume and the year. */
+function Seal({ s, top }: { s: number; top: number }) {
+  const d = 104 * s;
   return (
-    <Svg width={size} height={size} viewBox="0 0 28 28">
-      <Defs>
-        <LinearGradient id="ck" x1="24" y1="3" x2="5" y2="26" gradientUnits="userSpaceOnUse">
-          <Stop offset="0" stopColor={ICON.check[0]} />
-          <Stop offset="0.55" stopColor={ICON.check[1]} />
-          <Stop offset="1" stopColor={ICON.check[2]} />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="28" height="28" rx="14" fill="url(#ck)" />
-      <Path d="M8.2 14.6 L12.4 18.6 L20 9.6" stroke="#FFFFFF" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </Svg>
-  );
-}
-
-function BarsIcon({ size }: { size: number }) {
-  const bars = [
-    { x: 3, h: 15, o: 0.95 },
-    { x: 9.6, h: 20, o: 0.85 },
-    { x: 16.2, h: 16, o: 0.7 },
-    { x: 22.8, h: 10, o: 0.5 },
-  ];
-  return (
-    <Svg width={size} height={size} viewBox="0 0 30 30">
-      <Defs>
-        <LinearGradient id="bar" x1="0" y1="3" x2="0" y2="25" gradientUnits="userSpaceOnUse">
-          <Stop offset="0" stopColor={ICON.bars[0]} />
-          <Stop offset="1" stopColor={ICON.bars[1]} />
-        </LinearGradient>
-      </Defs>
-      {bars.map((b) => (
-        <Rect key={b.x} x={b.x} y={24 - b.h} width="4.6" height={b.h} rx="1" fill="url(#bar)" opacity={b.o} />
-      ))}
-      <Rect x="1" y="26.2" width="28" height="2.2" rx="1.1" fill={ICON.barsBase} />
-    </Svg>
-  );
-}
-
-type PageProps = { s: number; hidden: boolean; twinkle: SharedValue<number> };
-
-export const TitlePage = forwardRef<View, PageProps>(function TitlePage({ s, hidden, twinkle }, ref) {
-  return (
-    <Sheet ref={ref} label={COPY.pages[0]} hidden={hidden}>
-      <Text style={[styles.abs, styles.center, { top: TYPE.eyebrow.top * s }, lineStyle(TYPE.eyebrow, s, INK.eyebrow)]}>{COPY.meet}</Text>
-      <Wordmark s={s} t={twinkle} />
-      <Mark s={s} t={twinkle} />
-      <Text style={[styles.abs, styles.center, { top: TYPE.intro.top * s }, lineStyle(TYPE.intro, s, INK.text)]}>{COPY.intro}</Text>
-      <View style={[styles.hintRow, { top: TYPE.hint.top * s, height: TYPE.hint.line * s }]}>
-        <Text style={lineStyle(TYPE.hint, s, INK.mute)}>{COPY.hint}</Text>
-        <SymbolView
-          name="arrow.right"
-          size={LAYOUT.hintArrow.size * s}
-          weight="medium"
-          tintColor={INK.mute}
-          style={{ marginLeft: LAYOUT.hintArrow.gap * s, width: LAYOUT.hintArrow.size * s, height: LAYOUT.hintArrow.size * s }}
-        />
+    <View style={[styles.abs, { top: top * s, left: 0, right: 0, alignItems: 'center' }]}>
+      <View style={[styles.seal, { width: d, height: d, borderRadius: d / 2, borderWidth: 1 * s }]}>
+        <View style={[styles.sealInner, { width: d - 10 * s, height: d - 10 * s, borderRadius: (d - 10 * s) / 2, borderWidth: 0.6 * s }]}>
+          <Text style={caps(8.5, s, PAPER.accent)}>{COPY.sealTop}</Text>
+          <Text style={serif(19, 24, s, PAPER.accent, true)}>{COPY.sealMid}</Text>
+          <Text style={caps(8.5, s, PAPER.accent)}>{COPY.sealBottom}</Text>
+        </View>
       </View>
+    </View>
+  );
+}
+
+export const TitlePage = forwardRef<View, PageProps>(function TitlePage({ s, hidden }, ref) {
+  return (
+    <Sheet ref={ref} label="Title page" hidden={hidden} s={s}>
+      <Text style={[styles.abs, styles.center, { top: 150 * s }, serif(16, 22, s, PAPER.mute, true)]}>{COPY.presents}</Text>
+      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: 196 * s }, serif(46, 50, s)]}>{COPY.title}</Text>
+      <Ornament s={s} top={318} />
+      <Text style={[styles.abs, styles.center, { top: 348 * s }, serif(17, 24, s, PAPER.ink, true)]}>{COPY.subtitle}</Text>
+      <Seal s={s} top={470} />
+      <Text style={[styles.abs, styles.center, { top: 700 * s }, caps(10, s)]}>{COPY.imprint}</Text>
+      <Text style={[styles.abs, { right: BOOK.margin * s, top: BOOK.folio * s }, serif(15, 18, s, PAPER.mute, true)]}>{COPY.hint}</Text>
     </Sheet>
   );
 });
 
 export const PrefacePage = forwardRef<View, PageProps>(function PrefacePage({ s, hidden }, ref) {
-  const r = LAYOUT.rows;
+  const block = { left: BOOK.margin * s, right: BOOK.margin * s };
   return (
-    <Sheet ref={ref} label={COPY.pages[1]} hidden={hidden}>
-      <Text style={[styles.abs, styles.center, { top: TYPE.eyebrow.top * s }, lineStyle(TYPE.eyebrow, s, INK.eyebrow)]}>{COPY.preface}</Text>
-      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: TYPE.title.top * s }, lineStyle(TYPE.title, s, INK.text)]}>{COPY.prefaceTitle}</Text>
-      {COPY.rows.map((row, i) => (
-        <View key={row.title}>
-          <View style={[styles.icon, { left: (r.iconX - r.icon / 2) * s, top: (r.iconY[i] - r.icon / 2) * s }]}>
-            {i === 0 ? <CheckBadge size={r.icon * s} /> : <BarsIcon size={r.icon * s} />}
-          </View>
-          <View style={[styles.abs, { left: r.textLeft * s, top: r.titleTop[i] * s }]}>
-            <Text style={lineStyle(TYPE.rowTitle, s, INK.text)}>{row.title}</Text>
-            <Text style={[lineStyle(TYPE.rowBody, s, INK.text), { marginTop: r.gap * s }]}>{row.body}</Text>
-          </View>
-        </View>
+    <Sheet ref={ref} label="Preface" hidden={hidden} s={s} head={COPY.headPreface} folio="ii">
+      <Text style={[styles.abs, styles.center, { top: 150 * s }, caps(11, s, PAPER.accent)]}>{COPY.preface}</Text>
+      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: 176 * s }, serif(32, 38, s)]}>{COPY.prefaceTitle}</Text>
+      <Ornament s={s} top={238} width={64} />
+      {COPY.rows.map((r, i) => (
+        <Text key={r.title} style={[styles.abs, block, { top: (284 + i * 132) * s, textAlign: 'justify' }, serif(16, 24, s)]}>
+          <Text style={runIn(12, s)}>{r.title.toUpperCase()}</Text>
+          {'  '}
+          {r.body}
+        </Text>
       ))}
-      <View style={[styles.shield, { top: LAYOUT.shield.top * s }]}>
-        <SymbolView name="shield.lefthalf.filled" size={LAYOUT.shield.size * s} tintColor={INK.footnote} />
-      </View>
-      <Text style={[styles.abs, styles.center, { top: TYPE.footnote.top * s }, lineStyle(TYPE.footnote, s, INK.footnote)]}>{COPY.footnote}</Text>
-      <Text style={[styles.abs, styles.center, { top: TYPE.folio.top * s }, lineStyle(TYPE.folio, s, INK.mute)]}>2</Text>
+      <View style={[styles.abs, { left: BOOK.margin * s, top: 640 * s, width: 64 * s, height: StyleSheet.hairlineWidth, backgroundColor: PAPER.rule }]} />
+      <Text style={[styles.abs, block, { top: 652 * s }, serif(12.5, 18, s, PAPER.mute)]}>{COPY.footnote}</Text>
     </Sheet>
   );
 });
 
 export const ForewordPage = forwardRef<View, PageProps>(function ForewordPage({ s, hidden }, ref) {
+  const block = { left: BOOK.margin * s, right: BOOK.margin * s };
   return (
-    <Sheet ref={ref} label={COPY.pages[2]} hidden={hidden}>
-      <Text style={[styles.abs, styles.center, { top: TYPE.eyebrow.top * s }, lineStyle(TYPE.eyebrow, s, INK.eyebrow)]}>{COPY.foreword}</Text>
-      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: TYPE.title.top * s }, lineStyle(TYPE.title, s, INK.text)]}>{COPY.forewordTitle}</Text>
-      <Text style={[styles.abs, { left: LAYOUT.bodyLeft * s, right: 0, top: TYPE.body.top * s }, lineStyle(TYPE.body, s, INK.text)]}>{COPY.body}</Text>
-      <Text style={[styles.abs, styles.center, { top: TYPE.folio.top * s }, lineStyle(TYPE.folio, s, INK.mute)]}>3</Text>
+    <Sheet ref={ref} label="Foreword" hidden={hidden} s={s} head={COPY.headForeword} folio="iii">
+      <Text style={[styles.abs, styles.center, { top: 150 * s }, caps(11, s, PAPER.accent)]}>{COPY.foreword}</Text>
+      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: 176 * s }, serif(32, 38, s)]}>{COPY.forewordTitle}</Text>
+      <Ornament s={s} top={238} width={64} />
+      {/* The text as one column: the first words in spaced capitals, the later paragraphs indented, no gaps. */}
+      <View style={[styles.abs, block, { top: 284 * s }]}>
+        {COPY.body.map((para, i) => (
+          <Text key={i} style={[{ textAlign: 'justify' }, serif(16, 24, s)]}>
+            {i === 0 ? (
+              <>
+                <Text style={runIn(12.5, s, PAPER.accent)}>{COPY.bodyLead}</Text>
+                {para}
+              </>
+            ) : `\u2003${para}`}
+          </Text>
+        ))}
+        <Text style={[{ marginTop: 28 * s, textAlign: 'right' }, serif(15, 22, s, PAPER.mute, true)]}>{COPY.signoff}</Text>
+      </View>
+      <Ornament s={s} top={620} width={64} />
     </Sheet>
   );
 });
 
 export const CoverPage = forwardRef<View, PageProps>(function CoverPage({ s, hidden }, ref) {
-  const sp = LAYOUT.sparkle;
   return (
-    <Sheet ref={ref} label={COPY.pages[3]} hidden={hidden}>
-      <View style={[styles.abs, { left: (sp.cx - sp.size / 2) * s, top: (sp.cy - sp.size / 2) * s }]}>
-        <Sparkle size={sp.size * s} colored />
-      </View>
-      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: TYPE.cover.top * s }, lineStyle(TYPE.cover, s, INK.text)]}>{COPY.cover}</Text>
-      <Text style={[styles.abs, styles.center, { top: TYPE.caption.top * s, letterSpacing: 0.3 * s }, lineStyle(TYPE.caption, s, INK.caption)]}>{COPY.caption}</Text>
-      <Text style={[styles.abs, styles.center, { top: TYPE.author.top * s }, lineStyle(TYPE.author, s, INK.author)]}>{COPY.author}</Text>
-      <Text style={[styles.abs, styles.center, { top: TYPE.folio.top * s }, lineStyle(TYPE.folio, s, INK.mute)]}>4</Text>
+    <Sheet ref={ref} label="This book belongs to" hidden={hidden} s={s}>
+      {/* The title is foil-blocked: it catches the light (foil-shader.ts) in this band. */}
+      <Text accessibilityRole="header" style={[styles.abs, styles.center, { top: 168 * s }, serif(40, 46, s, PAPER.foil)]}>{COPY.title}</Text>
+      <Ornament s={s} top={290} />
+      <Text style={[styles.abs, styles.center, { top: 384 * s }, caps(10.5, s)]}>{COPY.belongs}</Text>
+      <Text style={[styles.abs, styles.center, { top: 414 * s }, serif(34, 42, s, PAPER.ink, true)]}>{COPY.author}</Text>
+      <View style={[styles.abs, { left: 72 * s, right: 72 * s, top: 462 * s, height: StyleSheet.hairlineWidth, backgroundColor: PAPER.rule }]} />
+      <Text style={[styles.abs, styles.center, { top: 486 * s }, serif(15, 22, s, PAPER.mute, true)]}>{COPY.begun}</Text>
+      <Seal s={s} top={600} />
     </Sheet>
   );
 });
 
 const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: INK.paper, overflow: 'hidden' },
+  sheet: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: PAPER.base, overflow: 'hidden' },
   abs: { position: 'absolute' },
   center: { left: 0, right: 0, textAlign: 'center' },
-  wordRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' },
-  dot: { position: 'absolute' },
-  mark: {
-    position: 'absolute',
-    backgroundColor: INK.paper,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: INK.iconLine,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-  },
-  markLetters: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' },
-  markText: { fontWeight: '900', color: ICON.markInk, letterSpacing: -2 },
-  icon: { position: 'absolute' },
-  shield: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  hintRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  gutter: { position: 'absolute', left: 0, top: 0, bottom: 0 },
+  foreEdge: { position: 'absolute', right: 0, top: 0, bottom: 0 },
+  seal: { borderColor: PAPER.rule, alignItems: 'center', justifyContent: 'center' },
+  sealInner: { borderColor: PAPER.rule, alignItems: 'center', justifyContent: 'center' },
 });

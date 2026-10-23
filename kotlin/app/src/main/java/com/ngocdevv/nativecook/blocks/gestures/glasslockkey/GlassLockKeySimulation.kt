@@ -5,41 +5,60 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.sin
 
-/** Fixed-step port of glass-sim.ts. Coordinates and velocities are density-independent pixels. */
-class GlassLockKeySimulation(
-    width: Double,
-    reduced: Boolean,
+internal data class GlassLockKeyGeometry(
+    val width: Double,
+    val height: Double,
+    val scale: Double,
+    val faceX: Double,
+    val lockTop: Double,
+    val lockBottom: Double,
+    val plugX: Double,
+    val plugY: Double,
+    val restX: Double,
+    val restY: Double,
+    val seatY: Double,
+)
+
+internal fun glassLockKeyGeometry(width: Double, height: Double): GlassLockKeyGeometry {
+    val scale = width / GlassLockKeyTokens.STAGE_WIDTH
+    val lockTop = height * GlassLockKeyTokens.Lock.topRatio
+    val lockBottom = lockTop + GlassLockKeyTokens.Lock.height * scale
+    val plugY = lockBottom + GlassLockKeyTokens.Lock.plugHeight * scale
+    return GlassLockKeyGeometry(
+        width = width,
+        height = height,
+        scale = scale,
+        faceX = width / 2.0 - GlassLockKeyTokens.Lock.face * scale / 2.0,
+        lockTop = lockTop,
+        lockBottom = lockBottom,
+        plugX = width / 2.0,
+        plugY = plugY,
+        restX = width / 2.0,
+        restY = height * GlassLockKeyTokens.Key.restRatio,
+        seatY = plugY - GlassLockKeyTokens.Key.blade * scale,
+    )
+}
+
+/** Fixed-step, deterministic port of the approved RN `lock-sim.ts`. */
+internal class GlassLockKeySimulation(
+    val geometry: GlassLockKeyGeometry,
+    reducedMotion: Boolean,
     autoPlay: Boolean,
 ) {
-    init {
-        require(width > 0.0) { "width must be positive" }
-    }
-
-    val s: Double = width / GlassLockKeyTokens.STAGE_WIDTH
-    val restX: Double = GlassLockKeyTokens.UPG.keyRest.x * s
-    val restY: Double = GlassLockKeyTokens.UPG.keyRest.y * s
-    val plugX: Double = GlassLockKeyTokens.UPG.plug.x * s
-    val plugY: Double = GlassLockKeyTokens.UPG.plug.y * s
-    val ringX: Double = GlassLockKeyTokens.UPG.ring.x * s
-    val ringY: Double = GlassLockKeyTokens.UPG.ring.y * s
-
-    var reduced: Boolean = reduced
+    var reduced = reducedMotion
         set(value) {
             if (field == value) return
             field = value
             if (value) {
-                // Reduced Motion keeps direct interaction and opacity changes, but stops the demo and ambient clock.
-                cancelScriptedInteraction()
                 demoOn = false
-                auto = -1.0
-                clock = 0.0
-            } else {
-                // The next autoplay-enabled advance settles any reduced state before restarting phase zero.
-                resumeReturning = false
-                userInterrupted = true
+                autoUnlock = -1.0
+                scripted = false
+                grab = 0
             }
             quiet = 0.0
         }
@@ -50,11 +69,9 @@ class GlassLockKeySimulation(
         private set
     var mode = IDLE
         private set
-    var modeT = 0.0
+    var kx = geometry.restX
         private set
-    var kx = restX
-        private set
-    var ky = restY
+    var ky = geometry.restY
         private set
     var kvx = 0.0
         private set
@@ -62,488 +79,446 @@ class GlassLockKeySimulation(
         private set
     var lift = 0.0
         private set
-    var th = 0.0
+    var theta = 0.0
         private set
-    var tv = 0.0
-        private set
-    var detent = 0
-        private set
-    var strain = 0.0
+    var thetaVelocity = 0.0
         private set
     var shackle = 0.0
         private set
-    var shackleV = 0.0
+    var bounce = 0.0
         private set
     var sheet = 0.0
         private set
-    var glint = -1.0
+    var shakeTime = -1.0
         private set
-    var shake = -1.0
+    var glintTime = -1.0
         private set
-    var show = 0.0
-        private set
-    var idleT = 0.0
-        private set
-    var tick = -1.0
+    var wrongHint = false
         private set
     var grab = 0
         private set
-    var scripted = false
-        private set
-    var gx = 0.0
-        private set
-    var gy = 0.0
-        private set
-    var fx = 0.0
-        private set
-    var fy = 0.0
-        private set
-    var x0 = 0.0
-        private set
-    var th0 = 0.0
-        private set
-    var demoOn = autoPlay && !reduced
-        private set
-    var demoT = 0.0
-        private set
-    var quiet = 0.0
-        private set
-    var auto = -1.0
-        private set
 
-    private var resumeReturning = false
-    private var userInterrupted = false
-    private var physicalPointerActive = false
+    private var insertTime = 1.0
+    private var insertFrom = geometry.plugY
+    private var insertTo = geometry.plugY
+    private var insertDuration = 1.0
+    private var detent = 0
+    private var shackleVelocity = 0.0
+    private var bounceVelocity = 0.0
+    private var sheetTime = 1.0
+    private var sheetFrom = 0.0
+    private var sheetTo = 0.0
+    private var sheetDuration = 1.0
+    private var sheetDelay = 0.0
+    private var scripted = false
+    private var grabX = 0.0
+    private var grabY = 0.0
+    private var fingerX = 0.0
+    private var fingerY = 0.0
+    private var turnStartX = 0.0
+    private var turnStartTheta = 0.0
+    private var demoOn = autoPlay && !reducedMotion
+    private var demoTime = 0.0
+    private var quiet = 0.0
+    private var autoUnlock = -1.0
     private val events = mutableListOf<Int>()
 
-    fun advance(frameDt: Double, autoPlay: Boolean) {
-        if (frameDt <= 0.0) return
-        val elapsed = min(frameDt, GlassLockKeyTokens.SIM.maxFrameDelta)
-        acc = min(acc + elapsed, GlassLockKeyTokens.SIM.maxFrameDelta)
+    val isOpen: Boolean
+        get() = mode == OPEN
+
+    val inserted: Boolean
+        get() = mode == INSERTING || mode == SEATED || mode == OPEN || mode == CLOSING
+
+    fun advance(frameSeconds: Double, autoPlay: Boolean) {
+        if (frameSeconds <= 0.0) return
+        if (reduced) demoOn = false
+        acc = min(acc + frameSeconds, GlassLockKeyTokens.STEP * GlassLockKeyTokens.MAX_STEPS)
         while (acc >= GlassLockKeyTokens.STEP) {
+            fixedStep(autoPlay && !reduced)
             acc -= GlassLockKeyTokens.STEP
-            if (step(autoPlay)) {
-                acc = 0.0
-                break
-            }
         }
     }
 
-    fun down(x: Double, y: Double) {
-        physicalPointerActive = true
-        inputDown(x, y, isScripted = false)
+    fun down(x: Double, y: Double, isScripted: Boolean = false) {
+        scripted = isScripted
+        if (!scripted) {
+            demoOn = false
+            autoUnlock = -1.0
+            quiet = 0.0
+        }
+        fingerX = x
+        fingerY = y
+        grab = 0
+        val bowY = ky + (GlassLockKeyTokens.Key.blade + GlassLockKeyTokens.Key.ring / 2.0) * geometry.scale
+        if (mode == IDLE || mode == CARRYING) {
+            val inX = abs(x - kx) < GlassLockKeyTokens.Key.hit / 2.0 * geometry.scale
+            val inY = y > ky - 20.0 * geometry.scale &&
+                y < bowY + (GlassLockKeyTokens.Key.ring / 2.0 + 16.0) * geometry.scale
+            if (inX && inY) {
+                grab = 1
+                mode = CARRYING
+                grabX = kx - x
+                grabY = ky - y
+                emit(GlassLockKeyTokens.Haptic.grab)
+            }
+        } else if (mode == SEATED && hypot(x - kx, y - bowY) <
+            (GlassLockKeyTokens.Key.hit / 2.0 + 12.0) * geometry.scale
+        ) {
+            grab = 2
+            turnStartX = x
+            grabY = y
+            turnStartTheta = theta
+        }
     }
 
     fun move(x: Double, y: Double) {
-        fx = x
-        fy = y
-        if (!scripted) quiet = 0.0
+        fingerX = x
+        fingerY = y
     }
 
-    fun up(vx: Double, vy: Double) {
-        inputUp(vx, vy)
-        physicalPointerActive = false
-        quiet = 0.0
+    fun up(velocityX: Double, velocityY: Double) {
+        if (grab == 1) {
+            grab = 0
+            if (hypot(kx - geometry.plugX, ky - geometry.plugY) <
+                GlassLockKeyTokens.Carry.magnet * geometry.scale
+            ) {
+                seat()
+            } else {
+                mode = IDLE
+                kvx = velocityX
+                kvy = velocityY
+            }
+        } else if (grab == 2) {
+            grab = 0
+            if (theta < -0.1 && !reduced) {
+                shakeTime = 0.0
+                emit(GlassLockKeyTokens.Haptic.wrong)
+            }
+            if (theta < -0.1) wrongHint = true
+        }
+        scripted = false
     }
 
-    fun command(action: String) {
-        require(action == "unlock" || action == "lock") { "action must be unlock or lock" }
-        inputCommand(action, isScripted = false)
+    fun command(action: Action, isScripted: Boolean = false) {
+        if (!isScripted) {
+            demoOn = false
+            quiet = 0.0
+        }
+        when {
+            action == Action.lock && mode == OPEN -> {
+                mode = CLOSING
+                startSheet(0.0, 0.0)
+            }
+            action == Action.unlock && mode == IDLE -> autoUnlock = 0.0
+        }
     }
 
     fun drainEvents(): List<Int> {
         if (events.isEmpty()) return emptyList()
-        val drained = events.toList()
-        events.clear()
-        return drained
+        return events.toList().also { events.clear() }
     }
 
-    private fun inputDown(x: Double, y: Double, isScripted: Boolean) {
-        scripted = isScripted
-        if (!scripted) registerUserInteraction()
-        fx = x
-        fy = y
-        grab = 0
-        if ((mode == IDLE || mode == CARRYING) &&
-            abs(x - kx) < GlassLockKeyTokens.GM.keyHitW * s &&
-            abs(y - ky) < GlassLockKeyTokens.GM.keyHitH * s
-        ) {
-            grab = 1
-            setMode(CARRYING)
-            gx = kx - x
-            gy = ky - y
-            emit(GlassLockKeyTokens.G_HAPTIC.grab.toInt())
-        } else if (mode == SEATED && hypot(x - ringX, y - ringY) < GlassLockKeyTokens.GM.ringHit * s) {
-            grab = 2
-            x0 = x
-            th0 = th
-            strain = 0.0
-        }
-    }
-
-    private fun inputUp(vx: Double, vy: Double) {
-        if (!scripted) quiet = 0.0
-        if (grab == 1) {
-            grab = 0
-            val distance = hypot(kx - plugX, ky - plugY)
-            val toward = (plugX - kx) * vx + (plugY - ky) * vy
-            val speed = hypot(vx, vy)
-            if (distance < GlassLockKeyTokens.GM.magnet * s ||
-                (toward > 0.0 &&
-                    speed > GlassLockKeyTokens.GM.flick * s &&
-                    distance < GlassLockKeyTokens.GM.magnet * GlassLockKeyTokens.SIM.flickDistanceMultiplier * s)
-            ) {
-                seat()
-            } else {
-                setMode(IDLE)
-                kvx = vx
-                kvy = vy
-            }
-        } else if (grab == 2) {
-            grab = 0
-            if (strain < GlassLockKeyTokens.SIM.wrongReleaseThreshold && !reduced) {
-                shake = 0.0
-                emit(GlassLockKeyTokens.G_HAPTIC.wrong.toInt())
-            }
-        }
-        scripted = false
-    }
-
-    private fun inputCommand(action: String, isScripted: Boolean) {
-        if (!isScripted) {
-            // Accessibility can interrupt autoplay between its scripted down/up events.
-            cancelScriptedInteraction()
-            registerUserInteraction()
-        }
-        if (action == "lock" && mode == OPEN) {
-            setMode(CLOSING)
-        } else if (action == "unlock" && mode == IDLE) {
-            auto = 0.0
-        }
-    }
-
-    private fun registerUserInteraction() {
-        demoOn = false
-        auto = -1.0
-        quiet = 0.0
-        resumeReturning = false
-        userInterrupted = true
-    }
-
-    private fun cancelScriptedInteraction() {
-        if (!scripted) return
-        if (grab == 1) {
-            grab = 0
-            setMode(IDLE)
-            kvx = 0.0
-            kvy = 0.0
-        } else if (grab == 2) {
-            grab = 0
-        }
-        scripted = false
-    }
-
-    private fun setMode(next: Int) {
-        mode = next
-        modeT = 0.0
-    }
-
-    private fun seat() {
-        setMode(INSERTING)
-        grab = 0
-        kx = plugX
-        ky = plugY
-        emit(GlassLockKeyTokens.G_HAPTIC.seat.toInt())
-    }
-
-    private fun open() {
-        setMode(OPEN)
-        grab = 0
-        th = 1.0
-        tv = 0.0
-        shackleV += if (reduced) 0.0 else GlassLockKeyTokens.GM.shackleKick
-        glint = 0.0
-        emit(GlassLockKeyTokens.G_HAPTIC.open.toInt())
+    fun shakeOffset(): Double {
+        if (shakeTime < 0.0) return 0.0
+        val progress = shakeTime / GlassLockKeyTokens.Shake.duration
+        return GlassLockKeyTokens.Shake.amplitude * (1.0 - progress) *
+            sin(2.0 * PI * GlassLockKeyTokens.Shake.cycles * progress)
     }
 
     private fun emit(event: Int) {
-        if (!scripted && !demoOn && auto < 0.0) events += event
+        if (!scripted && !demoOn && autoUnlock < 0.0) events += event
     }
 
-    /** Returns true when this fixed step reset to the exact rest state. */
-    private fun step(autoPlay: Boolean): Boolean {
-        val dt = GlassLockKeyTokens.STEP
-        if (reduced && demoOn) demoOn = false
+    private fun startSheet(target: Double, delay: Double) {
+        sheetFrom = sheet
+        sheetTo = target
+        sheetTime = 0.0
+        sheetDelay = delay
+        val baseDuration = when {
+            reduced -> GlassLockKeyTokens.SheetMotion.reducedFade
+            target == 1.0 -> GlassLockKeyTokens.SheetMotion.open
+            else -> GlassLockKeyTokens.SheetMotion.close
+        }
+        sheetDuration = max(0.05, baseDuration * abs(target - sheet))
+    }
 
-        if (demoOn && !reduced) {
-            val t0 = demoT
-            val t1 = t0 + dt
-            runDemo(t0, t1)
-            demoT = t1
-            if (demoT * 1000.0 >= GlassLockKeyTokens.LOOP) {
-                resetForDemoLoop()
-                return true
+    private fun seat() {
+        mode = INSERTING
+        grab = 0
+        kx = geometry.plugX
+        insertFrom = geometry.plugY
+        insertTo = geometry.seatY
+        insertTime = 0.0
+        insertDuration = if (reduced) GlassLockKeyTokens.STEP else GlassLockKeyTokens.Insert.duration
+        emit(GlassLockKeyTokens.Haptic.seat)
+    }
+
+    private fun unseat() {
+        mode = INSERTING
+        insertFrom = ky
+        insertTo = geometry.plugY + 2.0 * geometry.scale
+        insertTime = 0.0
+        insertDuration = if (reduced) GlassLockKeyTokens.STEP else GlassLockKeyTokens.Insert.outDuration
+    }
+
+    private fun open() {
+        mode = OPEN
+        grab = 0
+        theta = GlassLockKeyTokens.Turn.open
+        thetaVelocity = 0.0
+        bounceVelocity += GlassLockKeyTokens.Bounce.openKick
+        shackleVelocity += if (reduced) 0.0 else 4.0
+        glintTime = 0.0
+        startSheet(1.0, if (reduced) 0.0 else GlassLockKeyTokens.SheetMotion.delay)
+        emit(GlassLockKeyTokens.Haptic.open)
+    }
+
+    private fun runDemo(start: Double, end: Double) {
+        val carry = GlassLockKeyTokens.Script.carry
+        if (start <= carry[0] && carry[0] < end) {
+            down(geometry.restX, geometry.restY + 40.0 * geometry.scale, isScripted = true)
+        }
+        if (end > carry[0] && start < carry[1] && grab == 1) {
+            val progress = cosineEase((min(end, carry[1]) - carry[0]) / (carry[1] - carry[0]))
+            move(
+                geometry.restX + GlassLockKeyTokens.Script.carryTo[0] * geometry.scale * progress,
+                geometry.restY + 40.0 * geometry.scale +
+                    GlassLockKeyTokens.Script.carryTo[1] * geometry.scale * progress,
+            )
+        }
+        if (start < carry[1] && carry[1] <= end && grab == 1) up(0.0, 0.0)
+
+        val turn = GlassLockKeyTokens.Script.turn
+        val bowY = geometry.seatY +
+            (GlassLockKeyTokens.Key.blade + GlassLockKeyTokens.Key.ring / 2.0) * geometry.scale
+        if (start <= turn[0] && turn[0] < end) {
+            down(geometry.plugX - 8.0 * geometry.scale, bowY, isScripted = true)
+        }
+        if (end > turn[0] && start < turn[1] && grab == 2) {
+            val progress = cosineEase((min(end, turn[1]) - turn[0]) / (turn[1] - turn[0]))
+            move(
+                geometry.plugX - 8.0 * geometry.scale +
+                    GlassLockKeyTokens.Script.turnBy * geometry.scale * progress,
+                bowY,
+            )
+        }
+        if (start < turn[1] && turn[1] <= end && grab == 2) up(0.0, 0.0)
+        if (start <= GlassLockKeyTokens.Script.lockAt && GlassLockKeyTokens.Script.lockAt < end) {
+            command(Action.lock, isScripted = true)
+        }
+    }
+
+    private fun fixedStep(autoPlay: Boolean) {
+        val dt = GlassLockKeyTokens.STEP
+        when {
+            demoOn -> {
+                val start = demoTime
+                var end = start + dt
+                runDemo(start, end)
+                if (end * 1000.0 >= GlassLockKeyTokens.LOOP) {
+                    end -= GlassLockKeyTokens.LOOP / 1000.0
+                    if (mode == IDLE && hypot(kx - geometry.restX, ky - geometry.restY) < 0.5) {
+                        kx = geometry.restX
+                        ky = geometry.restY
+                        kvx = 0.0
+                        kvy = 0.0
+                    }
+                }
+                demoTime = end
             }
-        } else if (auto >= 0.0) {
-            val t0 = auto + GlassLockKeyTokens.G_SCRIPT.carry[0]
-            runDemo(t0, t0 + dt)
-            auto += dt
-            if (t0 > GlassLockKeyTokens.G_SCRIPT.turn[1] + GlassLockKeyTokens.SIM.autoFinishDelay) {
-                auto = -1.0
+            autoUnlock >= 0.0 -> {
+                val start = autoUnlock + GlassLockKeyTokens.Script.carry[0]
+                runDemo(start, start + dt)
+                autoUnlock += dt
+                if (start > GlassLockKeyTokens.Script.turn[1] + 0.1) autoUnlock = -1.0
             }
-        } else if (stepResume(autoPlay, dt)) {
-            return true
+            autoPlay && grab == 0 -> {
+                quiet += dt
+                if (quiet * 1000.0 >= GlassLockKeyTokens.RESUME_MS && (mode == IDLE || mode == OPEN)) {
+                    demoOn = true
+                    demoTime = if (mode == OPEN) GlassLockKeyTokens.Script.resumeOpen else 0.0
+                }
+            }
         }
 
-        modeT += dt
         stepKey(dt)
-        lift += ((if (grab == 1) 1.0 else 0.0) - lift) *
-            (1.0 - exp(-GlassLockKeyTokens.SIM.liftRate * dt))
+        lift += ((if (grab == 1) 1.0 else 0.0) - lift) * (1.0 - exp(-14.0 * dt))
         stepTurn(dt)
-        stepDetents()
         stepShackle(dt)
         stepSheet(dt)
-        stepVisibility(dt)
-        glint = advanceTimer(glint, GlassLockKeyTokens.GM.glint, dt)
-        shake = advanceTimer(shake, GlassLockKeyTokens.GM.shake.duration, dt)
-        tick = advanceTimer(tick, GlassLockKeyTokens.GM.tick.duration, dt)
-        if (!reduced) clock += dt
-        return false
-    }
-
-    private fun stepResume(autoPlay: Boolean, dt: Double): Boolean {
-        if (!autoPlay || reduced || grab != 0 || physicalPointerActive || !userInterrupted) return false
-        quiet += dt
-        if (!resumeReturning && quiet * 1000.0 >= GlassLockKeyTokens.SIM.interactionResumeMs) {
-            resumeReturning = true
-            if (mode != IDLE && mode != CLOSING) setMode(CLOSING)
-        }
-        if (!resumeReturning || mode != IDLE) return false
-        val atRest = hypot(kx - restX, ky - restY) < GlassLockKeyTokens.SIM.restPositionEpsilon &&
-            hypot(kvx, kvy) < GlassLockKeyTokens.SIM.restVelocityEpsilon &&
-            abs(th) < GlassLockKeyTokens.SIM.restAngleEpsilon &&
-            show < GlassLockKeyTokens.SIM.restVisualEpsilon &&
-            sheet < GlassLockKeyTokens.SIM.restVisualEpsilon &&
-            abs(shackle) < GlassLockKeyTokens.SIM.restVisualEpsilon
-        if (atRest) {
-            resetForDemoLoop()
-            return true
-        }
-        return false
+        clock += dt
     }
 
     private fun stepKey(dt: Double) {
         if (mode == CARRYING && grab == 1) {
-            var targetX = fx + gx
-            var targetY = fy + gy
-            val distance = hypot(targetX - plugX, targetY - plugY)
-            val radius = GlassLockKeyTokens.GM.magnet * s
+            var targetX = fingerX + grabX
+            var targetY = fingerY + grabY
+            val distance = hypot(targetX - geometry.plugX, targetY - geometry.plugY)
+            val radius = GlassLockKeyTokens.Carry.magnet * geometry.scale
             if (distance < radius && !reduced) {
-                val pull = GlassLockKeyTokens.GM.magnetPull *
-                    (1.0 - distance / radius).pow(GlassLockKeyTokens.SIM.magnetExponent)
-                targetX += (plugX - targetX) * pull
-                targetY += (plugY - targetY) * pull
+                val pull = GlassLockKeyTokens.Carry.magnetPull * (1.0 - distance / radius).pow(0.6)
+                targetX += (geometry.plugX - targetX) * pull
+                targetY += (geometry.plugY - targetY) * pull
             }
             kvx = (targetX - kx) / dt
             kvy = (targetY - ky) / dt
             kx = targetX
             ky = targetY
-            if (hypot(targetX - plugX, targetY - plugY) < GlassLockKeyTokens.GM.seat * s) seat()
+            if (hypot(targetX - geometry.plugX, targetY - geometry.plugY) <
+                GlassLockKeyTokens.Carry.seat * geometry.scale
+            ) {
+                seat()
+            }
+        } else if (mode == INSERTING) {
+            insertTime = min(insertDuration, insertTime + dt)
+            val progress = easeOutCubic(insertTime / insertDuration)
+            ky = insertFrom + (insertTo - insertFrom) * progress
+            kx = geometry.plugX
+            if (insertTime >= insertDuration) {
+                if (insertTo == geometry.seatY) {
+                    mode = SEATED
+                } else {
+                    mode = IDLE
+                    kvy = 0.0
+                }
+            }
         } else if (mode == IDLE) {
-            springKeyX(restX, GlassLockKeyTokens.GM.home.k, GlassLockKeyTokens.GM.home.c, dt)
-            springKeyY(restY, GlassLockKeyTokens.GM.home.k, GlassLockKeyTokens.GM.home.c, dt)
-        } else if (mode == INSERTING && modeT >= if (reduced) dt else GlassLockKeyTokens.GM.insert) {
-            setMode(SEATED)
+            val horizontal = spring(kx, kvx, geometry.restX, GlassLockKeyTokens.Carry.home, dt)
+            kx = horizontal.first
+            kvx = horizontal.second
+            val vertical = spring(ky, kvy, geometry.restY, GlassLockKeyTokens.Carry.home, dt)
+            ky = vertical.first
+            kvy = vertical.second
         }
     }
 
     private fun stepTurn(dt: Double) {
         if (mode == SEATED) {
             if (grab == 2) {
-                val raw = th0 + (fx - x0) / (GlassLockKeyTokens.GM.turnPx * s)
-                if (raw < 0.0) {
-                    strain = raw
-                    th = -GlassLockKeyTokens.GM.wrong * (1.0 - exp(raw / GlassLockKeyTokens.GM.wrong))
-                } else {
-                    th = raw
-                }
-                if (th >= 1.0) open()
-                if (fy - ringY > GlassLockKeyTokens.GM.pullOut * s && th < GlassLockKeyTokens.SIM.pullOutAngle) {
-                    setMode(CARRYING)
+                var nextTheta = turnStartTheta +
+                    (fingerX - turnStartX) / (GlassLockKeyTokens.Turn.radius * geometry.scale)
+                if (nextTheta < 0.0) nextTheta = -rubber(-nextTheta, GlassLockKeyTokens.Turn.wrong)
+                thetaVelocity = (nextTheta - theta) / dt
+                theta = nextTheta
+                if (fingerY - grabY > GlassLockKeyTokens.Carry.pullOut * geometry.scale && abs(theta) < 0.1) {
                     grab = 1
-                    th = 0.0
-                    kx = plugX
-                    ky = plugY
-                    gx = kx - fx
-                    gy = ky - fy
+                    mode = CARRYING
+                    grabX = kx - fingerX
+                    grabY = ky - fingerY
+                    theta = 0.0
+                    thetaVelocity = 0.0
                 }
+                if (theta >= GlassLockKeyTokens.Turn.open) open()
             } else {
-                springTurn(0.0, GlassLockKeyTokens.GM.back.k, GlassLockKeyTokens.GM.back.c, dt)
+                val turn = spring(theta, thetaVelocity, 0.0, GlassLockKeyTokens.Turn.back, dt)
+                theta = turn.first
+                thetaVelocity = turn.second
             }
-        } else if (
-            mode == CLOSING &&
-            sheet < GlassLockKeyTokens.SIM.closeSheetThreshold &&
-            shackle < GlassLockKeyTokens.SIM.closeShackleThreshold
-        ) {
-            springTurn(0.0, GlassLockKeyTokens.GM.back.k, GlassLockKeyTokens.GM.back.c, dt)
-            if (abs(th) < GlassLockKeyTokens.SIM.closeAngleThreshold) {
-                th = 0.0
-                tv = 0.0
-                setMode(IDLE)
-                kx = plugX
-                ky = plugY + GlassLockKeyTokens.GM.outPull * s
-                kvy = GlassLockKeyTokens.GM.outSpeed * s
+        } else if (mode == CLOSING && shackle < 0.06) {
+            val turn = spring(theta, thetaVelocity, 0.0, GlassLockKeyTokens.Turn.close, dt)
+            theta = turn.first
+            thetaVelocity = turn.second
+            if (sheet < 0.02 && abs(theta) < 0.02 && shackle < 0.02) {
+                theta = 0.0
+                thetaVelocity = 0.0
+                unseat()
             }
         }
-    }
-
-    private fun stepDetents() {
-        var current = 0
-        for (threshold in GlassLockKeyTokens.GM.detents) {
-            if (th >= threshold - GlassLockKeyTokens.SIM.detentEpsilon) current += 1
+        if (theta > 0.3 && mode == SEATED) wrongHint = false
+        var currentDetent = 0
+        GlassLockKeyTokens.Turn.detents.forEachIndexed { index, threshold ->
+            if (theta >= threshold - 0.0001) currentDetent = index + 1
         }
-        if (current > detent) {
-            emit(GlassLockKeyTokens.G_HAPTIC.detent.toInt())
-            if (!reduced) tick = 0.0
+        if (currentDetent != detent) {
+            if (currentDetent > detent) {
+                bounceVelocity += GlassLockKeyTokens.Bounce.detentKick
+                emit(GlassLockKeyTokens.Haptic.detent)
+            }
+            detent = currentDetent
         }
-        detent = current
     }
 
     private fun stepShackle(dt: Double) {
-        val target = if (mode == OPEN || (mode == CLOSING && sheet > GlassLockKeyTokens.GM.shackleAfter)) 1.0 else 0.0
+        val target = if (mode == OPEN ||
+            (mode == CLOSING && sheet > GlassLockKeyTokens.SheetMotion.shackleAfter)
+        ) 1.0 else 0.0
         if (reduced) {
-            shackle = target
-            shackleV = 0.0
-            return
+            shackle += (target - shackle) * (1.0 - exp(-18.0 * dt))
+            shackleVelocity = 0.0
+            bounce = 0.0
+            bounceVelocity = 0.0
+        } else {
+            val springSpec = if (target == 1.0) {
+                GlassLockKeyTokens.Spring(
+                    GlassLockKeyTokens.Shackle.stiffness,
+                    GlassLockKeyTokens.Shackle.damping,
+                )
+            } else {
+                GlassLockKeyTokens.Spring(
+                    GlassLockKeyTokens.Shackle.closeStiffness,
+                    GlassLockKeyTokens.Shackle.closeDamping,
+                )
+            }
+            val shackleStep = spring(shackle, shackleVelocity, target, springSpec, dt)
+            shackle = shackleStep.first
+            shackleVelocity = shackleStep.second
+            val bounceStep = spring(
+                bounce,
+                bounceVelocity,
+                0.0,
+                GlassLockKeyTokens.Spring(
+                    GlassLockKeyTokens.Bounce.stiffness,
+                    GlassLockKeyTokens.Bounce.damping,
+                ),
+                dt,
+            )
+            bounce = bounceStep.first
+            bounceVelocity = bounceStep.second
         }
-        val spring = GlassLockKeyTokens.GM.shackle
-        val stiffness = if (target > 0.0) spring.k else spring.kClose
-        val damping = if (target > 0.0) spring.c else spring.cClose
-        val nextVelocity = shackleV + (-stiffness * (shackle - target) - damping * shackleV) * dt
-        shackle += nextVelocity * dt
-        shackleV = nextVelocity
+        if (shakeTime >= 0.0) {
+            shakeTime += dt
+            if (shakeTime > GlassLockKeyTokens.Shake.duration) shakeTime = -1.0
+        }
+        if (glintTime >= 0.0) {
+            glintTime += dt
+            if (glintTime > GlassLockKeyTokens.glintDuration) glintTime = -1.0
+        }
     }
 
     private fun stepSheet(dt: Double) {
-        val target = if (mode == OPEN) 1.0 else 0.0
-        val delay = if (mode == OPEN) GlassLockKeyTokens.GM.sheetDelay else 0.0
-        if (modeT >= delay) {
-            val rate = if (target > 0.0) GlassLockKeyTokens.GM.sheetIn else GlassLockKeyTokens.GM.sheetOut
-            sheet += (target - sheet) * (1.0 - exp(-rate * dt))
+        if (sheetTime >= sheetDuration + sheetDelay) return
+        sheetTime += dt
+        val progress = clamp((sheetTime - sheetDelay) / sheetDuration)
+        val eased = when {
+            reduced -> progress
+            sheetTo == 1.0 -> 1.0 - (1.0 - progress).pow(4.0)
+            else -> progress * progress * (3.0 - 2.0 * progress)
         }
+        sheet = sheetFrom + (sheetTo - sheetFrom) * eased
     }
 
-    private fun stepVisibility(dt: Double) {
-        val resting = mode == IDLE && grab == 0
-        idleT = if (resting) idleT + dt else 0.0
-        val target = when {
-            resumeReturning && resting -> 0.0
-            resting && idleT > GlassLockKeyTokens.GM.show.hold -> 0.0
-            resting && show < GlassLockKeyTokens.SIM.showThreshold -> 0.0
-            else -> 1.0
-        }
-        val rate = if (target > 0.0) GlassLockKeyTokens.GM.show.inRate else GlassLockKeyTokens.GM.show.outRate
-        show += (target - show) * (1.0 - exp(-rate * dt))
+    private fun spring(
+        value: Double,
+        velocity: Double,
+        target: Double,
+        spring: GlassLockKeyTokens.Spring,
+        dt: Double,
+    ): Pair<Double, Double> {
+        val nextVelocity = velocity +
+            (-spring.stiffness * (value - target) - spring.damping * velocity) * dt
+        return Pair(value + nextVelocity * dt, nextVelocity)
     }
 
-    private fun runDemo(t0: Double, t1: Double) {
-        val carry = GlassLockKeyTokens.G_SCRIPT.carry
-        val fromX = restX
-        val fromY = restY + GlassLockKeyTokens.GM.grabBelow * s
-        if (t0 <= carry[0] && carry[0] < t1) inputDown(fromX, fromY, isScripted = true)
-        if (t1 > carry[0] && t0 < carry[1] && grab == 1) {
-            val u = cosineEase((min(t1, carry[1]) - carry[0]) / (carry[1] - carry[0]))
-            val targetX = plugX + GlassLockKeyTokens.SIM.carryTargetOffsetX * s
-            val targetY = plugY +
-                (GlassLockKeyTokens.GM.grabBelow + GlassLockKeyTokens.SIM.carryTargetOffsetY) * s
-            fx = fromX + (targetX - fromX) * u
-            fy = fromY + (targetY - fromY) * u
-        }
-        if (t0 < carry[1] && carry[1] <= t1 && grab == 1) inputUp(0.0, 0.0)
+    private fun cosineEase(value: Double): Double = (1.0 - cos(PI * clamp(value))) / 2.0
 
-        val turn = GlassLockKeyTokens.G_SCRIPT.turn
-        if (t0 <= turn[0] && turn[0] < t1) inputDown(ringX, ringY, isScripted = true)
-        if (t1 > turn[0] && t0 < turn[1] && grab == 2) {
-            val u = cosineEase((min(t1, turn[1]) - turn[0]) / (turn[1] - turn[0]))
-            fx = ringX + GlassLockKeyTokens.G_SCRIPT.turnBy * s * u
-            fy = ringY
-        }
-        if (t0 < turn[1] && turn[1] <= t1 && grab == 2) inputUp(0.0, 0.0)
-        if (t0 <= GlassLockKeyTokens.G_SCRIPT.lockAt && GlassLockKeyTokens.G_SCRIPT.lockAt < t1) {
-            inputCommand("lock", isScripted = true)
-        }
-    }
+    private fun easeOutCubic(value: Double): Double = 1.0 - (1.0 - value).pow(3.0)
 
-    private fun springKeyX(target: Double, stiffness: Double, damping: Double, dt: Double) {
-        val nextVelocity = kvx + (-stiffness * (kx - target) - damping * kvx) * dt
-        kx += nextVelocity * dt
-        kvx = nextVelocity
-    }
+    private fun rubber(over: Double, limit: Double): Double = limit * (1.0 - exp(-over / limit))
 
-    private fun springKeyY(target: Double, stiffness: Double, damping: Double, dt: Double) {
-        val nextVelocity = kvy + (-stiffness * (ky - target) - damping * kvy) * dt
-        ky += nextVelocity * dt
-        kvy = nextVelocity
-    }
+    private fun clamp(value: Double, low: Double = 0.0, high: Double = 1.0): Double =
+        value.coerceIn(low, high)
 
-    private fun springTurn(target: Double, stiffness: Double, damping: Double, dt: Double) {
-        val nextVelocity = tv + (-stiffness * (th - target) - damping * tv) * dt
-        th += nextVelocity * dt
-        tv = nextVelocity
-    }
-
-    private fun resetForDemoLoop() {
-        clock = 0.0
-        mode = IDLE
-        modeT = 0.0
-        kx = restX
-        ky = restY
-        kvx = 0.0
-        kvy = 0.0
-        lift = 0.0
-        th = 0.0
-        tv = 0.0
-        detent = 0
-        strain = 0.0
-        shackle = 0.0
-        shackleV = 0.0
-        sheet = 0.0
-        glint = -1.0
-        shake = -1.0
-        show = 0.0
-        idleT = 0.0
-        tick = -1.0
-        grab = 0
-        scripted = false
-        gx = 0.0
-        gy = 0.0
-        fx = 0.0
-        fy = 0.0
-        x0 = 0.0
-        th0 = 0.0
-        demoOn = !reduced
-        demoT = 0.0
-        quiet = 0.0
-        auto = -1.0
-        resumeReturning = false
-        userInterrupted = false
-        physicalPointerActive = false
-        events.clear()
-    }
-
-    private fun advanceTimer(value: Double, duration: Double, dt: Double): Double {
-        if (value < 0.0) return value
-        val next = value + dt
-        return if (next > duration) -1.0 else next
-    }
-
-    private fun cosineEase(value: Double): Double {
-        return (1.0 - cos(PI * clamp(value))) / 2.0
-    }
-
-    private fun clamp(value: Double, low: Double = 0.0, high: Double = 1.0): Double {
-        return value.coerceIn(low, high)
-    }
+    enum class Action { unlock, lock }
 
     companion object {
         const val IDLE = 0
@@ -552,6 +527,5 @@ class GlassLockKeySimulation(
         const val SEATED = 3
         const val OPEN = 4
         const val CLOSING = 5
-
     }
 }

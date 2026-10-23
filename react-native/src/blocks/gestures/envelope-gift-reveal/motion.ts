@@ -13,8 +13,9 @@ export const OPEN = {
   cardRise: 222,
   tiltMax: 10,
   breathDeg: 7,
-  /** Divides LOOP_MS so the breath falls at the same place in every loop. */
-  breathMs: 4_000,
+  /** One breath per loop: the flap lifts a few degrees at 9.0–9.7 s, after the reset, to say it opens. */
+  breathMs: 10_000,
+  breathLead: 1_000,
   /** The wax seal cracks over the first part of the flap's lift. */
   sealSplitDeg: 40,
   /** Envelope settles down this far as the flap opens; the pocket's V opens to this fraction of the height. */
@@ -40,7 +41,7 @@ export const REVEAL = {
   pageMs: 600,
   textDelay: 520,
   stagger: 80,
-  confetti: 70,
+  confetti: 0, // a letter, not a party: no confetti
   confettiLife: 2.6,
   gravity: 520,
   drag: 0.985,
@@ -48,15 +49,26 @@ export const REVEAL = {
   /** Light sweep across the card art on arrival, and the price counting up. */
   sweepMs: 900,
   countMs: 760,
+  /** Once the card has landed it turns over to the note: a heavy card, so it overshoots a few degrees and settles. */
+  flipDelay: 160,
+  flipMs: 900,
+  flipBack: 0.9, // ease-out-back's overshoot constant: about 4 % (7°)
+  flipLift: 0.05, // it lifts toward you by this share of its size mid-turn
 } as const;
 
-export const RESET = { fadeMs: 420 } as const;
+/**
+ * Back to sealed, sequenced (owner, 21 Oct: the two headlines cross-faded on top of each other). Within the same
+ * 420 ms, the revealed screen leaves first (title, message, CTA and card out by `outShare`), then the sealed one
+ * arrives (envelope and headline from `inFrom`); the headline's letters rise back in, one after another, the way
+ * they left. Shares of the window; ms otherwise. The last letter lands at 180 + 14·5 + 160 = 410 ms.
+ */
+export const RESET = { fadeMs: 420, outShare: 0.4, inFrom: 0.43, textOutMs: 160, letterMs: 160, letterStagger: 5 } as const;
 
 /** Headline exit: letters slide down one after another over the first part of the drag (progress units). */
 export const HEADLINE = { stagger: 0.006, span: 0.05, drop: SPACE.xl } as const;
 
 /** Ambient life while sealed. */
-export const AMBIENT = { floatPt: SPACE.xs, floatMs: 3_200, glowMs: 9_000, glowAmount: 0.12 } as const;
+export const AMBIENT = { floatPt: 2, floatMs: 5_000, glowMs: 10_000, glowAmount: 0 } as const;
 export const REDUCED_MS = 200;
 
 /** Animation review (20 Oct): press feedback and the final texts' entrance. */
@@ -70,15 +82,15 @@ export const POLISH = {
 };
 
 /** Autoplay: one scripted finger on one clock (ms). */
-export const LOOP_MS = 8_000;
-export const RESUME_AFTER_MS = 3_500;
+export const LOOP_MS = 10_000;
+export const RESUME_AFTER_MS = 2_000;
 export const SCRIPT = {
-  /** A slow, readable pull: 1.6 s for the flap and the card, then about 1 s of reveal. */
-  down: 700,
-  up: 2_300,
+  /** A slow, readable pull: 1.5 s for the seal, the flap and the card; the card lands by about 3.2 s and turns over. */
+  down: 600,
+  up: 2_100,
   rise: 300,
-  /** About 1.7 s of finished screen after the texts have risen, then the cross-fade back. */
-  reset: 6_000,
+  /** About 4 s of the note to read, then back to sealed by 8.6 s and rest. */
+  reset: 8_200,
 } as const;
 
 /** QA only: when set, the script stops at this time (ms) so a state can be photographed. Keep null. */

@@ -2,7 +2,7 @@ import QuartzCore
 import SwiftUI
 import UIKit
 
-/// Full-screen input surface for the glass key. Keep it above the rendered lock and below the vault sheet so the
+/// Full-screen input surface for the key. Keep it above the rendered lock and below the vault sheet so the
 /// sheet's real buttons remain tappable. Its accessibility element is virtual, so no invisible button intercepts
 /// the same key region used for dragging.
 struct GlassLockKeyTouch: UIViewRepresentable {
@@ -29,10 +29,6 @@ struct GlassLockKeyTouch: UIViewRepresentable {
         private var previousPoint = CGPoint.zero
         private var previousTime = 0.0
         private var velocity = CGVector.zero
-        private var beganAt = CGPoint.zero
-        private var beganTime = 0.0
-        private var maximumTravel = 0.0
-        private var keyActivationFrame = CGRect.zero
         private var cancelledForExtraTouch = false
         private var keyElement: KeyElement!
 
@@ -73,7 +69,6 @@ struct GlassLockKeyTouch: UIViewRepresentable {
         }
 
         func updateAccessibility(isOpen: Bool, frame: CGRect) {
-            keyActivationFrame = frame
             keyElement.isOpen = isOpen
             keyElement.accessibilityFrameInContainerSpace = frame
             keyElement.accessibilityLabel = isOpen
@@ -117,25 +112,15 @@ struct GlassLockKeyTouch: UIViewRepresentable {
                 previousPoint = point
                 previousTime = now
                 velocity = .zero
-                beganAt = point
-                beganTime = now
-                maximumTravel = 0
                 onInput(.down(point))
 
             case .changed:
-                maximumTravel = max(maximumTravel, hypot(point.x - beganAt.x, point.y - beganAt.y))
                 updateVelocity(point: point, time: now)
                 onInput(.move(point))
 
             case .ended:
-                maximumTravel = max(maximumTravel, hypot(point.x - beganAt.x, point.y - beganAt.y))
                 updateFinalVelocity(point: point, time: now)
                 onInput(.up(velocity: velocity))
-                if now - beganTime <= 0.35,
-                   maximumTravel <= 8,
-                   keyActivationFrame.insetBy(dx: -8, dy: -8).contains(beganAt) {
-                    onCommand(keyElement.isOpen ? .lock : .unlock)
-                }
 
             case .cancelled, .failed:
                 // Cancellation is still a real lift. Sending the last measured velocity preserves RN's

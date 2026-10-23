@@ -1,25 +1,39 @@
 package com.ngocdevv.nativecook.blocks.gestures.cassettedeck
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.channels.SendChannel
 
-/** Routes every finger on the screen to the deck's keys and cassette (see [CassetteDeckTouchRouter]). */
-internal fun Modifier.cassetteDeckTouch(controller: CassetteDeckController): Modifier {
-    return pointerInput(controller) {
-        val router = CassetteDeckTouchRouter(controller)
-        var geometry: CassetteDeckGeometry? = null
-        try {
-            awaitPointerEventScope {
-                while (true) {
+/** The full-screen zero-slop pan used by the React Native block. */
+internal fun Modifier.cassetteDeckTouch(
+    session: CassetteDeckSession,
+    layout: CassetteDeckLayout,
+    wake: SendChannel<Unit>,
+): Modifier {
+    return pointerInput(session, layout) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val density = this.density.toDouble()
+            session.touchStart(
+                layout.stageX(down.position.x / density),
+                layout.stageY(down.position.y / density),
+            )
+            wake.trySend(Unit)
+            down.consume()
+            try {
+                var pressed = true
+                while (pressed) {
                     val event = awaitPointerEvent()
-                    val density = this.density
-                    val current = CassetteDeckGeometry(size.width / density.toDouble(), size.height / density.toDouble())
-                    geometry = current
-                    router.onEvent(event, current, density)
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    pressed = change?.pressed == true
+                    change?.consume()
                 }
+            } finally {
+                session.touchEnd()
+                wake.trySend(Unit)
             }
-        } finally {
-            router.cancelAll(geometry)
         }
     }
 }

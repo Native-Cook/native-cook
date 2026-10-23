@@ -1,655 +1,259 @@
 package com.ngocdevv.nativecook.blocks.gestures.gumballcrank
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.round
 import kotlin.math.sin
 
-/**
- * One owner on the Compose frame clock. Call [step] from the frame loop, then invalidate the
- * Canvas when it returns true. State changes also advance [dirtyVersion] for snapshot adapters.
- */
-internal class GumballCrankSimulation(
-    reduced: Boolean,
-    private val autoPlay: Boolean,
-) {
-    var reduced: Boolean = reduced
-        private set
+internal enum class GumballCrankPhase { Ready, Dispensing, Reward, Collecting }
+internal enum class GumballCrankHaptic { Tick, Strain, Drop, Open, Collect }
+internal data class GumballCrankCapsulePose(val x: Double, val y: Double, val scale: Double, val rotation: Double, val split: Double, val alpha: Double)
 
-    var phase = GumballCrankPhase.READY
-        private set
+internal class GumballCrankSimulation(reduced: Boolean) {
+    companion object { private const val TAU = PI * 2.0; private const val QUARTER = PI / 2.0 }
 
-    var phaseTime = 0.0
-        private set
+    var reduced = reduced; private set
+    var angle = 0.0; private set
+    var wobble = 0.0; private set
+    var phase = GumballCrankPhase.Ready; private set
+    var phaseTime = 0.0; private set
+    var card = 0.0; private set
+    var scrim = 0.0; private set
+    var press = 0.0; private set
+    var wallet = 1240.0; private set
+    var walletPrevious = 1240.0; private set
+    var walletMix = 1.0; private set
+    var walletBump = 0.0; private set
+    var hint = 0; private set
+    var hintFrom = 0; private set
+    var hintMix = 1.0; private set
+    var ghostX = 0.0; private set
+    var ghostY = 0.0; private set
+    var ghostAlpha = 0.0; private set
+    var ghostPress = 0.0; private set
+    var detent = 0; private set
+    var moving = true; private set
 
-    var angle = 0.0
-        private set
-
-    var press = 0.0
-        private set
-
-    var jostleX = 0.0
-        private set
-
-    var jostleY = 0.0
-        private set
-
-    var clock = 0.0
-        private set
-
-    var bump = 0.0
-        private set
-
-    var coins = GumballCrankTokens.coinsFrom
-        private set
-
-    var dirtyVersion = 0L
-        private set
-
-    private var accumulator = 0.0
-    private var turned = 0.0
-    private var detent = 0
-    private var angularVelocity = 0.0
-    private var wobble = 0.0
-    private var wobbleVelocity = 0.0
-    private var ratchetBack = 0.0
-    private var strain = 0.0
+    val ballX: DoubleArray
+    val ballY: DoubleArray
+    val ballR: DoubleArray
+    val ballColor: IntArray
+    private val homeX: DoubleArray
+    private val homeY: DoubleArray
+    private val ballVX: DoubleArray
+    private val ballVY: DoubleArray
+    private var base = 0.0
+    private var goal = 0.0
+    private var lastPointerAngle = 0.0
     private var grabbed = false
-    private var scriptedGesture = false
-    private var previousPointerAngle = 0.0
-    private var lastPointerTime = 0.0
-    private var jostleVelocityX = 0.0
-    private var jostleVelocityY = 0.0
-    private var demoRunning = autoPlay && !reduced
+    private var pressing = false
+    private var wobbleVelocity = 0.0
+    private var cardVelocity = 0.0
+    private var walletVelocity = 0.0
+    private var walletMixDuration = 0.15
+    private var demoRunning = false
     private var demoTime = 0.0
     private var quietTime = 0.0
-    private var automaticTurnTime = -1.0
-    private var resumeEligible = false
-    private var returning = false
-    private var returnTime = 0.0
-    private var returnAngle = 0.0
-    private var returnPress = 0.0
-    private var returnJostleX = 0.0
-    private var returnJostleY = 0.0
-    private var returnMorph = 0.0
-    private var returnOut = 0.0
-    private val pendingHaptics = mutableListOf<GumballCrankHaptic>()
-    private val mutableConfetti = mutableListOf<GumballCrankConfetti>()
+    private var scriptDown = false
+    private val events = ArrayList<GumballCrankHaptic>(8)
 
-    val confetti: List<GumballCrankConfetti>
-        get() = mutableConfetti
+    init {
+        val pile = settlePile()
+        ballX = pile.x.copyOf(); ballY = pile.y.copyOf(); ballR = pile.r; ballColor = pile.c
+        homeX = pile.x; homeY = pile.y
+        ballVX = DoubleArray(ballX.size); ballVY = DoubleArray(ballX.size)
+    }
 
-    val visualAngle: Double
-        get() = if (reduced) 0.0 else angle + wobble * 0.06 + ratchetBack * 0.35
+    val accessibilityDescription: String
+        get() = when (phase) {
+            GumballCrankPhase.Reward -> "Day 7 reward, 50 coins. Collect reward."
+            GumballCrankPhase.Collecting -> "Collecting 50 coins."
+            else -> if (hint == 2) GumballCrankCopy.Done else GumballCrankCopy.Hint
+        }
+    val accessibilityAction: String get() = if (phase == GumballCrankPhase.Reward) "Collect reward" else "Turn the handle one quarter"
 
-    val outProgress: Double
-        get() {
-            if (returning) return returnOut * (1.0 - returnEase)
-            if (phase == GumballCrankPhase.DISPENSING) {
-                if (reduced) return clamp((phaseTime - GumballCrankTokens.outStart) / GumballCrankTokens.reducedFade)
-                return easeOutBack(clamp((phaseTime - GumballCrankTokens.outStart) / GumballCrankTokens.outDuration))
+    fun start(autoPlay: Boolean, reduceMotion: Boolean) {
+        reduced = reduceMotion; demoRunning = autoPlay; demoTime = 0.0; quietTime = 0.0; toRest()
+    }
+
+    fun step(dt: Double, autoPlay: Boolean) {
+        if (!demoRunning && autoPlay) {
+            quietTime += dt
+            if (quietTime >= 2.0) { toRest(); demoTime = 0.0; demoRunning = true }
+        }
+        if (demoRunning && autoPlay) {
+            val old = demoTime
+            demoTime += dt
+            if (demoTime >= 10.0) { toRest(); demoTime %= 10.0 }
+            script(if (demoTime < old) 0.0 else old, demoTime)
+        }
+
+        var busy = stepPile(dt)
+        if (!grabbed && phase == GumballCrankPhase.Ready && angle != base) {
+            angle += (base - angle) * min(1.0, dt * if (reduced) 30.0 else 14.0)
+            if (abs(angle - base) < 0.002) angle = base
+            busy = true
+        }
+        spring(wobble, wobbleVelocity, 0.0, dt, 0.18, 0.45).also { wobble = it.first; wobbleVelocity = it.second }
+        if (wobbleVelocity != 0.0) busy = true
+        if (phase != GumballCrankPhase.Ready) { phaseTime += dt; busy = true }
+        if (phase == GumballCrankPhase.Dispensing) {
+            if (crossed(0.25, dt)) events += GumballCrankHaptic.Drop
+            if (crossed(1.32, dt)) events += GumballCrankHaptic.Open
+            if (phaseTime >= 1.95) {
+                phase = GumballCrankPhase.Reward; phaseTime = 0.0
+                angle = 0.0; base = 0.0; goal = 0.0; detent = 0
             }
-            if (phase == GumballCrankPhase.REWARD) return 1.0
-            if (phase == GumballCrankPhase.COLLECTING) {
-                if (reduced) return 1.0 - clamp((phaseTime - GumballCrankTokens.collectAt) / GumballCrankTokens.reducedFade)
-                if (phaseTime < GumballCrankTokens.collectAt) return 1.0
-                return 1.0 - easeOutCubic(clamp((phaseTime - GumballCrankTokens.collectAt) / GumballCrankTokens.backDuration))
+        } else if (phase == GumballCrankPhase.Collecting) {
+            repeat(8) { i ->
+                if (crossed(i * 0.05 + 0.5, dt)) {
+                    setWallet(min(1290.0, wallet + 6.25), 0.15)
+                    if (!reduced) walletVelocity += 1.6
+                }
             }
-            return 0.0
+            if (phaseTime >= 0.95) { phase = GumballCrankPhase.Ready; phaseTime = 0.0; setHint(2) }
         }
 
-    val morphProgress: Double
-        get() {
-            if (returning) return returnMorph * (1.0 - returnEase)
-            if (phase == GumballCrankPhase.DISPENSING) {
-                if (reduced) return clamp((phaseTime - (GumballCrankTokens.dispenseDone - GumballCrankTokens.reducedFade)) / GumballCrankTokens.reducedFade)
-                return easeOutCubic(clamp((phaseTime - GumballCrankTokens.morphStart) / GumballCrankTokens.morphDuration))
-            }
-            if (phase == GumballCrankPhase.REWARD) return 1.0
-            if (phase == GumballCrankPhase.COLLECTING) {
-                if (reduced) return 1.0 - clamp((phaseTime - GumballCrankTokens.couponOutStart) / GumballCrankTokens.reducedFade)
-                return 1.0 - easeInOut(clamp((phaseTime - GumballCrankTokens.couponOutStart) / GumballCrankTokens.couponOutDuration))
-            }
-            return 0.0
+        val cardGoal = if (phase == GumballCrankPhase.Reward || phase == GumballCrankPhase.Dispensing && phaseTime >= 1.45) 1.0 else 0.0
+        if (phase != GumballCrankPhase.Collecting) {
+            spring(card, cardVelocity, cardGoal, dt, if (reduced) 0.2 else 0.48, if (reduced) 1.0 else 0.82).also { card = it.first; cardVelocity = it.second }
         }
-
-    val machineSquash: Double
-        get() {
-            if (reduced || phase != GumballCrankPhase.DISPENSING || phaseTime >= GumballCrankTokens.squashDuration) return 0.0
-            return sin(PI * phaseTime / GumballCrankTokens.squashDuration) * 0.02
-        }
-
-    val cameraProgress: Double
-        get() {
-            if (reduced) return 0.0
-            val progress = clamp(outProgress)
-            return progress * progress * (3.0 - 2.0 * progress)
-        }
-
-    val potX: Double
-        get() {
-            if (reduced && phase != GumballCrankPhase.READY) return GumballCrankTokens.potX
-            return GumballCrankTokens.exitX + (GumballCrankTokens.potX - GumballCrankTokens.exitX) * outProgress
-        }
-
-    val potY: Double
-        get() {
-            if (reduced && phase != GumballCrankPhase.READY) return GumballCrankTokens.potY
-            return GumballCrankTokens.exitY + (GumballCrankTokens.potY - GumballCrankTokens.exitY) * outProgress
-        }
-
-    val potScale: Double
-        get() {
-            if (reduced && phase != GumballCrankPhase.READY) return 1.0
-            return (0.3 + 0.7 * outProgress) * (1.0 - (1.0 - GumballCrankTokens.tubBackScale) * morphProgress)
-        }
-
-    val couponX: Double
-        get() {
-            if (reduced) return GumballCrankTokens.cardCenterX
-            return GumballCrankTokens.panelCenterX + (GumballCrankTokens.cardCenterX - GumballCrankTokens.panelCenterX) * morphProgress
-        }
-
-    val couponY: Double
-        get() {
-            if (reduced) return GumballCrankTokens.cardCenterY
-            val drop = if (phase == GumballCrankPhase.COLLECTING) (1.0 - morphProgress) * 40.0 else 0.0
-            return GumballCrankTokens.panelCenterY + (GumballCrankTokens.cardCenterY - GumballCrankTokens.panelCenterY) * morphProgress + drop
-        }
-
-    val couponWidth: Double
-        get() {
-            if (reduced) return GumballCrankTokens.cardWidth
-            val progress = if (phase == GumballCrankPhase.COLLECTING) 1.0 else morphProgress
-            return GumballCrankTokens.panelWidth + (GumballCrankTokens.cardWidth - GumballCrankTokens.panelWidth) * progress
-        }
-
-    val couponHeight: Double
-        get() {
-            if (reduced) return GumballCrankTokens.cardHeight
-            val progress = if (phase == GumballCrankPhase.COLLECTING) 1.0 else morphProgress
-            return GumballCrankTokens.panelHeight + (GumballCrankTokens.cardHeight - GumballCrankTokens.panelHeight) * progress
-        }
-
-    val couponRotation: Double
-        get() = GumballCrankTokens.peelAngle * sin(PI * morphProgress)
-
-    val panelOpacity: Double
-        get() {
-            if (reduced) return 0.0
-            return if (morphProgress > 0.001) 1.0 - clamp(morphProgress / 0.5) else 0.0
-        }
-
-    val couponOpacity: Double
-        get() {
-            if (reduced) return morphProgress
-            return if (phase == GumballCrankPhase.COLLECTING) morphProgress else clamp((morphProgress - 0.2) / 0.4)
-        }
-
-    val stubCoinOpacity: Double
-        get() {
-            if (phase == GumballCrankPhase.COLLECTING) return 0.0
-            if (reduced) return morphProgress
-            return clamp((morphProgress - 0.6) / 0.4)
-        }
-
-    val ringOpacity: Double
-        get() {
-            if (phase != GumballCrankPhase.READY || reduced || returning) return 0.0
-            val breathing = 0.35 + 0.25 * sin(clock * 2.4)
-            if (!demoRunning) return breathing
-            // Seam override: retain RN's 2.4 rad/s breath, then meet its exact resting alpha at P.
-            val tail = clamp((demoTime - (GumballCrankTokens.loopDuration - GumballCrankTokens.returnDuration)) / GumballCrankTokens.returnDuration)
-            return breathing + (0.35 - breathing) * easeInOut(tail)
-        }
-
-    val sweepX: Double
-        get() {
-            if (reduced) return GumballCrankTokens.hiddenX
-            val sweepTime = if (phase == GumballCrankPhase.DISPENSING) phaseTime / GumballCrankTokens.sweepDuration else (clock % GumballCrankTokens.idleSweepDuration) / GumballCrankTokens.sweepDuration
-            if (sweepTime >= 1.0) return GumballCrankTokens.hiddenX
-            return GumballCrankTokens.sweepStartX + GumballCrankTokens.sweepTravel * sweepTime
-        }
-
-    val confettiOpacity: Double
-        get() = if (mutableConfetti.isEmpty() || reduced) 0.0 else clamp(1.8 - phaseTime * 0.8) * (if (returning) 1.0 - returnEase else 1.0)
-
-    val cardTextOpacity: Double
-        get() {
-            if (reduced) return morphProgress
-            return if (phase == GumballCrankPhase.COLLECTING) morphProgress else clamp((morphProgress - 0.75) / 0.25)
-        }
-
-    val counterOpacity: Double
-        get() {
-            if (phase == GumballCrankPhase.COLLECTING) return 1.0
-            return 1.0 - 0.7 * morphProgress
-        }
-
-    val shouldTick: Boolean
-        get() = returning || grabbed || automaticTurnTime >= 0.0 || demoRunning || phase != GumballCrankPhase.READY || angularVelocity > 0.0 || (!reduced && (autoPlay || ringOpacity > 0.0))
-
-    private val returnEase: Double
-        get() = easeInOut(clamp(returnTime / GumballCrankTokens.returnDuration))
-
-    fun updateReducedMotion(value: Boolean) {
-        if (reduced == value) return
-        reduced = value
-        resetToRest(restartDemo = autoPlay && !value, resetAccumulator = true)
-        markDirty()
+        val scrimGoal = if (cardGoal > 0.0 || phase == GumballCrankPhase.Collecting && phaseTime < 0.75) 1.0 else 0.0
+        scrim = toward(scrim, scrimGoal, dt, if (scrimGoal > 0.0) 0.3 else 0.25)
+        press = toward(press, if (pressing) 1.0 else 0.0, dt, 0.12)
+        spring(walletBump, walletVelocity, 0.0, dt, 0.26, 0.5).also { walletBump = it.first; walletVelocity = it.second }
+        hintMix = min(1.0, hintMix + dt / 0.25); walletMix = min(1.0, walletMix + dt / walletMixDuration)
+        ghostAlpha = toward(ghostAlpha, if (scriptDown) 1.0 else 0.0, dt, if (scriptDown) 0.15 else 0.12)
+        ghostPress = toward(ghostPress, if (scriptDown || pressing) 1.0 else 0.0, dt, 0.15)
+        moving = busy || demoRunning || grabbed || cardVelocity != 0.0 || walletVelocity != 0.0 || hintMix < 1.0 || walletMix < 1.0
     }
 
-    fun step(frameDt: Double, width: Double): Boolean {
-        if (frameDt <= 0.0 || width <= 0.0) return false
-        val before = dirtyVersion
-        accumulator = min(accumulator + frameDt, GumballCrankTokens.step * GumballCrankTokens.maxSteps)
-        while (accumulator >= GumballCrankTokens.step) {
-            fixedStep(width)
-            accumulator -= GumballCrankTokens.step
-        }
-        return dirtyVersion != before
+    fun pointerDown(x: Float, y: Float) {
+        takeOver()
+        if (phase == GumballCrankPhase.Reward && insideButton(x.toDouble(), y.toDouble())) { pressing = true; moving = true } else grabAt(x.toDouble(), y.toDouble())
     }
-
-    fun down(x: Double, y: Double, width: Double): Boolean {
-        if (phase != GumballCrankPhase.READY) return false
-        val scale = width / GumballCrankTokens.stageWidth
-        val knobX = GumballCrankTokens.knobCenterX * scale
-        val knobY = GumballCrankTokens.knobCenterY * scale
-        if (hypot(x - knobX, y - knobY) >= GumballCrankTokens.grabRadius * scale) return false
-        registerUserInteraction()
-        grabbed = true
-        angularVelocity = 0.0
-        previousPointerAngle = atan2(y - knobY, x - knobX)
-        lastPointerTime = clock
-        emit(GumballCrankHaptic.GRAB)
-        markDirty()
-        return true
+    fun pointerMove(x: Float, y: Float) { if (grabbed) turnTo(x.toDouble(), y.toDouble()); if (pressing && !insideButton(x.toDouble(), y.toDouble())) pressing = false }
+    fun pointerUp(x: Float, y: Float) {
+        if (pressing && insideButton(x.toDouble(), y.toDouble())) collect()
+        pressing = false; grabbed = false; goal = base; moving = true
     }
-
-    fun move(x: Double, y: Double, width: Double): Boolean {
-        if (!grabbed) return false
-        registerUserInteraction(keepGrab = true)
-        val scale = width / GumballCrankTokens.stageWidth
-        val knobX = GumballCrankTokens.knobCenterX * scale
-        val knobY = GumballCrankTokens.knobCenterY * scale
-        val pointerAngle = atan2(y - knobY, x - knobX)
-        var delta = pointerAngle - previousPointerAngle
-        if (delta > PI) delta -= PI * 2.0
-        if (delta < -PI) delta += PI * 2.0
-        previousPointerAngle = pointerAngle
-        val elapsed = max(1.0 / 240.0, clock - lastPointerTime)
-        lastPointerTime = clock
-        applyPointerDelta(delta, elapsed)
-        markDirty()
-        return true
-    }
-
-    fun up(): Boolean {
-        if (!grabbed) return false
-        registerUserInteraction(keepGrab = true)
-        finishGesture()
-        markDirty()
-        return true
-    }
-
-    fun command(action: GumballCrankCommand): Boolean {
-        if (action == GumballCrankCommand.TURN && phase == GumballCrankPhase.READY) {
-            registerUserInteraction()
-            if (reduced) {
-                setPhase(GumballCrankPhase.DISPENSING)
-                emit(GumballCrankHaptic.DISPENSE)
-                markDirty()
-                return true
-            }
-            automaticTurnTime = 0.0
-            markDirty()
-            return true
-        }
-        if (action == GumballCrankCommand.COLLECT && phase == GumballCrankPhase.REWARD) {
-            registerUserInteraction()
-            setPhase(GumballCrankPhase.COLLECTING)
-            emit(GumballCrankHaptic.COLLECT)
-            markDirty()
-            return true
-        }
-        return false
-    }
-
-    fun drainHaptics(): List<GumballCrankHaptic> {
-        if (pendingHaptics.isEmpty()) return emptyList()
-        val result = pendingHaptics.toList()
-        pendingHaptics.clear()
-        return result
-    }
-
-    private fun fixedStep(width: Double) {
-        if (returning) {
-            stepReturn()
-            return
-        }
-        val previousDemoTime = demoTime
-        if (demoRunning) {
-            val nextDemoTime = demoTime + GumballCrankTokens.step
-            runTurn(previousDemoTime, nextDemoTime, GumballCrankTokens.demoTurnStart, width, scripted = true)
-            if (previousDemoTime <= GumballCrankTokens.collectScriptAt && GumballCrankTokens.collectScriptAt < nextDemoTime) {
-                scriptedCollect()
-            }
-            demoTime = nextDemoTime
-            if (demoTime + GumballCrankTokens.loopTolerance >= GumballCrankTokens.loopDuration) {
-                resetToRest(restartDemo = autoPlay && !reduced, resetAccumulator = false)
-                markDirty()
-                return
-            }
-        } else if (automaticTurnTime >= 0.0) {
-            runTurn(automaticTurnTime, automaticTurnTime + GumballCrankTokens.step, 0.0, width, scripted = true)
-            automaticTurnTime += GumballCrankTokens.step
-            if (automaticTurnTime > GumballCrankTokens.demoTurnDuration + 0.1) automaticTurnTime = -1.0
-        }
-        val userTouchHeld = grabbed && !scriptedGesture
-        if (autoPlay && resumeEligible && !userTouchHeld && !reduced) {
-            quietTime += GumballCrankTokens.step
-            if (quietTime + GumballCrankTokens.loopTolerance >= GumballCrankTokens.touchResetDelay) {
-                beginReturn()
-            }
-        }
-        if (!grabbed && angularVelocity > 0.0 && phase == GumballCrankPhase.READY) {
-            advance(angularVelocity * GumballCrankTokens.step)
-            angularVelocity = max(0.0, angularVelocity - GumballCrankTokens.friction * angularVelocity * GumballCrankTokens.step)
-            if (angularVelocity < GumballCrankTokens.catchSpin) angularVelocity = 0.0
-        }
-        wobbleVelocity += (-GumballCrankTokens.wobbleStiffness * wobble - GumballCrankTokens.wobbleDamping * wobbleVelocity) * GumballCrankTokens.step
-        wobble += wobbleVelocity * GumballCrankTokens.step
-        if (!grabbed) ratchetBack *= exp(-14.0 * GumballCrankTokens.step)
-        press += ((if (grabbed) 1.0 else 0.0) - press) * (1.0 - exp(-18.0 * GumballCrankTokens.step))
-        jostleVelocityX += (-160.0 * jostleX - 9.0 * jostleVelocityX) * GumballCrankTokens.step
-        jostleX += jostleVelocityX * GumballCrankTokens.step
-        jostleVelocityY += (-160.0 * jostleY - 9.0 * jostleVelocityY) * GumballCrankTokens.step
-        jostleY += jostleVelocityY * GumballCrankTokens.step
-        stepTimeline(width)
-        clock += GumballCrankTokens.step
-        markDirty()
-    }
-
-    private fun stepTimeline(width: Double) {
-        val before = phaseTime
-        phaseTime += GumballCrankTokens.step
-        if (phase == GumballCrankPhase.DISPENSING) {
-            if (before < GumballCrankTokens.confettiAt && phaseTime >= GumballCrankTokens.confettiAt && !reduced) burst(width)
-            if (phaseTime >= GumballCrankTokens.dispenseDone) {
-                setPhase(GumballCrankPhase.REWARD)
-                coins -= GumballCrankTokens.coinsAdd
-                emit(GumballCrankHaptic.OPEN)
-            }
-        } else if (phase == GumballCrankPhase.COLLECTING && phaseTime >= GumballCrankTokens.collectAt + GumballCrankTokens.backDuration) {
-            setPhase(GumballCrankPhase.READY)
-        }
-        if (phase == GumballCrankPhase.COLLECTING && before < GumballCrankTokens.collectAt && phaseTime >= GumballCrankTokens.collectAt) {
-            coins += GumballCrankTokens.coinsAdd
-            bump = if (reduced) 0.0 else 1.0
-        }
-        bump = max(0.0, bump - GumballCrankTokens.step * 3.0)
-        val scale = width / GumballCrankTokens.stageWidth
-        mutableConfetti.forEachIndexed { index, particle ->
-            particle.velocityY += GumballCrankTokens.confettiGravity * scale * GumballCrankTokens.step
-            particle.x += particle.velocityX * GumballCrankTokens.step
-            particle.y += particle.velocityY * GumballCrankTokens.step
-            particle.rotation += (if (index % 2 == 0) 1.0 else -1.0) * GumballCrankTokens.confettiSpin * GumballCrankTokens.step
-        }
-        if (mutableConfetti.isNotEmpty() && phase != GumballCrankPhase.DISPENSING && phaseTime > 0.5) mutableConfetti.clear()
-    }
-
-    private fun advance(delta: Double) {
-        angle += delta
-        turned += delta
-        val nextDetent = floor(turned / GumballCrankTokens.detentAngle + 1e-6).toInt()
-        if (nextDetent > detent) {
-            detent = nextDetent
-            if (!reduced) {
-                wobbleVelocity += GumballCrankTokens.wobbleKick
-                jostleVelocityX += (if (nextDetent % 2 == 0) 1.0 else -1.0) * 90.0
-                jostleVelocityY -= 60.0
-            }
-            emit(GumballCrankHaptic.DETENT)
-        }
-        if (turned >= GumballCrankTokens.fullTurn - 1e-6) {
-            turned = 0.0
-            detent = 0
-            angularVelocity = 0.0
-            grabbed = false
-            angle = round(angle / GumballCrankTokens.fullTurn) * GumballCrankTokens.fullTurn
-            setPhase(GumballCrankPhase.DISPENSING)
-            emit(GumballCrankHaptic.DISPENSE)
+    fun accessibilityActivate() {
+        takeOver()
+        if (phase == GumballCrankPhase.Reward) collect() else if (phase == GumballCrankPhase.Ready) {
+            angle = min(TAU, (detent + 1) * QUARTER + 0.02)
+            while (detent < 4 && angle >= (detent + 1) * QUARTER) hitDetent()
         }
     }
+    fun drainHaptics(): List<GumballCrankHaptic> = events.toList().also { events.clear() }
 
-    private fun applyPointerDelta(delta: Double, elapsed: Double) {
-        if (delta > 0.0 && strain >= 0.0) {
-            angularVelocity = angularVelocity * 0.6 + delta / elapsed * 0.4
-            advance(delta)
-            return
+    fun capsulePose(): GumballCrankCapsulePose {
+        val doorY = 561.0
+        if (phase == GumballCrankPhase.Ready) return GumballCrankCapsulePose(201.0, 690.0, 1.0, 0.0, 0.0, 0.0)
+        val t = if (phase == GumballCrankPhase.Dispensing) phaseTime else 99.0
+        val fade = if (phase == GumballCrankPhase.Collecting) 1.0 - span(phaseTime, 0.45, 0.85) else 1.0
+        if (reduced) return GumballCrankCapsulePose(201.0, 690.0, 1.0, 0.0, span(t, 1.32, 1.7), span(t, 0.3, 0.95) * fade)
+        if (t < 0.3) return GumballCrankCapsulePose(201.0, doorY, 0.6, 0.0, 0.0, 0.0)
+        val u = span(t, 0.3, 0.95); val e = easeOut(u)
+        var rotation = -2.6 * (1.0 - e)
+        if (t >= 0.95) { val w = span(t, 0.95, 1.7); rotation = 0.16 * sin(w * PI * 3.0) * (1.0 - w) }
+        return GumballCrankCapsulePose(201.0, doorY + 129.0 * e, 0.6 + 0.4 * e, rotation, easeOut(span(t, 1.32, 1.7)), min(1.0, u * 6.0) * fade)
+    }
+
+    private fun takeOver() { demoRunning = false; quietTime = 0.0; scriptDown = false; ghostAlpha = 0.0; ghostPress = 0.0 }
+    private fun crossed(value: Double, dt: Double) = phaseTime >= value && phaseTime - dt < value
+    private fun insideButton(x: Double, y: Double) = x in 66.0..336.0 && y in 580.0..632.0
+    private fun grabAt(x: Double, y: Double): Boolean {
+        val dx = x - 201.0; val dy = y - 462.0
+        if (dx * dx + dy * dy > 4900.0 || phase != GumballCrankPhase.Ready) return false
+        grabbed = true; lastPointerAngle = atan2(dx, -dy); goal = angle; moving = true; return true
+    }
+    private fun turnTo(x: Double, y: Double) {
+        val a = atan2(x - 201.0, -(y - 462.0)); var delta = a - lastPointerAngle
+        if (delta > PI) delta -= TAU; if (delta < -PI) delta += TAU
+        lastPointerAngle = a; goal += delta
+        val back = goal - base
+        if (back < 0.0) {
+            val before = angle; angle = base - 0.22 * (1.0 - exp(back / 0.22))
+            if (before >= base && angle < base - 0.05) events += GumballCrankHaptic.Strain
+        } else angle = min(goal, TAU)
+        while (detent < 4 && angle >= (detent + 1) * QUARTER) hitDetent()
+        moving = true
+    }
+    private fun hitDetent() {
+        detent++; base = detent * QUARTER; wobbleVelocity += if (reduced) 0.0 else 4.0; kickPile(detent); events += GumballCrankHaptic.Tick
+        if (detent == 4) { phase = GumballCrankPhase.Dispensing; phaseTime = 0.0; grabbed = false; setHint(1) }
+    }
+    private fun collect() { if (phase == GumballCrankPhase.Reward) { pressing = false; phase = GumballCrankPhase.Collecting; phaseTime = 0.0; events += GumballCrankHaptic.Collect } }
+    private fun toRest() {
+        grabbed = false; pressing = false; phase = GumballCrankPhase.Ready; phaseTime = 0.0; angle = 0.0; base = 0.0; goal = 0.0; detent = 0
+        card = 0.0; cardVelocity = 0.0; scrim = 0.0
+        if (wallet != 1240.0) setWallet(1240.0, 0.5)
+        setHint(0); moving = true
+    }
+    private fun setHint(value: Int) { if (hint != value) { hintFrom = hint; hint = value; hintMix = 0.0 } }
+    private fun setWallet(value: Double, duration: Double) { walletPrevious = wallet; wallet = value; walletMix = 0.0; walletMixDuration = duration }
+    private fun script(old: Double, now: Double) {
+        fun cross(at: Double) = old < at && now >= at
+        if (cross(0.5)) { gripAt(angle).also { ghostX = it.first; ghostY = it.second }; scriptDown = true; grabAt(ghostX, ghostY) }
+        if (scriptDown && now > 0.7 && now <= 2.55) {
+            val u = span(now, 0.7, 2.5) * 4.0; val q = floor(min(u, 3.9999)); val a = (q + easeInOut(u - q)) * QUARTER + 0.02
+            gripAt(a).also { ghostX = it.first; ghostY = it.second }; turnTo(ghostX, ghostY)
         }
-        if (delta > 0.0) {
-            strain = min(0.0, strain + delta)
-            ratchetBack = -GumballCrankTokens.backMax * (1.0 - exp(strain / GumballCrankTokens.backMax))
-            return
+        if (cross(2.65)) { scriptDown = false; grabbed = false; goal = base }
+        if (cross(5.25)) { ghostX = 228.0; ghostY = 606.0; scriptDown = true }
+        if (cross(5.45)) pressing = true
+        if (cross(5.7)) { collect(); pressing = false; scriptDown = false }
+        if (cross(9.0)) { setWallet(1240.0, 0.5); setHint(0) }
+    }
+    private fun gripAt(a: Double) = Pair(201.0 + 34.0 * sin(a), 462.0 - 34.0 * cos(a))
+    private fun kickPile(k: Int) {
+        if (reduced) return
+        for (i in ballX.indices) { val low = clamp((homeY[i] - 254.0) / 117.0); val kick = 220.0 * (0.3 + 0.7 * low); val a = hash(i * 13 + k * 7) * TAU; ballVX[i] += cos(a) * kick * 0.6; ballVY[i] -= (0.5 + hash(i + k * 3) * 0.6) * kick }
+    }
+    private fun stepPile(dt: Double): Boolean {
+        val w = TAU / 0.52; val stiffness = w * w; val damping = 2.0 * 0.55 * w; val steps = max(1, ceil(dt / (1.0 / 240.0)).toInt()); val h = dt / steps
+        repeat(steps) {
+            for (i in ballX.indices) { ballVX[i] += (-stiffness * (ballX[i] - homeX[i]) - damping * ballVX[i]) * h; ballVY[i] += (-stiffness * (ballY[i] - homeY[i]) - damping * ballVY[i]) * h; ballX[i] += ballVX[i] * h; ballY[i] += ballVY[i] * h }
+            collide(ballX, ballY, ballR, ballVX, ballVY)
         }
-        val previousBack = ratchetBack
-        strain = min(0.0, strain + delta)
-        ratchetBack = -GumballCrankTokens.backMax * (1.0 - exp(strain / GumballCrankTokens.backMax))
-        if (previousBack > -0.02 && ratchetBack <= -0.02) emit(GumballCrankHaptic.RATCHET)
+        var busy = false
+        for (i in ballX.indices) if (abs(ballX[i] - homeX[i]) > 0.05 || abs(ballY[i] - homeY[i]) > 0.05 || abs(ballVX[i]) > 0.5 || abs(ballVY[i]) > 0.5) busy = true else { ballX[i] = homeX[i]; ballY[i] = homeY[i]; ballVX[i] = 0.0; ballVY[i] = 0.0 }
+        return busy
     }
-
-    private fun finishGesture() {
-        grabbed = false
-        angularVelocity = min(GumballCrankTokens.maxSpin, max(0.0, angularVelocity))
-        if (turned > PI && angularVelocity > GumballCrankTokens.commitSpin) {
-            angularVelocity = max(angularVelocity, (GumballCrankTokens.fullTurn - turned) / GumballCrankTokens.finishDuration + GumballCrankTokens.friction)
-        }
-        ratchetBack = 0.0
-        strain = 0.0
-        scriptedGesture = false
+    private data class Pile(val x: DoubleArray, val y: DoubleArray, val r: DoubleArray, val c: IntArray)
+    private fun settlePile(): Pile {
+        val n = 23; val x = DoubleArray(n); val y = DoubleArray(n); val r = DoubleArray(n); val c = IntArray(n); val vx = DoubleArray(n); val vy = DoubleArray(n)
+        repeat(n) { i -> r[i] = 15.5 + hash(i + 1) * 4.0; c[i] = floor(hash(i * 7 + 3) * 9).toInt(); x[i] = 121.0 + (i % 7) * 27.0 + hash(i + 9) * 4.0; y[i] = 264.0 + floor(i / 7.0) * 26.0 }
+        val h = 1.0 / 240.0
+        repeat(1600) { repeat(n) { i -> vy[i] += 900.0 * h; vx[i] *= 0.985; vy[i] *= 0.985; x[i] += vx[i] * h; y[i] += vy[i] * h }; repeat(3) { collide(x, y, r, vx, vy) } }
+        return Pile(x, y, r, c)
     }
-
-    private fun runTurn(start: Double, end: Double, origin: Double, width: Double, scripted: Boolean) {
-        val finish = origin + GumballCrankTokens.demoTurnDuration
-        fun point(time: Double): Pair<Double, Double> {
-            val progress = clamp((time - origin) / (finish - origin))
-            val eased = (1.0 - cos(PI * progress)) / 2.0
-            val pointerAngle = -PI / 2.0 + GumballCrankTokens.demoTurnAngle * eased
-            val scale = width / GumballCrankTokens.stageWidth
-            val knobX = GumballCrankTokens.knobCenterX * scale
-            val knobY = GumballCrankTokens.knobCenterY * scale
-            return Pair(knobX + cos(pointerAngle) * GumballCrankTokens.demoRadius * scale, knobY + sin(pointerAngle) * GumballCrankTokens.demoRadius * scale)
-        }
-        if (start <= origin && origin < end) {
-            val point = point(origin)
-            scriptedDown(point.first, point.second, width, scripted)
-        }
-        if (end > origin && start < finish && grabbed) {
-            val point = point(min(end, finish))
-            scriptedMove(point.first, point.second, width)
-        }
-        if (start < finish && finish <= end) finishGesture()
-    }
-
-    private fun scriptedDown(x: Double, y: Double, width: Double, scripted: Boolean) {
-        scriptedGesture = scripted
-        if (phase != GumballCrankPhase.READY) return
-        val scale = width / GumballCrankTokens.stageWidth
-        val knobX = GumballCrankTokens.knobCenterX * scale
-        val knobY = GumballCrankTokens.knobCenterY * scale
-        if (hypot(x - knobX, y - knobY) >= GumballCrankTokens.grabRadius * scale) return
-        grabbed = true
-        angularVelocity = 0.0
-        previousPointerAngle = atan2(y - knobY, x - knobX)
-        lastPointerTime = clock
-        emit(GumballCrankHaptic.GRAB)
-    }
-
-    private fun scriptedMove(x: Double, y: Double, width: Double) {
-        if (!grabbed) return
-        val scale = width / GumballCrankTokens.stageWidth
-        val knobX = GumballCrankTokens.knobCenterX * scale
-        val knobY = GumballCrankTokens.knobCenterY * scale
-        val pointerAngle = atan2(y - knobY, x - knobX)
-        var delta = pointerAngle - previousPointerAngle
-        if (delta > PI) delta -= PI * 2.0
-        if (delta < -PI) delta += PI * 2.0
-        previousPointerAngle = pointerAngle
-        val elapsed = max(1.0 / 240.0, clock - lastPointerTime)
-        lastPointerTime = clock
-        applyPointerDelta(delta, elapsed)
-    }
-
-    private fun scriptedCollect() {
-        if (phase != GumballCrankPhase.REWARD) return
-        scriptedGesture = true
-        setPhase(GumballCrankPhase.COLLECTING)
-        emit(GumballCrankHaptic.COLLECT)
-        scriptedGesture = false
-    }
-
-    private fun burst(width: Double) {
-        mutableConfetti.clear()
-        val scale = width / GumballCrankTokens.stageWidth
-        repeat(GumballCrankTokens.confettiCount) { index ->
-            val randomA = sin(index * 12.9898) * 43758.5453
-            val randomB = sin(index * 78.233) * 12345.678
-            val unitA = randomA - floor(randomA)
-            val unitB = randomB - floor(randomB)
-            val launchAngle = -PI / 2.0 + (unitA - 0.5) * GumballCrankTokens.confettiSpread * 2.0
-            val speed = GumballCrankTokens.confettiSpeed * (0.55 + 0.45 * unitB) * scale
-            mutableConfetti += GumballCrankConfetti(
-                x = GumballCrankTokens.exitX * scale,
-                y = GumballCrankTokens.exitY * scale,
-                velocityX = cos(launchAngle) * speed,
-                velocityY = sin(launchAngle) * speed,
-                rotation = unitB * 6.0,
-                colorIndex = index % 5,
-            )
-        }
-    }
-
-    private fun registerUserInteraction(keepGrab: Boolean = false) {
-        demoRunning = false
-        automaticTurnTime = -1.0
-        quietTime = 0.0
-        resumeEligible = autoPlay && !reduced
-        returning = false
-        if (!keepGrab) scriptedGesture = false
-    }
-
-    private fun beginReturn() {
-        if (returning) return
-        returnAngle = wrapAngle(visualAngle)
-        returnPress = press
-        returnJostleX = jostleX
-        returnJostleY = jostleY
-        returnMorph = morphProgress
-        returnOut = outProgress
-        wobble = 0.0
-        wobbleVelocity = 0.0
-        ratchetBack = 0.0
-        strain = 0.0
-        returning = true
-        returnTime = 0.0
-        grabbed = false
-        angularVelocity = 0.0
-        pendingHaptics.clear()
-    }
-
-    private fun stepReturn() {
-        returnTime += GumballCrankTokens.step
-        val progress = returnEase
-        angle = returnAngle * (1.0 - progress)
-        press = returnPress * (1.0 - progress)
-        jostleX = returnJostleX * (1.0 - progress)
-        jostleY = returnJostleY * (1.0 - progress)
-        clock += GumballCrankTokens.step
-        if (returnTime + GumballCrankTokens.loopTolerance >= GumballCrankTokens.returnDuration) {
-            resetToRest(restartDemo = autoPlay && !reduced, resetAccumulator = false)
-        }
-        markDirty()
-    }
-
-    private fun resetToRest(restartDemo: Boolean, resetAccumulator: Boolean) {
-        if (resetAccumulator) accumulator = 0.0
-        clock = 0.0
-        phase = GumballCrankPhase.READY
-        phaseTime = 0.0
-        angle = 0.0
-        turned = 0.0
-        detent = 0
-        angularVelocity = 0.0
-        wobble = 0.0
-        wobbleVelocity = 0.0
-        ratchetBack = 0.0
-        strain = 0.0
-        press = 0.0
-        grabbed = false
-        scriptedGesture = false
-        jostleX = 0.0
-        jostleY = 0.0
-        jostleVelocityX = 0.0
-        jostleVelocityY = 0.0
-        bump = 0.0
-        coins = GumballCrankTokens.coinsFrom
-        mutableConfetti.clear()
-        pendingHaptics.clear()
-        demoRunning = restartDemo
-        demoTime = 0.0
-        quietTime = 0.0
-        automaticTurnTime = -1.0
-        resumeEligible = false
-        returning = false
-        returnTime = 0.0
-        returnAngle = 0.0
-        returnPress = 0.0
-        returnJostleX = 0.0
-        returnJostleY = 0.0
-        returnMorph = 0.0
-        returnOut = 0.0
-    }
-
-    private fun setPhase(value: GumballCrankPhase) {
-        phase = value
-        phaseTime = 0.0
-    }
-
-    private fun emit(event: GumballCrankHaptic) {
-        // Scripted and button-driven turns stay silent; haptics only acknowledge direct user acts.
-        if (!scriptedGesture && !demoRunning && automaticTurnTime < 0.0) pendingHaptics += event
-    }
-
-    private fun markDirty() {
-        dirtyVersion += 1L
+    private fun collide(x: DoubleArray, y: DoubleArray, r: DoubleArray, vx: DoubleArray, vy: DoubleArray) {
+        for (i in x.indices) for (j in i + 1 until x.size) { val dx = x[j] - x[i]; val dy = y[j] - y[i]; val d = hypot(dx, dy).coerceAtLeast(1e-6); val limit = r[i] + r[j]; if (d < limit) { val push = (limit - d) / d / 2.0; x[i] -= dx * push; y[i] -= dy * push; x[j] += dx * push; y[j] += dy * push } }
+        for (i in x.indices) { val dx = x[i] - 201.0; val dy = y[i] - 254.0; val d = hypot(dx, dy).coerceAtLeast(1e-6); val limit = 117.0 - r[i]; if (d > limit) { x[i] = 201.0 + dx / d * limit; y[i] = 254.0 + dy / d * limit; val nx = dx / d; val ny = dy / d; val vn = vx[i] * nx + vy[i] * ny; if (vn > 0) { vx[i] -= 1.4 * vn * nx; vy[i] -= 1.4 * vn * ny } }; if (y[i] > 364.0 - r[i]) { y[i] = 364.0 - r[i]; if (vy[i] > 0) vy[i] *= -0.3 } }
     }
 }
 
-private fun clamp(value: Double): Double = min(1.0, max(0.0, value))
-
-private fun easeOutBack(value: Double): Double {
-    val overshoot = 1.4
-    return 1.0 + (overshoot + 1.0) * (value - 1.0).pow(3) + overshoot * (value - 1.0).pow(2)
+private fun clamp(value: Double, low: Double = 0.0, high: Double = 1.0) = value.coerceIn(low, high)
+private fun span(value: Double, start: Double, end: Double) = clamp((value - start) / (end - start))
+private fun hash(n: Int): Double { val value = sin(n * 127.1 + 311.7) * 43758.5453; return value - floor(value) }
+private fun toward(value: Double, goal: Double, dt: Double, duration: Double): Double { val amount = dt / duration; return if (goal > value) min(goal, value + amount) else max(goal, value - amount) }
+private fun bezier(x1: Double, y1: Double, x2: Double, y2: Double, u: Double): Double {
+    val k = clamp(u); val cx = 3 * x1; val bx = 3 * (x2 - x1) - cx; val ax = 1 - cx - bx; val cy = 3 * y1; val by = 3 * (y2 - y1) - cy; val ay = 1 - cy - by; var t = k
+    repeat(8) { val x = ((ax * t + bx) * t + cx) * t - k; val dx = (3 * ax * t + 2 * bx) * t + cx; if (abs(x) > 1e-5 && abs(dx) > 1e-6) t -= x / dx }
+    t = clamp(t); return ((ay * t + by) * t + cy) * t
 }
-
-private fun easeInOut(value: Double): Double {
-    if (value < 0.5) return 8.0 * value.pow(4)
-    return 1.0 - (-2.0 * value + 2.0).pow(4) / 2.0
-}
-
-private fun easeOutCubic(value: Double): Double = 1.0 - (1.0 - value).pow(3)
-
-private fun wrapAngle(value: Double): Double {
-    var wrapped = value % (PI * 2.0)
-    if (wrapped > PI) wrapped -= PI * 2.0
-    if (wrapped < -PI) wrapped += PI * 2.0
-    return wrapped
+private fun easeOut(u: Double) = bezier(0.23, 1.0, 0.32, 1.0, u)
+private fun easeInOut(u: Double) = bezier(0.77, 0.0, 0.175, 1.0, u)
+private fun spring(value: Double, velocity: Double, target: Double, dt: Double, duration: Double, dampingRatio: Double): Pair<Double, Double> {
+    val w = PI * 2 / duration; val stiffness = w * w; val damping = 2 * dampingRatio * w; val count = max(1, ceil(dt / 0.004).toInt()); val h = dt / count; var x = value; var v = velocity
+    repeat(count) { v += (-stiffness * (x - target) - damping * v) * h; x += v * h }
+    return if (abs(x - target) < 0.0005 && abs(v) < 0.005) Pair(target, 0.0) else Pair(x, v)
 }

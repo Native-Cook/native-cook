@@ -1,167 +1,148 @@
 import CoreText
 import SwiftUI
-
-private enum TiltSwipeActionsTokenColor {
-    static func make(_ token: String) -> Color {
-        if token.hasPrefix("#"), let value = UInt64(token.dropFirst(), radix: 16) {
-            return Color(.sRGB, red: Double((value >> 16) & 0xff) / 255, green: Double((value >> 8) & 0xff) / 255, blue: Double(value & 0xff) / 255, opacity: 1)
-        }
-        let values = token.replacingOccurrences(of: "rgba(", with: "").replacingOccurrences(of: ")", with: "").split(separator: ",").compactMap { Double($0) }
-        guard values.count == 4 else { return .clear }
-        return Color(.sRGB, red: values[0] / 255, green: values[1] / 255, blue: values[2] / 255, opacity: values[3])
-    }
-}
+import UIKit
 
 enum TiltSwipeActionsColor {
-    private typealias Token = TiltSwipeActionsTokens.Color
-    static let gradient = Token.gradient.map(TiltSwipeActionsTokenColor.make)
-    static let gradientStops = Token.gradientStops.map { CGFloat($0) }
-    static let desk = Token.desk.map(TiltSwipeActionsTokenColor.make)
-    static let plum = TiltSwipeActionsTokenColor.make(Token.plum)
-    static let plumInk = TiltSwipeActionsTokenColor.make(Token.plumInk)
-    static let cardInk = TiltSwipeActionsTokenColor.make(Token.cardInk)
-    static let white = TiltSwipeActionsTokenColor.make(Token.white)
-    static let pink = TiltSwipeActionsTokenColor.make(Token.pink)
-    static let pinkDeep = TiltSwipeActionsTokenColor.make(Token.pinkDeep)
-    static let title = TiltSwipeActionsTokenColor.make(Token.title)
-    static let subtitle = TiltSwipeActionsTokenColor.make(Token.subtitle)
-    static let cardLabel = TiltSwipeActionsTokenColor.make(Token.cardLabel)
-    static let cardCurrency = TiltSwipeActionsTokenColor.make(Token.cardCurrency)
-    static let slab = TiltSwipeActionsTokenColor.make(Token.slab)
-    static let slabEdge = TiltSwipeActionsTokenColor.make(Token.slabEdge)
-    static let slabShadow = TiltSwipeActionsTokenColor.make(Token.slabShadow)
-    static let panel = TiltSwipeActionsTokenColor.make(Token.panel)
-    static let panelEdge = TiltSwipeActionsTokenColor.make(Token.panelEdge)
-    static let deskEdge = TiltSwipeActionsTokenColor.make(Token.deskEdge)
-    static let panelIcon = TiltSwipeActionsTokenColor.make(Token.panelIcon)
-    static let panelIconActive = TiltSwipeActionsTokenColor.make(Token.panelIconActive)
-    static let menuInk = TiltSwipeActionsTokenColor.make(Token.menuInk)
-    static let menuPlus = TiltSwipeActionsTokenColor.make(Token.menuPlus)
-    static let menuScrim = TiltSwipeActionsTokenColor.make(Token.menuScrim)
-    static let income = TiltSwipeActionsTokenColor.make(Token.income)
-    static let transfer = TiltSwipeActionsTokenColor.make(Token.transfer)
-    static let scrim = TiltSwipeActionsTokenColor.make(Token.scrim)
-    static let finger = TiltSwipeActionsTokenColor.make(Token.finger)
-    static let lens = TiltSwipeActionsTokenColor.make(Token.lens)
-    static let lensRim = TiltSwipeActionsTokenColor.make(Token.lensRim)
-    static let glassEdge = TiltSwipeActionsTokenColor.make(Token.glassEdge)
-    static let pinkGlow = TiltSwipeActionsTokenColor.make(Token.pinkGlow)
-    static let sheen = Token.sheen.map(TiltSwipeActionsTokenColor.make)
-    static let fingerEdge = TiltSwipeActionsTokenColor.make(Token.fingerEdge)
-}
-
-enum TiltSwipeActionsTint {
-    private typealias Token = TiltSwipeActionsTokens.IconTint
-    static let yellow = TiltSwipeActionsTokenColor.make(Token.yellow)
-    static let lilac = TiltSwipeActionsTokenColor.make(Token.lilac)
-    static let peach = TiltSwipeActionsTokenColor.make(Token.peach)
-    static let mint = TiltSwipeActionsTokenColor.make(Token.mint)
-    static let sky = TiltSwipeActionsTokenColor.make(Token.sky)
-    static let rose = TiltSwipeActionsTokenColor.make(Token.rose)
-}
-
-enum TiltSwipeActionsTiltView {
-    private typealias Token = TiltSwipeActionsTokens.TiltView
-    static let p0 = (x: Double(Token.p0.x), y: Double(Token.p0.y))
-    static let u = (x: Double(Token.u.x), y: Double(Token.u.y))
-    static let v = (x: Double(Token.v.x), y: Double(Token.v.y))
-    static let cropX = Token.cropX; static let scale = Token.scale; static let screenRadius = Token.screenRadius
-}
-
-enum TiltSwipeActionsFlat {
-    private typealias Token = TiltSwipeActionsTokens.Flat
-    static let card = Token.card; static let section = Token.section; static let rowsTop = Token.rowsTop
-    static let rowLeft = Token.rowLeft; static let rowRight = Token.rowRight; static let panel = Token.panel
-    static let tabs = Token.tabs; static let tabY = Token.tabY; static let fab = Token.fab; static let menu = Token.menu; static let cards = Token.cards
-    static let width = TiltSwipeActionsTokens.flatWidth; static let height = TiltSwipeActionsTokens.flatHeight
-    static let planeWidth = TiltSwipeActionsTokens.planeWidth; static let planeHeight = TiltSwipeActionsTokens.planeHeight
+    static let paper = Color(red: 245 / 255, green: 241 / 255, blue: 232 / 255)
+    static let stock = Color(red: 251 / 255, green: 249 / 255, blue: 244 / 255)
+    static let ink = Color(red: 23 / 255, green: 24 / 255, blue: 29 / 255)
+    static let ink2 = Color(red: 110 / 255, green: 105 / 255, blue: 95 / 255)
+    static let ink3 = Color(red: 163 / 255, green: 157 / 255, blue: 145 / 255)
+    static let ivory = paper
+    static let brass = Color(red: 200 / 255, green: 173 / 255, blue: 126 / 255)
+    static let brassPaper = Color(red: 139 / 255, green: 107 / 255, blue: 58 / 255)
+    static let brassDot = Color(red: 166 / 255, green: 132 / 255, blue: 79 / 255)
+    static let rule = ink.opacity(0.10)
+    static let ruleBottom = ink.opacity(0.22)
+    static let ring = ink.opacity(0.16)
+    static let pieceEdge = ink.opacity(0.14)
+    static let tabBar = Color(red: 239 / 255, green: 234 / 255, blue: 223 / 255)
+    static let monoToast = Color(red: 46 / 255, green: 47 / 255, blue: 54 / 255)
+    static let flag = Color(red: 43 / 255, green: 44 / 255, blue: 51 / 255)
+    static let delete = Color(red: 143 / 255, green: 58 / 255, blue: 44 / 255)
 }
 
 enum TiltSwipeActionsLayout {
-    private typealias Token = TiltSwipeActionsTokens.Layout
-    static let gutter = Token.gutter; static let cardTop = Token.cardTop; static let cardHeight = Token.cardHeight
-    static let cardRadius = Token.cardRadius; static let cardBadge = Token.cardBadge; static let cardBadgeRadius = Token.cardBadgeRadius
-    static let sectionGap = Token.sectionGap; static let sectionTitle = Token.sectionTitle; static let sectionBottom = Token.sectionBottom
-    static let row = Token.row; static let circle = Token.circle; static let textLeft = Token.textLeft; static let rowRadius = Token.rowRadius
-    static let tile = Token.tile; static let tileHeight = Token.tileHeight; static let tileRadius = Token.tileRadius; static let tileGap = Token.tileGap
-    static let panel = Token.panel; static let panelRadius = Token.panelRadius; static let fab = Token.fab; static let fabRadius = Token.fabRadius
-    static let fabRight = Token.fabRight; static let pillHeight = Token.pillHeight; static let pillGap = Token.pillGap
-    static let menuItem = Token.menuItem; static let lens = Token.lens; static let menuWidth = Token.menuWidth; static let menuRadius = Token.menuRadius
-    static let finger = Token.finger; static let openX = TiltSwipeActionsTokens.OPEN_X
-    static let pillBottom = TiltSwipeActionsFlat.planeHeight - TiltSwipeActionsFlat.panel.top + TiltSwipeActionsTokens.pillBottomOffset
+    static let gutter: CGFloat = 16
+    static let cardHeight: CGFloat = 128
+    static let cardRadius: CGFloat = 20
+    static let cardFrameInset: CGFloat = 6
+    static let cardFrameRadius: CGFloat = 15
+    static let cardPad: CGFloat = 24
+    static let sectionGap: CGFloat = 28
+    static let sectionTitle: CGFloat = 32
+    static let listGap: CGFloat = 12
+    static let listPad: CGFloat = 5
+    static let row: CGFloat = 72
+    static let circle: CGFloat = 40
+    static let text: CGFloat = 52
+    static let inset: CGFloat = 4
+    static let bar: CGFloat = 64
+    static let outer: CGFloat = 14
+    static let mini: CGFloat = 16
+    static let mono: CGFloat = 28
+    static let hud: CGFloat = 40
+    static let hudOver: CGFloat = 56
+    static let toast: CGFloat = 56
+    static let toastRadius: CGFloat = 16
+    static let tile: CGFloat = 72
+    static let tabBar: CGFloat = 54
+    static let tab: CGFloat = 56
+    static let tabHeight: CGFloat = 40
+    static let tabGap: CGFloat = 8
+    static let fab: CGFloat = 48
+    static let finger: CGFloat = 40
+    static let menuWidth: CGFloat = 220
+    static let menuItem: CGFloat = 52
+    static let menuPadY: CGFloat = 8
+    static let menuRadius: CGFloat = 16
+    static let openX: CGFloat = -144
 }
 
-struct TiltSwipeActionsTextStyle {
-    let size: CGFloat
-    let lineHeight: CGFloat
-    let fontName: String
-    var kerning: CGFloat = 0
-}
-
-enum TiltSwipeActionsType {
-    private typealias Token = TiltSwipeActionsTokens.Typography
-    private static func postScriptName(_ family: String) -> String {
-        switch family {
-        case TiltSwipeActionsTokens.Font.semibold: return TiltSwipeActionsTokens.Font.postScriptSemibold
-        case TiltSwipeActionsTokens.Font.bold: return TiltSwipeActionsTokens.Font.postScriptBold
-        default: return TiltSwipeActionsTokens.Font.postScriptMedium
-        }
+enum TiltSwipeActionsScreenInsets {
+    static var current: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets ?? .zero
     }
-    static let cardLabel = TiltSwipeActionsTextStyle(size: Token.cardLabel.fontSize, lineHeight: Token.cardLabel.lineHeight, fontName: postScriptName(Token.cardLabel.fontFamily))
-    static let balance = TiltSwipeActionsTextStyle(size: Token.balance.fontSize, lineHeight: Token.balance.lineHeight, fontName: postScriptName(Token.balance.fontFamily), kerning: Token.balance.letterSpacing)
-    static let currency = TiltSwipeActionsTextStyle(size: Token.currency.fontSize, lineHeight: Token.currency.lineHeight, fontName: postScriptName(Token.currency.fontFamily))
-    static let section = TiltSwipeActionsTextStyle(size: Token.section.fontSize, lineHeight: Token.section.lineHeight, fontName: postScriptName(Token.section.fontFamily), kerning: Token.section.letterSpacing)
-    static let rowTitle = TiltSwipeActionsTextStyle(size: Token.rowTitle.fontSize, lineHeight: Token.rowTitle.lineHeight, fontName: postScriptName(Token.rowTitle.fontFamily))
-    static let rowSub = TiltSwipeActionsTextStyle(size: Token.rowSub.fontSize, lineHeight: Token.rowSub.lineHeight, fontName: postScriptName(Token.rowSub.fontFamily))
-    static let amount = TiltSwipeActionsTextStyle(size: Token.amount.fontSize, lineHeight: Token.amount.lineHeight, fontName: postScriptName(Token.amount.fontFamily))
-    static let tile = TiltSwipeActionsTextStyle(size: Token.tile.fontSize, lineHeight: Token.tile.lineHeight, fontName: postScriptName(Token.tile.fontFamily), kerning: Token.tile.letterSpacing)
-    static let pill = TiltSwipeActionsTextStyle(size: Token.pill.fontSize, lineHeight: Token.pill.lineHeight, fontName: postScriptName(Token.pill.fontFamily))
-    static let pillAction = TiltSwipeActionsTextStyle(size: Token.pillAction.fontSize, lineHeight: Token.pillAction.lineHeight, fontName: postScriptName(Token.pillAction.fontFamily))
-    static let menu = TiltSwipeActionsTextStyle(size: Token.menu.fontSize, lineHeight: Token.menu.lineHeight, fontName: postScriptName(Token.menu.fontFamily))
 }
 
-enum TiltSwipeActionsFonts {
+struct TiltSwipeActionsScene {
+    let width: CGFloat
+    let height: CGFloat
+    let top: CGFloat
+    let bottom: CGFloat
+
+    var listWidth: CGFloat { width - 2 * TiltSwipeActionsLayout.gutter }
+    var cardTop: CGFloat { top }
+    var sectionTop: CGFloat { cardTop + TiltSwipeActionsLayout.cardHeight + TiltSwipeActionsLayout.sectionGap }
+    var listTop: CGFloat { sectionTop + TiltSwipeActionsLayout.sectionTitle + TiltSwipeActionsLayout.listGap }
+    var rowsTop: CGFloat { listTop + TiltSwipeActionsLayout.listPad }
+    var barTop: CGFloat { height - bottom - TiltSwipeActionsLayout.tabBar }
+    var toastTop: CGFloat { barTop - TiltSwipeActionsLayout.listGap - TiltSwipeActionsLayout.toast - 4 }
+    var linkTop: CGFloat { barTop - 64 }
+    var fabLeft: CGFloat { width - TiltSwipeActionsLayout.gutter - TiltSwipeActionsLayout.fab }
+    var fabTop: CGFloat { barTop + 4 }
+    func tabCenter(_ index: Int) -> CGFloat {
+        TiltSwipeActionsLayout.gutter + CGFloat(index) * (TiltSwipeActionsLayout.tab + TiltSwipeActionsLayout.tabGap) + TiltSwipeActionsLayout.tab / 2
+    }
+}
+
+enum TiltSwipeActionsFont {
+    static let display = "TSABodoni48-Regular"
+    static let money22 = "TSABodoni22-Regular"
+    static let money22Regular = "TSABodoni22R-Regular"
+    static let money = "TSABodoni20-Regular"
+    static let moneySmall = "TSABodoni14-Regular"
+    static let monogram = "TSABodoni11-Regular"
+    static let italic = "TSABodoniItalic26-Regular"
+    static let sans = "TSAInstrument400-Regular"
+    static let sansMedium = "TSAInstrument500-Regular"
+    static let sansSemi = "TSAInstrument600-Regular"
+
     private static let registration: Void = {
-        for filename in ["TiltSwipe-Montserrat-Medium", "TiltSwipe-Montserrat-SemiBold", "TiltSwipe-Montserrat-Bold"] {
-            guard let url = Bundle.main.url(forResource: filename, withExtension: "ttf") else { continue }
+        let files = ["TSABodoni48", "TSABodoni22", "TSABodoni22R", "TSABodoni20", "TSABodoni14", "TSABodoni11", "TSABodoniItalic26", "TSAInstrument400", "TSAInstrument500", "TSAInstrument600"]
+        for file in files {
+            guard let url = Bundle.main.url(forResource: "TiltSwipeActions-\(file)", withExtension: "ttf") else { continue }
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
     }()
 
-    static func register() {
-        _ = registration
+    static func register() { _ = registration }
+}
+
+enum TiltSwipeActionsAssets {
+    private static func image(_ name: String, scale: CGFloat) -> Image {
+        guard let url = Bundle.main.url(forResource: "TiltSwipeActions-\(name)@3x", withExtension: "png"),
+              let data = try? Data(contentsOf: url), let uiImage = UIImage(data: data, scale: scale) else {
+            assertionFailure("Missing TiltSwipeActions image: \(name)")
+            return Image(uiImage: UIImage())
+        }
+        return Image(uiImage: uiImage)
     }
+
+    static let paper = image("paper", scale: 3)
+    static let guilloche = image("guilloche", scale: 3)
 }
 
-struct TiltSwipeActionsLabel: View {
-    let text: String
-    let style: TiltSwipeActionsTextStyle
-    let color: Color
-    var tabular = false
-    var fitsWidth = false
+enum TiltSwipeActionsCurve {
+    static let out = Animation.timingCurve(0.23, 1, 0.32, 1)
+    static let inOut = Animation.timingCurve(0.77, 0, 0.175, 1)
+    static let sheet = Animation.timingCurve(0.32, 0.72, 0, 1)
 
-    var body: some View {
-        let base = Text(text).font(.custom(style.fontName, fixedSize: style.size)).kerning(style.kerning)
-        Group { if tabular { base.monospacedDigit() } else { base } }
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .modifier(TiltSwipeActionsNoWrap(enabled: !fitsWidth))
-            .frame(height: style.lineHeight)
+    static func clamped(_ value: CGFloat, _ low: CGFloat = 0, _ high: CGFloat = 1) -> CGFloat {
+        min(max(value, low), high)
     }
-}
 
-private struct TiltSwipeActionsNoWrap: ViewModifier {
-    let enabled: Bool
-    func body(content: Content) -> some View { if enabled { content.fixedSize(horizontal: true, vertical: false) } else { content } }
-}
+    static func smooth(_ value: CGFloat) -> CGFloat {
+        let x = clamped(value)
+        return x * x * (3 - 2 * x)
+    }
 
-extension Double {
-    func tiltClamped(_ low: Double, _ high: Double) -> Double { Swift.min(Swift.max(self, low), high) }
-}
-
-enum TiltSwipeActionsGeometry {
-    static let plane: CGAffineTransform = {
-        typealias T = TiltSwipeActionsTiltView
-        return CGAffineTransform(a: T.scale * T.u.x, b: T.scale * T.u.y, c: T.scale * T.v.x, d: T.scale * T.v.y, tx: T.scale * (T.p0.x - T.cropX - TiltSwipeActionsFlat.height * T.v.x), ty: T.scale * (T.p0.y - TiltSwipeActionsFlat.height * T.v.y))
-    }()
+    static func interpolate(_ value: CGFloat, from: CGFloat, to: CGFloat) -> CGFloat {
+        guard to > from else { return value >= to ? 1 : 0 }
+        return clamped((value - from) / (to - from))
+    }
 }

@@ -100,21 +100,41 @@ final class PageCurlJournalSurface: UIView, UIGestureRecognizerDelegate {
     /// Snapshots the four pages once they can be laid out: the curl samples them as textures.
     private func buildPages() {
         guard let renderer else { return }
-        let pixelScale = pixelScale
         var images: [CGImage] = []
         for page in 0..<4 {
-            let content = PageCurlJournalPageView(
-                page: page, size: bounds.size, pixelScale: pixelScale, twinkle: PageCurlJournalTwinkle()
-            )
-            let snapshot = ImageRenderer(content: content)
-            snapshot.scale = pixelScale
-            snapshot.isOpaque = true
-            guard let image = snapshot.cgImage else { return }
+            guard let image = snapshot(page: page) else { return }
             images.append(image)
         }
         renderer.setPages(images)
         engine.resize(width: Double(bounds.width), height: Double(bounds.height))
         if renderer.hasPages, !engine.ready { engine.markReady() }
+    }
+
+    /// `ImageRenderer` substitutes warning glyphs for `UIViewRepresentable` content. Host the page in a real view
+    /// hierarchy so its UILabel typography, paper image and vector seal are all baked into the curl texture.
+    private func snapshot(page: Int) -> CGImage? {
+        let content = PageCurlJournalPageView(page: page, size: bounds.size)
+        let host = UIHostingController(rootView: content)
+        let hostedView = host.view!
+        hostedView.frame = CGRect(origin: .zero, size: bounds.size)
+        hostedView.bounds = CGRect(origin: .zero, size: bounds.size)
+        hostedView.backgroundColor = UIColor(PageCurlJournalTheme.Paper.base)
+        hostedView.overrideUserInterfaceStyle = .light
+        hostedView.isUserInteractionEnabled = false
+        insertSubview(hostedView, at: 0)
+        hostedView.setNeedsLayout()
+        hostedView.layoutIfNeeded()
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = pixelScale
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { context in
+            if !hostedView.drawHierarchy(in: hostedView.bounds, afterScreenUpdates: true) {
+                hostedView.layer.render(in: context.cgContext)
+            }
+        }
+        hostedView.removeFromSuperview()
+        return image.cgImage
     }
 
     // MARK: - Frame
@@ -135,7 +155,6 @@ final class PageCurlJournalSurface: UIView, UIGestureRecognizerDelegate {
 
     fileprivate func tick(_ link: CADisplayLink) {
         engine.step(now: link.timestamp)
-        if model.twinkle.value != engine.twinkle.value { model.twinkle.value = engine.twinkle.value }
         render()
     }
 

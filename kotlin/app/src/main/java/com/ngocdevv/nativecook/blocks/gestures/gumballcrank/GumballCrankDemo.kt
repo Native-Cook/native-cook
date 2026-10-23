@@ -8,7 +8,7 @@ fun GumballCrankDemo() {
     GumballCrank(autoPlay = true)
 }
 
-@Preview
+@Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
 private fun GumballCrankDemoPreview() {
     GumballCrankDemo()

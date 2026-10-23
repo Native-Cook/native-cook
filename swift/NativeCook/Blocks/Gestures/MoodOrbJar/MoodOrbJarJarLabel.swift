@@ -14,18 +14,18 @@ struct MoodOrbJarJarLabel: View {
         VStack(spacing: 0) {
             Text(MoodOrbJarTokens.Copy.month)
                 .font(.system(size: 11, weight: .bold))
-                .tracking(2.2)
+                .tracking(2.4)
                 .foregroundStyle(Palette.mute)
             ZStack {
                 Text("\(count)")
-                    .font(.system(size: 24, weight: .heavy))
+                    .font(.system(size: 26, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(Palette.ink)
-                    .frame(height: 30)
+                    .frame(height: 32)
                     .id(count)
                     .transition(transition)
             }
-            .frame(height: 30)
+            .frame(height: 32)
             .padding(.top, MoodOrbJarTokens.Space.extraSmall)
             .clipped()
         }

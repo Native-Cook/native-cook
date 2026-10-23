@@ -1,7 +1,7 @@
 // Every motion value of the block. Seconds unless the name ends in _MS; points unless noted.
 
 export const STEP = 1 / 120;
-export const MAX_STEPS = 30; // per frame: the sim keeps wall-clock time through dropped frames, so the loop stays 12 s
+export const MAX_STEPS = 30; // per frame: the sim keeps wall-clock time through dropped frames, so the loop stays 8 s
 
 export const CHAIN = {
   gravity: 900, // gives the source's 4 s swing on a 340 pt cord
@@ -34,7 +34,7 @@ export const STATE = {
   drop: 24, // and lengthens this much when declined
   lengthEase: 7, // per second
   colorEase: 14, // per second: short, so the hue change does not linger on its brownish middle
-  resetAfter: 2, // declined / ended back to ringing
+  resetAfter: 1.4, // declined / ended back to ringing
 };
 
 export const RING = {
@@ -51,18 +51,21 @@ export const RING = {
 
 export const HAPTIC = { grab: 1, answer: 2, decline: 3, tick: 4 } as const;
 
-// Autoplay: three swing periods. The script lifts to answer, holds the call, then pulls down to hang up.
-export const LOOP_MS = 12_000;
-export const RESUME_MS = 3_500;
+// Autoplay: two swing periods. The script lifts to answer, holds the call, then pulls down to hang up; the receiver is
+// back on its swing, ringing, before the loop ends.
+export const LOOP_MS = 8_000;
+export const RESUME_MS = 2_000;
+/** Where a resumed demo picks up when a call is still connected (s into the loop). */
+export const RESUME_IN_CALL = 3.9;
 export const PREROLL_LOOPS = 3; // the swing reaches its steady loop before the first frame
 export const SCRIPT = [
   // [start, end, from dx, from dy, to dx, to dy, down at start, up at end] from the handset's grab point
-  [2.6, 3.0, 0, 0, 0, -10, 1, 0],
-  [3.0, 3.55, 0, -10, 6, -84, 0, 0],
-  [3.55, 3.7, 6, -84, 6, -84, 0, 1],
-  [7.4, 7.75, 0, 0, 0, 14, 1, 0],
-  [7.75, 8.25, 0, 14, -4, 92, 0, 0],
-  [8.25, 8.4, -4, 92, -4, 92, 0, 1],
+  [1.6, 2.0, 0, 0, 0, -10, 1, 0],
+  [2.0, 2.55, 0, -10, 6, -84, 0, 0],
+  [2.55, 2.7, 6, -84, 6, -84, 0, 1],
+  [4.4, 4.75, 0, 0, 0, 14, 1, 0],
+  [4.75, 5.25, 0, 14, -4, 92, 0, 0],
+  [5.25, 5.4, -4, 92, -4, 92, 0, 1],
 ] as const;
 // Replica: the source's swing, measured on its frames (4 s period) as Fourier series in screen px / degrees:
 // [mean, cos 1, sin 1, cos 2, sin 2, cos 3, sin 3, cos 4, sin 4] of the handset's glow centroid and its lean.

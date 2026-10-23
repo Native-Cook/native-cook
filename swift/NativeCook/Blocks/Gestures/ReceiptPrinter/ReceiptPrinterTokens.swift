@@ -24,6 +24,7 @@ struct ReceiptPrinterRow {
 struct ReceiptPrinterCard {
     let date: [String]
     let km: String
+    let seed: Int
 }
 
 /// SwiftUI values ported verbatim from the receipt-printer React Native theme.
@@ -47,7 +48,7 @@ enum ReceiptPrinterTokens {
         static let bg: Color = hex(0xEFEFEF)
         static let card: Color = hex(0xE5E5E5)
         static let cardPressed: Color = hex(0xFFFFFF)
-        static let ink: Color = hex(0x111111)
+        static let ink: Color = hex(0x1F2226)
         static let inkSoft: Color = hex(0x8A8A8A)
         static let date: Color = hex(0x767676)
         static let inkFaint: Color = hex(0xA8A8A8)
@@ -55,7 +56,7 @@ enum ReceiptPrinterTokens {
         static let slot: Color = hex(0x1E1E1E)
         static let slotSheen: Color = hex(0x3A3A3A)
         static let slit: Color = hex(0x8E8E8E)
-        static let paper: Color = hex(0xFFFFFF)
+        static let paper: Color = hex(0xFAF8F2)
         static let paperShade: Color = rgba(0.0, 0.0, 0.0, 0.05)
         static let dash: Color = hex(0xBDBDBD)
         static let grid: Color = hex(0xD9D9D9)
@@ -64,7 +65,7 @@ enum ReceiptPrinterTokens {
         static let zone: Color = hex(0x7EE06E)
         static let tag: Color = hex(0x111111)
         static let tagInk: Color = hex(0xFFFFFF)
-        static let menu: Color = rgba(255.0, 255.0, 255.0, 0.94)
+        static let menu: Color = hex(0xFFFFFF)
         static let shadow: Color = hex(0x000000)
         static let buttonDark: Color = hex(0x111111)
         static let buttonLight: Color = hex(0xFFFFFF)
@@ -240,41 +241,41 @@ enum ReceiptPrinterTokens {
         static let dashes: [Double] = [363.0, 410.0, 505.0, 751.0, 947.0, 1181.0]
         static let rows: [ReceiptPrinterRow] = [
             ReceiptPrinterRow(cap: 222.3, text: "RUN RECEIPT", align: "center", size: TYPE.rcTitle, bold: true),
-            ReceiptPrinterRow(cap: 272.0, text: "ORDER:#6235", align: "center", size: TYPE.body),
-            ReceiptPrinterRow(cap: 296.3, text: "JANUARY 28, 2026", align: "center", size: TYPE.body),
-            ReceiptPrinterRow(cap: 321.3, text: "INDOOR – EASY", align: "center", size: TYPE.body),
+            ReceiptPrinterRow(cap: 272.0, text: "RUN #0418", align: "center", size: TYPE.body),
+            ReceiptPrinterRow(cap: 296.3, text: "WED, JANUARY 28, 2026", align: "center", size: TYPE.body),
+            ReceiptPrinterRow(cap: 321.3, text: "RIVERSIDE LOOP – TEMPO", align: "center", size: TYPE.body),
             ReceiptPrinterRow(cap: 381.7, text: "ITEM", align: "left", x: 60.0, size: TYPE.head, bold: true),
             ReceiptPrinterRow(cap: 381.7, text: "PACE", align: "left", x: 172.0, size: TYPE.head, bold: true),
             ReceiptPrinterRow(cap: 381.7, text: "ZONE", align: "left", x: 217.0, size: TYPE.head, bold: true),
             ReceiptPrinterRow(cap: 381.7, text: "TIME", align: "left", x: 262.0, size: TYPE.head, bold: true),
             ReceiptPrinterRow(cap: 381.7, text: "HR", align: "right", x: 340.0, size: TYPE.head, bold: true),
-            ReceiptPrinterRow(cap: 435.3, text: "1 KM", align: "left", x: 60.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 435.3, text: "09'21\"", align: "left", x: 163.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 435.3, text: "09:21", align: "left", x: 258.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 435.3, text: "0", align: "right", x: 340.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 470.5, text: "1.08 KM", align: "left", x: 60.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 470.5, text: "09'59\"", align: "left", x: 163.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 470.5, text: "00:50", align: "left", x: 258.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 470.5, text: "0", align: "right", x: 340.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 435.3, text: "5 KM", align: "left", x: 60.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 435.3, text: "05'28\"", align: "left", x: 163.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 435.3, text: "27:21", align: "left", x: 258.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 435.3, text: "154", align: "right", x: 340.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 470.5, text: "1.21 KM", align: "left", x: 60.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 470.5, text: "05'11\"", align: "left", x: 163.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 470.5, text: "06:17", align: "left", x: 258.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 470.5, text: "168", align: "right", x: 340.0, size: TYPE.body),
             ReceiptPrinterRow(cap: 558.7, text: "PACE", align: "left", x: 60.0, size: TYPE.head, bold: true),
-            ReceiptPrinterRow(cap: 561.0, text: "09'21\"/KM~09'59\"/KM | 09'24\"/KM", align: "right", x: 340.0, size: TYPE.chartNote, color: COLOR.inkSoft),
+            ReceiptPrinterRow(cap: 561.0, text: "05'04\"–05'42\"/KM | AVG 05'25\"", align: "right", x: 340.0, size: TYPE.chartNote, color: COLOR.inkSoft),
             ReceiptPrinterRow(cap: 715.0, text: "0KM", align: "left", x: 60.0, size: TYPE.tiny, color: COLOR.inkSoft),
-            ReceiptPrinterRow(cap: 715.0, text: "1.1KM", align: "right", x: 340.0, size: TYPE.tiny, color: COLOR.inkSoft),
+            ReceiptPrinterRow(cap: 715.0, text: "6.2KM", align: "right", x: 340.0, size: TYPE.tiny, color: COLOR.inkSoft),
             ReceiptPrinterRow(cap: 789.0, text: "TOTAL:", align: "left", x: 60.0, size: TYPE.total, bold: true),
-            ReceiptPrinterRow(cap: 789.0, text: "1.08 KM", align: "right", x: 340.0, size: TYPE.total, bold: true),
+            ReceiptPrinterRow(cap: 789.0, text: "6.21 KM", align: "right", x: 340.0, size: TYPE.total, bold: true),
             ReceiptPrinterRow(cap: 827.0, text: "DURATION", align: "left", x: 60.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 827.0, text: "00:10:12", align: "right", x: 340.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 827.0, text: "00:33:38", align: "right", x: 340.0, size: TYPE.body),
             ReceiptPrinterRow(cap: 851.7, text: "AVG PACE", align: "left", x: 60.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 851.7, text: "09'24\"/KM", align: "right", x: 340.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 851.7, text: "05'25\"/KM", align: "right", x: 340.0, size: TYPE.body),
             ReceiptPrinterRow(cap: 876.3, text: "BEST 1K", align: "left", x: 60.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 876.3, text: "09'21\"/KM", align: "right", x: 340.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 901.3, text: "CALORIES", align: "left", x: 60.0, size: TYPE.body),
-            ReceiptPrinterRow(cap: 901.3, text: "73 KCAL", align: "right", x: 340.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 876.3, text: "05'09\"/KM", align: "right", x: 340.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 901.3, text: "AVG HR", align: "left", x: 60.0, size: TYPE.body),
+            ReceiptPrinterRow(cap: 901.3, text: "156 BPM", align: "right", x: 340.0, size: TYPE.body),
             ReceiptPrinterRow(cap: 983.0, text: "*** DUPLICATE COPY ***", align: "center", size: TYPE.body, bold: true),
             ReceiptPrinterRow(cap: 1018.3, text: "KEEP FOR YOUR RECORDS", align: "center", size: TYPE.small, color: COLOR.inkSoft),
-            ReceiptPrinterRow(cap: 1210.3, text: "OFFICE HOUR", align: "center", size: TYPE.small, bold: true),
-            ReceiptPrinterRow(cap: 1223.7, text: "WED–JAN 18:51", align: "center", size: TYPE.small, bold: true),
-            ReceiptPrinterRow(cap: 1261.7, text: "A LIGHT RUN MOVES THINGS FORWARD.", align: "center", size: TYPE.small, bold: true),
+            ReceiptPrinterRow(cap: 1210.3, text: "PRINTED", align: "center", size: TYPE.small, bold: true),
+            ReceiptPrinterRow(cap: 1223.7, text: "WED 28 JAN 18:51", align: "center", size: TYPE.small, bold: true),
+            ReceiptPrinterRow(cap: 1261.7, text: "EVEN PACE, STRONG FINISH.", align: "center", size: TYPE.small, bold: true),
             ReceiptPrinterRow(cap: 1294.7, text: "GENERATED LOCALLY VIA STRIDE OS.", align: "center", size: TYPE.tiny, color: COLOR.inkFaint),
         ]
         static let paragraph = Paragraph(
@@ -290,7 +291,7 @@ enum ReceiptPrinterTokens {
                 "receipt.strideos.run.",
             ]
         )
-        static let fast = Fast(x: 97.0, top: 431.3, w: 36.0, h: 17.7, radius: 3.5, size: 9.5)
+        static let fast = Fast(x: 120.0, top: 466.5, w: 34.0, h: 17.7, radius: 3.5, size: 9.5)
         static let zone = Zone(x: 231.3, ys: [440.2, 475.3], r: 4.2)
         static let chart = Chart(top: 585.0, bottom: 705.0, base: 689.6, baseW: 2.4, columns: 6, dotted: 4)
         static let edge = Edge(period: 12.8, depth: 6.0)
@@ -308,18 +309,21 @@ enum ReceiptPrinterTokens {
     }
 
     static let CARDS: [ReceiptPrinterCard] = [
-        ReceiptPrinterCard(date: ["JAN", "28"], km: "1.08KM"), ReceiptPrinterCard(date: ["JAN", "27"], km: "0.9KM"), ReceiptPrinterCard(date: ["JAN", "26"], km: "0.87KM"),
-        ReceiptPrinterCard(date: ["JAN", "24"], km: "0.85KM"), ReceiptPrinterCard(date: ["JAN", "23"], km: "0.93KM"), ReceiptPrinterCard(date: ["2025", "MAY 11"], km: "1.06KM"),
-        ReceiptPrinterCard(date: ["2025", "MAY 10"], km: "0.7KM"), ReceiptPrinterCard(date: ["2025", "APR 28"], km: "0.47KM"), ReceiptPrinterCard(date: ["2025", "APR 26"], km: "1KM"),
-        ReceiptPrinterCard(date: ["2025", "APR 24"], km: "0.66KM"), ReceiptPrinterCard(date: ["2025", "APR 22"], km: "0.69KM"), ReceiptPrinterCard(date: ["2025", "APR 21"], km: "0.49KM"),
-        ReceiptPrinterCard(date: ["2025", "MAR 24"], km: "0.62KM"), ReceiptPrinterCard(date: ["2025", "MAR 23"], km: "0.81KM"), ReceiptPrinterCard(date: ["2025", "MAR 22"], km: "0.55KM"),
+        ReceiptPrinterCard(date: ["WED", "28 JAN"], km: "6.21 KM", seed: 3), ReceiptPrinterCard(date: ["SUN", "25 JAN"], km: "12.40 KM", seed: 11),
+        ReceiptPrinterCard(date: ["THU", "22 JAN"], km: "5.02 KM", seed: 5), ReceiptPrinterCard(date: ["TUE", "20 JAN"], km: "8.15 KM", seed: 8),
+        ReceiptPrinterCard(date: ["SAT", "17 JAN"], km: "10.33 KM", seed: 2), ReceiptPrinterCard(date: ["WED", "14 JAN"], km: "6.18 KM", seed: 3),
+        ReceiptPrinterCard(date: ["MON", "12 JAN"], km: "4.40 KM", seed: 14), ReceiptPrinterCard(date: ["SAT", "10 JAN"], km: "9.87 KM", seed: 6),
+        ReceiptPrinterCard(date: ["THU", "8 JAN"], km: "5.55 KM", seed: 9), ReceiptPrinterCard(date: ["TUE", "6 JAN"], km: "7.20 KM", seed: 12),
+        ReceiptPrinterCard(date: ["SUN", "4 JAN"], km: "11.06 KM", seed: 4), ReceiptPrinterCard(date: ["FRI", "2 JAN"], km: "5.00 KM", seed: 7),
+        ReceiptPrinterCard(date: ["WED", "31 DEC"], km: "6.42 KM", seed: 10), ReceiptPrinterCard(date: ["MON", "29 DEC"], km: "8.90 KM", seed: 1),
+        ReceiptPrinterCard(date: ["SAT", "27 DEC"], km: "3.25 KM", seed: 13),
     ]
 
-    static let PILLS: [String] = ["0.85KM", "0.87KM", "1.06KM"]
+    static let PILLS: [String] = ["91.4 KM", "12 RUNS", "5'29\"/KM"]
 
     enum COPY {
         static let title: String = "RUN RECEIPT"
-        static let subtitle: String = "Year distance: 7.4 KM"
+        static let subtitle: String = "2026 so far · tap a run to print it"
         static let long: String = "LONG RECEIPT"
         static let short: String = "SHORT RECEIPT"
         static let save: String = "SAVE"
@@ -357,7 +361,6 @@ enum ReceiptPrinterMotion {
     enum SCREEN {
         static let gridOutMs: Double = 260.0
         static let slotInMs: Double = 220.0
-        static let gridInMs: Double = 420.0
     }
 
     static let ISLAND_SPRING = Spring(damping: 17.0, stiffness: 230.0, mass: 1.0)
@@ -384,12 +387,15 @@ enum ReceiptPrinterMotion {
 
     enum RETRACT {
         static let ms: Double = 520.0
+        static let gridLeadMs: Double = 130.0
+        static let gridInMs: Double = 680.0
+        static let reducedMs: Double = 200.0
     }
 
     static let LOOP_MS: Double = 10000.0
 
     enum AUTOPLAY {
-        static let resumeDelayMs: Double = 3500.0
+        static let resumeDelayMs: Double = 2000.0
         static let pressAt: Double = 500.0
         static let pickAt: Double = 1300.0
         static let scrolls: [Scroll] = [
@@ -429,7 +435,6 @@ enum ReceiptPrinterMotion {
         static let pressScale: Double = 0.97
         static let pressInMs: Double = 100.0
         static let pressOutMs: Double = 160.0
-        static let returnMs: Double = 380.0
         static let armedLed: Double = 1.0
     }
 }

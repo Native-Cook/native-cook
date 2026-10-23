@@ -1,6 +1,7 @@
 /**
- * Envelope Gift Reveal: swipe up on the envelope (or press Open) — the flap folds back, the card
- * follows the finger out, flies into place and the page turns from lime to white under confetti.
+ * Envelope Gift Reveal: a letter from Nora on a linen table. Swipe up on the envelope (or press "Lift the flap"): the
+ * wax seal cracks, the flap folds back in perspective, the card follows the finger out, lands, and turns over to her
+ * note in her own hand.
  */
 import * as Haptics from 'expo-haptics';
 import { useFonts } from 'expo-font';
@@ -13,7 +14,7 @@ import { scheduleOnUI } from 'react-native-worklets';
 
 import { EnvelopeScene, frameOf } from './EnvelopeScene';
 import { HEADLINE, POLISH, REDUCED_MS, RESET, REVEAL } from './motion';
-import { COLORS, DISPLAY_FONT, GIFT, LAYOUT, screenLayout } from './theme';
+import { COLORS, FONTS, GIFT, LAYOUT, screenLayout } from './theme';
 import { PHASE, useEnvelope, type EnvelopeValues, type Haptic } from './use-envelope';
 
 export type EnvelopeGiftRevealProps = { autoPlay?: boolean; onShop?: () => void };
@@ -46,11 +47,20 @@ export function EnvelopeGiftReveal({ autoPlay = false, onShop }: EnvelopeGiftRev
   return <Screen key={`${width}x${height}-${reduced}`} width={width} height={height} reduced={reduced} autoPlay={autoPlay} onShop={onShop} />;
 }
 
-/** Headline letters leave one after another, sliding down as the flap starts to lift (wide type, staggered). */
+/**
+ * Headline letters leave one after another, sliding down as the flap starts to lift (wide type, staggered). On the
+ * way back they wait for the revealed screen's title to be gone, then rise in the same order (reverse of the exit).
+ */
 function Letter({ ch, order, v, reduced }: { ch: string; order: number; v: EnvelopeValues; reduced: boolean }) {
   const style = useAnimatedStyle(() => {
     const f = frameOf(v, reduced);
-    if (f.reset > 0) return { opacity: f.reset, transform: [{ translateY: 0 }] };
+    if (f.reset > 0) {
+      if (reduced) return { opacity: f.resetIn, transform: [{ translateY: 0 }] };
+      const start = RESET.inFrom * RESET.fadeMs + order * RESET.letterStagger;
+      const u = clamp01((f.reset * RESET.fadeMs - start) / RESET.letterMs);
+      const e = 1 - Math.pow(1 - u, 3);
+      return { opacity: e, transform: [{ translateY: HEADLINE.drop * (1 - e) }] };
+    }
     const u = reduced ? clamp01(f.p / 0.08) : clamp01((f.p - order * HEADLINE.stagger) / HEADLINE.span);
     const e = u * u * (3 - 2 * u);
     return { opacity: 1 - e, transform: [{ translateY: HEADLINE.drop * e }] };
@@ -61,12 +71,17 @@ function Letter({ ch, order, v, reduced }: { ch: string; order: number; v: Envel
 function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; height: number; reduced: boolean; autoPlay: boolean; onShop?: () => void }) {
   const insets = useSafeAreaInsets();
   // The headlines wait for the wide face, so they never flash in the fallback font.
-  const [fontReady] = useFonts({ [DISPLAY_FONT]: require('./assets/ArchivoExpanded-Black.ttf') });
+  const [fontReady] = useFonts({
+    [FONTS.serif]: require('./assets/InstrumentSerif-Regular.ttf'),
+    [FONTS.ui]: require('./assets/Inter-Medium.ttf'),
+    [FONTS.uiBold]: require('./assets/Inter-SemiBold.ttf'),
+  });
   const [phase, setPhase] = useState<number>(PHASE.sealed);
   const onHaptic = useCallback((k: Haptic) => HAPTIC[k](), []);
   const lay = screenLayout(height, insets.top, insets.bottom);
   const finalCardY = lay.cardTop;
-  const { values: v, input } = useEnvelope(width, finalCardY + LAYOUT.cardH / 2, lay.envTop, autoPlay, reduced, { onPhase: setPhase, onHaptic });
+  // Reduce Motion: no demo; the letter waits sealed and a finger still opens it.
+  const { values: v, input } = useEnvelope(width, finalCardY + LAYOUT.cardH / 2, lay.envTop, autoPlay && !reduced, reduced, { onPhase: setPhase, onHaptic });
 
   const pan = useMemo(() => Gesture.Pan().minDistance(0).maxPointers(1)
     .onBegin((e) => { input.takeOver(); input.down(e.absoluteX, e.absoluteY, false); })
@@ -79,6 +94,11 @@ function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; h
     input.letGo();
   }), [input]);
 
+  const kickerStyle = useAnimatedStyle(() => {
+    const f = frameOf(v, reduced);
+    const o = f.reset > 0 ? f.resetIn : 1 - clamp01(f.p / 0.08);
+    return { opacity: o };
+  });
   const buttonStyle = useAnimatedStyle(() => {
     const f = frameOf(v, reduced);
     const leaving = f.reset > 0 ? 1 - f.reset : clamp01(f.p / 0.06);
@@ -89,7 +109,8 @@ function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; h
   const finalStyle = (k: number) => {
     'worklet';
     const delay = showFinal && !reduced ? 400 + REVEAL.textDelay + k * REVEAL.stagger : 0;
-    const timing = { duration: showFinal ? 320 : reduced ? REDUCED_MS : RESET.fadeMs, easing: TEXT_EASE, reduceMotion: ReduceMotion.Never };
+    // Out fast on a reset, so the title is gone before the sealed headline starts to come back.
+    const timing = { duration: showFinal ? 320 : reduced ? REDUCED_MS * RESET.outShare : RESET.textOutMs, easing: TEXT_EASE, reduceMotion: ReduceMotion.Never };
     return {
       opacity: withDelay(delay, withTiming(showFinal ? 1 : 0, timing)),
       transform: [{ translateY: withDelay(delay, withTiming(showFinal || reduced ? 0 : POLISH.textRise, timing)) }],
@@ -113,6 +134,9 @@ function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; h
       </GestureDetector>
 
       {fontReady && (
+        <Animated.Text pointerEvents="none" style={[styles.kicker, { top: lay.headlineTop - 24 }, kickerStyle]}>{GIFT.kicker}</Animated.Text>
+      )}
+      {fontReady && (
         <View pointerEvents="none" style={[styles.headlineBox, { top: lay.headlineTop }]} accessible accessibilityRole="header"
           accessibilityLabel={GIFT.headline.replace('\n', ' ')}>
           {GIFT.headline.split('\n').map((line, row) => (
@@ -122,11 +146,12 @@ function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; h
           ))}
         </View>
       )}
-      <Animated.View style={[styles.openWrap, { top: lay.buttonY - LAYOUT.buttonD / 2 }, buttonStyle]} pointerEvents={sealed ? 'box-none' : 'none'}>
-        <Pressable onPress={() => ui(() => { 'worklet'; input.open(); })} pressRetentionOffset={16}
-          accessibilityRole="button" accessibilityLabel="Open the gift">
+      <Animated.View style={[styles.openWrap, { top: lay.buttonY - LAYOUT.hintH / 2 }, buttonStyle]} pointerEvents={sealed ? 'box-none' : 'none'}>
+        <Pressable onPress={() => ui(() => { 'worklet'; input.open(); })} pressRetentionOffset={16} hitSlop={8}
+          accessibilityRole="button" accessibilityLabel="Open the letter">
           {({ pressed }) => <Animated.View style={[styles.open, pressStyle(pressed)]}>
-            <Text style={styles.openText}>OPEN</Text>
+            <View style={styles.chevron} />
+            <Text style={styles.openText}>{GIFT.hint}</Text>
           </Animated.View>}
         </Pressable>
       </Animated.View>
@@ -135,14 +160,15 @@ function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; h
         {GIFT.title}
       </Animated.Text>}
       <Animated.View pointerEvents="none" style={[styles.message, { top: lay.messageTop }, final1]}
-        accessible={revealed} accessibilityLabel={`Gift card, ${GIFT.amount}. ${GIFT.message}`}>
-        <Text style={styles.messageText}>{GIFT.message}</Text>
+        accessible={revealed} accessibilityLabel={`Gift card, ${GIFT.amount} at ${GIFT.shop}. ${GIFT.message}`}>
+        <Text style={styles.messageText}>{GIFT.caption}</Text>
+        <Text style={styles.messageSub}>{GIFT.captionSub}</Text>
       </Animated.View>
       <Animated.View style={[styles.ctaWrap, { top: lay.ctaTop }, final2]} pointerEvents={revealed ? 'box-none' : 'none'}>
         <Pressable onPress={() => (onShop ? onShop() : ui(() => { 'worklet'; input.reset(); }))} pressRetentionOffset={16}
           accessibilityRole="button" accessibilityLabel={GIFT.cta}>
           {({ pressed }) => <Animated.View style={[styles.cta, pressStyle(pressed)]}>
-            <Text style={styles.ctaText}>{GIFT.cta.toUpperCase()}</Text>
+            <Text style={styles.ctaText}>{GIFT.cta}</Text>
           </Animated.View>}
         </Pressable>
       </Animated.View>
@@ -151,30 +177,28 @@ function Screen({ width, height, reduced, autoPlay, onShop }: { width: number; h
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.lime },
+  root: { flex: 1, backgroundColor: COLORS.table },
   envA11y: { position: 'absolute', width: LAYOUT.envW, height: LAYOUT.envH },
-  headlineBox: { position: 'absolute', left: LAYOUT.finalSide, right: 8 },
+  kicker: { position: 'absolute', left: LAYOUT.side, right: LAYOUT.side, fontFamily: FONTS.ui, fontSize: 11, lineHeight: 16, letterSpacing: 1.6, color: COLORS.mute },
+  headlineBox: { position: 'absolute', left: LAYOUT.side, right: LAYOUT.side },
   headlineLine: { flexDirection: 'row' },
-  headline: {
-    color: COLORS.ink, fontSize: LAYOUT.headline, lineHeight: LAYOUT.headlineLine, fontFamily: DISPLAY_FONT, letterSpacing: -1,
-  },
+  // Instrument Serif's caps and ascenders reach above its line box on iOS: the line is set 4 pt taller than the size.
+  headline: { color: COLORS.ink, fontSize: LAYOUT.headline, lineHeight: LAYOUT.headlineLine, fontFamily: FONTS.serif, letterSpacing: -0.6 },
   openWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   open: {
-    width: LAYOUT.buttonD, height: LAYOUT.buttonD, borderRadius: LAYOUT.buttonD / 2, backgroundColor: COLORS.ink,
-    alignItems: 'center', justifyContent: 'center', shadowColor: '#3A4A00', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 14 },
+    height: LAYOUT.hintH, paddingHorizontal: 24, borderRadius: LAYOUT.hintH / 2, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: COLORS.faint,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(243,236,223,0.04)',
   },
-  openText: { color: COLORS.white, fontSize: 13, fontWeight: '700', letterSpacing: 1.8 },
+  chevron: { width: 9, height: 9, borderLeftWidth: 1.75, borderTopWidth: 1.75, borderColor: COLORS.ink, transform: [{ rotate: '45deg' }], marginTop: 4 },
+  openText: { color: COLORS.ink, fontFamily: FONTS.ui, fontSize: 15, letterSpacing: -0.1 },
   title: {
-    position: 'absolute', left: LAYOUT.finalSide, right: 8, color: COLORS.ink, fontSize: LAYOUT.title,
-    lineHeight: LAYOUT.titleLine, fontFamily: DISPLAY_FONT, letterSpacing: -0.5,
+    position: 'absolute', left: LAYOUT.side, right: LAYOUT.side, color: COLORS.ink, fontSize: LAYOUT.title,
+    lineHeight: LAYOUT.titleLine, fontFamily: FONTS.serif, letterSpacing: -0.4,
   },
-  message: {
-    position: 'absolute', left: LAYOUT.finalSide, right: LAYOUT.finalSide, height: LAYOUT.messageH, borderRadius: 4,
-    backgroundColor: COLORS.message, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20,
-    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 3,
-  },
-  messageText: { color: COLORS.messageInk, fontSize: 16, textAlign: 'center' },
-  ctaWrap: { position: 'absolute', left: LAYOUT.finalSide, right: LAYOUT.finalSide },
-  cta: { height: LAYOUT.buttonH, backgroundColor: COLORS.ink, alignItems: 'center', justifyContent: 'center' },
-  ctaText: { color: COLORS.white, fontSize: 13, fontWeight: '700', letterSpacing: 1.2 },
+  message: { position: 'absolute', left: LAYOUT.side, right: LAYOUT.side, alignItems: 'center' },
+  messageText: { color: COLORS.ink, fontFamily: FONTS.ui, fontSize: 15, lineHeight: 20, textAlign: 'center' },
+  messageSub: { color: COLORS.mute, fontFamily: FONTS.ui, fontSize: 13, lineHeight: 18, textAlign: 'center', marginTop: 4 },
+  ctaWrap: { position: 'absolute', left: LAYOUT.side, right: LAYOUT.side },
+  cta: { height: LAYOUT.buttonH, borderRadius: LAYOUT.buttonH / 2, backgroundColor: COLORS.cta, alignItems: 'center', justifyContent: 'center' },
+  ctaText: { color: COLORS.ctaInk, fontFamily: FONTS.uiBold, fontSize: 16, letterSpacing: -0.2 },
 });

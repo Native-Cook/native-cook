@@ -75,19 +75,11 @@ export const STAGGER = {
   per: 60,
 } as const;
 
-export const SCATTER = {
-  // Detail view: the other bubbles fly this far outward while they shrink away.
-  distance: 220,
-} as const;
+/** The name a tap shows above a bubble: in, held, out (ms). */
+export const LABEL = { inMs: 180, holdMs: 1600, outMs: 220, rise: 6 } as const;
 
-export const DETAIL = {
-  // Where the tapped bubble sits in the detail view (share of the height) and its radius.
-  y: 0.333,
-  radius: 70,
-  fadeMs: 240,
-  fadeOutMs: 160,
-  ease: [0.23, 1, 0.32, 1] as [number, number, number, number],
-} as const;
+/** Completion: a ring of light leaves the bubble and fades (calm, no sparks). */
+export const RIPPLE = { ms: 700, reach: 26 } as const;
 
 export const SWITCH = {
   fadeMs: 260,
@@ -96,26 +88,22 @@ export const SWITCH = {
 } as const;
 
 // One autoplay period; it ends where it started, so the preview loops without a jump.
-export const LOOP_MS = 12000;
+export const LOOP_MS = 10000;
 
-// QA only (pixel gate): freeze the autoplay in one state. null in shipped code.
-//   'rest' — Social cluster; 'a' — Personal; 'b' — detail view.
-export const QA_HOLD: 'rest' | 'a' | 'b' | null = null;
-export const QA_HOLD_AT = { rest: 0, a: 8300, b: 4600 } as const;
+// QA only (pixel gate): freeze the autoplay at a time (ms). null in shipped code.
+export const QA_HOLD: number | null = null;
 
 export const AUTOPLAY = {
-  resumeDelayMs: 3500,
-  // The upgrade's sequence on top of the source's: hold the star until its glass fills (burst, ripple), tap a
-  // bubble into its detail and back, switch to Personal and back, then tap the star to reopen it, so the loop
-  // ends where it started.
+  resumeDelayMs: 2000,
+  // Hold the star until its glass fills (the cluster ripples and re-packs), tap a bubble to read its name, switch to
+  // Personal and back, then tap the star to reopen it, so the loop ends where it started.
   holdId: 'star',
-  holdStart: 600,
-  holdEnd: 1900,
-  openId: 'home',
-  openAt: 3200,
-  backAt: 5400,
-  personalAt: 6800,
-  socialAt: 8800,
-  tapAt: 10400,
+  holdStart: 400,
+  holdEnd: 1700,
+  nameId: 'home',
+  nameAt: 2700,
+  personalAt: 4200,
+  socialAt: 6400,
+  tapAt: 8000,
   tapMs: 120,
 } as const;

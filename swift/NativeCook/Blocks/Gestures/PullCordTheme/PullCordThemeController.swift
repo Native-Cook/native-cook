@@ -1,232 +1,181 @@
-@preconcurrency import CoreMotion
+import CoreGraphics
 import Observation
+import QuartzCore
 import UIKit
 
-/// Owns the UI-thread simulation, display clock, motion sensor, and feedback.
+struct PullCordThemeSnapshot {
+    let geometry: PullCordThemeSimulation.Geometry
+    let chain: [CGPoint]
+    let foot: CGPoint
+    let pull: CGPoint
+    let angle: Double
+    let heat: Double
+    let front: Double
+    let adaptation: Double
+    let flicker: Double
+    let clock: Double
+    let light: Double
+    let reduced: Bool
+    let range: PullCordThemeLight.Range
+}
+
 @MainActor
 @Observable
 final class PullCordThemeController {
-    struct Snapshot {
-        var renderValues: PullCordThemeRenderValues
+    private(set) var snapshot: PullCordThemeSnapshot
+    private(set) var pageMasks: PullCordThemePageMasks?
 
-        static let empty = Self(renderValues: .empty)
-    }
-
-    private(set) var snapshot = Snapshot.empty
-
-    var renderValues: PullCordThemeRenderValues {
-        snapshot.renderValues
-    }
-
-    @ObservationIgnored private(set) var geometry: PullCordThemeSimulation.Geometry?
-
-    private let autoPlay: Bool
-    @ObservationIgnored private var state: PullCordThemeSimulation.State?
-    @ObservationIgnored private var reducedMotion = false
+    @ObservationIgnored private var state: PullCordThemeSimulation.State
+    @ObservationIgnored private var geometry: PullCordThemeSimulation.Geometry
+    @ObservationIgnored private var autoPlay: Bool
     @ObservationIgnored private var previousTimestamp: CFTimeInterval?
-    @ObservationIgnored private var tiltRoll = 0.0
-
-    @ObservationIgnored private lazy var ticker = PullCordThemeDisplayLink { [weak self] timestamp in
-        self?.displayLinkDidTick(timestamp: timestamp)
+    @ObservationIgnored private lazy var displayLink = PullCordThemeDisplayLink { [weak self] timestamp in
+        self?.frame(timestamp)
     }
-    private let motionManager = CMMotionManager()
-    private let selectionFeedback = UISelectionFeedbackGenerator()
-    private let detentFeedback = UIImpactFeedbackGenerator(style: .heavy)
-    private let homeFeedback = UIImpactFeedbackGenerator(style: .soft)
+    @ObservationIgnored private let feedback = UIImpactFeedbackGenerator(style: .rigid)
 
     init(autoPlay: Bool) {
+        let geometry = PullCordThemeSimulation.makeGeometry(
+            width: PullCordThemeTokens.stageWidth,
+            height: 852
+        )
+        self.geometry = geometry
         self.autoPlay = autoPlay
+        state = PullCordThemeSimulation.State(geometry: geometry, reduced: false, autoPlay: autoPlay)
+        snapshot = Self.makeSnapshot(state: state, geometry: geometry)
     }
 
-    func configure(width: Double, height: Double, reducedMotion: Bool) {
-        guard width > 0, height > 0 else { return }
-        let nextGeometry = PullCordThemeSimulation.makeGeometry(width: width, height: height)
-        let geometryChanged = geometry?.width != nextGeometry.width
-            || geometry?.height != nextGeometry.height
-
-        self.reducedMotion = reducedMotion
-        geometry = nextGeometry
-
-        if geometryChanged || state == nil {
-            state = PullCordThemeSimulation.initialState(
-                geometry: nextGeometry,
-                reducedMotion: reducedMotion,
-                autoPlay: autoPlay
+    func configure(size: CGSize, autoPlay: Bool, reducedMotion: Bool, displayScale: CGFloat) {
+        guard size.width > 0, size.height > 0 else { return }
+        let changedSize = abs(geometry.width - size.width) > 0.25 || abs(geometry.height - size.height) > 0.25
+        let changedMode = state.reduced != reducedMotion
+        self.autoPlay = autoPlay && !reducedMotion
+        if changedSize || changedMode {
+            geometry = PullCordThemeSimulation.makeGeometry(width: size.width, height: size.height)
+            state = PullCordThemeSimulation.State(
+                geometry: geometry,
+                reduced: reducedMotion,
+                autoPlay: self.autoPlay
             )
-        } else {
-            state?.reducedMotion = reducedMotion
+        } else if !self.autoPlay {
+            state.demoOn = false
+        }
+        if changedSize || pageMasks == nil {
+            pageMasks = PullCordThemePageMasks.make(size: size, scale: displayScale)
         }
         publish()
+        updateClock()
     }
 
     func start() {
-        guard geometry != nil, state != nil else { return }
         previousTimestamp = nil
-        prepareFeedback()
-        startMotionUpdates()
-        ticker.start()
+        feedback.prepare()
+        updateClock()
     }
 
     func stop() {
-        ticker.stop()
+        displayLink.stop()
         previousTimestamp = nil
-        motionManager.stopDeviceMotionUpdates()
-        tiltRoll = 0
     }
 
-    func touchBegan(at point: CGPoint) {
+    func pointerDown(at point: CGPoint) {
         send(.down(x: point.x, y: point.y))
     }
 
-    func touchMoved(to point: CGPoint, velocity: CGVector) {
-        send(
-            .move(
-                x: point.x,
-                y: point.y,
-                velocityX: velocity.dx,
-                velocityY: velocity.dy
-            )
-        )
+    func pointerMoved(to point: CGPoint, velocity: CGVector) {
+        send(.move(
+            x: point.x,
+            y: point.y,
+            velocityX: velocity.dx,
+            velocityY: velocity.dy
+        ))
     }
 
-    func touchEnded(velocity: CGVector, cancelled: Bool) {
-        send(
-            .up(
-                velocityX: velocity.dx,
-                velocityY: velocity.dy,
-                cancelled: cancelled
-            )
-        )
+    func pointerEnded(velocity: CGVector, cancelled: Bool) {
+        send(.up(velocityX: velocity.dx, velocityY: velocity.dy, cancelled: cancelled))
+    }
+
+    func tap(at point: CGPoint) {
+        send(.tap(x: point.x, y: point.y))
     }
 
     func toggle() {
         send(.toggle)
     }
 
-    private func displayLinkDidTick(timestamp: CFTimeInterval) {
-        guard
-            let geometry,
-            var state
-        else { return }
-
-        defer { previousTimestamp = timestamp }
-        guard let previousTimestamp else { return }
-
-        if let roll = motionManager.deviceMotion?.attitude.roll {
-            tiltRoll = roll
-        }
-
-        state.reducedMotion = reducedMotion
-        let wallDelta = max(0, timestamp - previousTimestamp) * PullCordThemeMotion.qaSpeed
-        PullCordThemeSimulation.step(
-            state: &state,
-            geometry: geometry,
-            frameDelta: min(0.1, wallDelta),
-            scriptDelta: wallDelta,
-            autoPlay: autoPlay
-        )
-        self.state = state
+    private func send(_ input: PullCordThemeSimulation.Input) {
+        PullCordThemeSimulation.input(state, geometry, input)
+        playEvents()
         publish()
+        updateClock()
     }
 
-    private func send(_ input: PullCordThemeSimulation.Input) {
-        guard let geometry, var state else { return }
-        PullCordThemeSimulation.input(state: &state, geometry: geometry, input: input)
-        self.state = state
+    private func frame(_ timestamp: CFTimeInterval) {
+        guard let previousTimestamp else {
+            self.previousTimestamp = timestamp
+            return
+        }
+        self.previousTimestamp = timestamp
+        PullCordThemeSimulation.step(
+            state,
+            geometry,
+            frameDelta: max(0, timestamp - previousTimestamp),
+            autoPlay: autoPlay
+        )
+        playEvents()
+        publish()
+        updateClock()
+    }
+
+    private func playEvents() {
+        guard !state.events.isEmpty else { return }
+        state.events.removeAll(keepingCapacity: true)
+        feedback.impactOccurred(intensity: 0.82)
+        feedback.prepare()
     }
 
     private func publish() {
-        guard let geometry, var state else { return }
-        let pointCount = Int(PullCordThemeTokens.Cord.points)
-        var rope: [CGPoint] = []
-        rope.reserveCapacity(pointCount)
-        for index in 0..<pointCount {
-            rope.append(CGPoint(x: state.positionX[index], y: state.positionY[index]))
-        }
+        snapshot = Self.makeSnapshot(state: state, geometry: geometry)
+    }
 
-        let simulatedAngle = PullCordThemeSimulation.bulbAngle(
-            state: state,
-            geometry: geometry
+    private var needsClock: Bool {
+        if !state.reduced { return true }
+        return state.grab != 0
+            || state.tapOn
+            || abs(state.travel) > 0.001
+            || abs(state.travelVelocity) > 0.001
+            || abs(state.heat - state.light) > 0.001
+            || abs(state.adaptation - state.light) > 0.001
+            || state.frontTime < state.frontDuration
+    }
+
+    private func updateClock() {
+        if needsClock {
+            displayLink.start()
+        } else {
+            displayLink.stop()
+            previousTimestamp = nil
+        }
+    }
+
+    private static func makeSnapshot(
+        state: PullCordThemeSimulation.State,
+        geometry: PullCordThemeSimulation.Geometry
+    ) -> PullCordThemeSnapshot {
+        PullCordThemeSnapshot(
+            geometry: geometry,
+            chain: zip(state.x, state.y).map { CGPoint(x: $0.0, y: $0.1) },
+            foot: PullCordThemeSimulation.switchFoot(geometry, angle: state.angle),
+            pull: PullCordThemeSimulation.pullCentre(state, geometry),
+            angle: state.angle,
+            heat: state.heat,
+            front: state.front,
+            adaptation: state.adaptation,
+            flicker: PullCordThemeSimulation.flicker(state),
+            clock: state.clock,
+            light: state.light,
+            reduced: state.reduced,
+            range: PullCordThemeLight.fieldRange(geometry)
         )
-        let visualAngle = simulatedAngle
-            + (state.reducedMotion ? 0 : tiltRoll * PullCordThemeMotion.Hero.tilt)
-        let center = PullCordThemeSimulation.glassCenter(state: state, geometry: geometry)
-        let reach = PullCordThemeSimulation.revealReach(center: center, geometry: geometry)
-        let pull = state.isArmed && !state.reducedMotion
-            ? min(
-                1,
-                state.extensionAmount
-                    / (PullCordThemeMotion.Switch.detent * geometry.scale)
-            )
-            : 0
-        let revealFraction = state.light == 0
-            ? state.revealValue + PullCordThemeMotion.Feel.preview * pull * pull
-            : state.revealValue - PullCordThemeMotion.Feel.preview * pull * pull
-        let revealRadius = state.reducedMotion
-            ? (state.revealValue > 0 ? reach : 0)
-            : max(0, revealFraction) * reach
-
-        let maximumAngle = (
-            PullCordThemeTokens.ReplicaArt.swingSrc
-                * PullCordThemeTokens.Fit.k
-                * geometry.scale
-        ) / PullCordThemeSimulation.glassArm(geometry: geometry)
-        let side = max(-1, min(1, visualAngle / maximumAngle))
-        let bead = rope[pointCount - 1]
-
-        snapshot = Snapshot(
-            renderValues: PullCordThemeRenderValues(
-                rope: rope,
-                bead: bead,
-                bulbAngle: visualAngle,
-                bulbCenter: CGPoint(x: center.x, y: center.y),
-                reveal: revealRadius,
-                revealFraction: max(0, min(1, revealFraction)),
-                fade: state.reducedMotion
-                    ? state.revealValue
-                    : (state.revealValue > 0 ? 1 : 0),
-                level: state.level,
-                neon: PullCordThemeSimulation.ignitionValue(state: state),
-                side: side,
-                commitAge: state.reducedMotion ? 99 : state.commitTime,
-                clock: state.clock,
-                isLight: state.light == 1,
-                reducedMotion: state.reducedMotion
-            )
-        )
-
-        playAndClearEvents(state: &state)
-        self.state = state
-    }
-
-    private func playAndClearEvents(state: inout PullCordThemeSimulation.State) {
-        for event in state.events {
-            switch event {
-            case .grab, .tick:
-                selectionFeedback.selectionChanged()
-                selectionFeedback.prepare()
-            case .detent:
-                detentFeedback.impactOccurred()
-                detentFeedback.prepare()
-            case .home:
-                homeFeedback.impactOccurred()
-                homeFeedback.prepare()
-            }
-        }
-        state.events.removeAll(keepingCapacity: true)
-    }
-
-    private func prepareFeedback() {
-        selectionFeedback.prepare()
-        detentFeedback.prepare()
-        homeFeedback.prepare()
-    }
-
-    private func startMotionUpdates() {
-        guard motionManager.isDeviceMotionAvailable, !motionManager.isDeviceMotionActive else {
-            return
-        }
-        motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
-        motionManager.startDeviceMotionUpdates()
     }
 }

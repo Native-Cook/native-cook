@@ -1,38 +1,55 @@
-/** The run list: title, three month pills and a grid of run cards with a treadmill drawing. */
+/** The run list: title, the year in three figures, and a grid of runs, each with its route traced. */
 import { SymbolView } from 'expo-symbols';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { POLISH, PRESS } from './motion';
 import { CAP_TOP, CARDS, COLOR, COPY, GRID, FONT, PILLS, TYPE } from './theme';
 
 const HOLD_EASE = Easing.bezier(POLISH.easeOut[0], POLISH.easeOut[1], POLISH.easeOut[2], POLISH.easeOut[3]);
 
-/** A bar from (x1, y1) to (x2, y2), w thick, with round ends: the treadmill is built from these. */
-function bar(x1: number, y1: number, x2: number, y2: number, w: number) {
-  const l = Math.hypot(x2 - x1, y2 - y1);
-  const nx = (-(y2 - y1) / l) * (w / 2);
-  const ny = ((x2 - x1) / l) * (w / 2);
-  const r = w / 2;
-  return `M${x1 + nx} ${y1 + ny} L${x2 + nx} ${y2 + ny} A${r} ${r} 0 0 0 ${x2 - nx} ${y2 - ny} L${x1 - nx} ${y1 - ny} A${r} ${r} 0 0 0 ${x1 + nx} ${y1 + ny}Z`;
+/**
+ * The run's route, as a map app would trace it: a loop made of a few harmonics with seeded weights and phases, so each
+ * tile's route has its own shape (a long loop by the river, a lopsided one up a hill), fitted to the tile.
+ */
+function routePath(seed: number, w: number, h: number) {
+  const rnd = (k: number) => {
+    const v = Math.sin(seed * 91.7 + k * 12.9898) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const a2 = 0.1 + rnd(1) * 0.18;
+  const a3 = rnd(2) * 0.12;
+  const b2 = 0.08 + rnd(3) * 0.22;
+  const p2 = rnd(4) * 6.28;
+  const p3 = rnd(5) * 6.28;
+  const q2 = rnd(6) * 6.28;
+  const pts: [number, number][] = [];
+  for (let k = 0; k < 64; k++) {
+    const t = (k / 64) * Math.PI * 2;
+    pts.push([Math.cos(t) + a2 * Math.cos(2 * t + p2) + a3 * Math.cos(3 * t + p3), Math.sin(t) + b2 * Math.sin(2 * t + q2) + a3 * 0.6 * Math.sin(3 * t + p3)]);
+  }
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of pts) {
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  const k = Math.min((w - 6) / (x1 - x0), (h - 6) / (y1 - y0));
+  const ox = (w - (x1 - x0) * k) / 2 - x0 * k;
+  const oy = (h - (y1 - y0) * k) / 2 - y0 * k;
+  const at = (i: number): [number, number] => [ox + pts[i][0] * k, oy + pts[i][1] * k];
+  const d = pts.map((_, i) => `${i === 0 ? 'M' : 'L'}${at(i)[0].toFixed(1)} ${at(i)[1].toFixed(1)}`).join(' ') + ' Z';
+  return { d, start: at(Math.floor(rnd(7) * 64)) };
 }
 
-// Measured on the source's card (viewBox = points): deck, motor housing, upright, handlebar, console.
-const TREADMILL = [
-  bar(2.8, 28.4, 42.6, 25.6, 5.4),
-  bar(34.6, 21.8, 43.4, 21.2, 5),
-  bar(30.6, 30.4, 28.2, 9.8, 4),
-  bar(7.6, 9.8, 39.2, 7.4, 4.2),
-  'M33.8 0.6 L38.6 6.2 L30.4 6.8 Z',
-];
+const ROUTE = { w: 78, h: 44 };
 
-/** A treadmill in a three-quarter side view, white with an ink outline, as drawn on the source's cards. */
-function Treadmill() {
-  return <Svg width={GRID.iconW} height={GRID.iconH} viewBox="0 0 46 33">
-    <Path d="M6 31.6 a2.1 1 0 1 0 4.2 0 a2.1 1 0 1 0 -4.2 0z" fill={COLOR.icon} />
-    {TREADMILL.map((d) => <Path key={d} d={d} fill={COLOR.paper} stroke={COLOR.icon} strokeWidth={1.3} strokeLinejoin="round" />)}
+/** The route in ink, its start as a dot. */
+function Route({ seed }: { seed: number }) {
+  const { d, start } = routePath(seed, ROUTE.w, ROUTE.h);
+  return <Svg width={ROUTE.w} height={ROUTE.h} viewBox={`0 0 ${ROUTE.w} ${ROUTE.h}`}>
+    <Path d={d} fill="none" stroke={COLOR.icon} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
+    <Circle cx={start[0]} cy={start[1]} r={2.6} fill={COLOR.zone} stroke={COLOR.icon} strokeWidth={1} />
   </Svg>;
 }
 
@@ -70,7 +87,7 @@ function Card({ i, top, left, pressed, lift, onPress, onLongPress }: { i: number
     <Animated.View style={[styles.card, anim]}>
       <Text style={[styles.date, { top: cap(TYPE.cardDate, GRID.dateCap), left: GRID.dateInset }]}>{c.date[0]}</Text>
       <Text style={[styles.date, { top: cap(TYPE.cardDate, GRID.dateCap), right: GRID.dateInset }]}>{c.date[1]}</Text>
-      <View style={[styles.icon, { top: GRID.iconTop }]}><Treadmill /></View>
+      <View style={[styles.icon, { top: GRID.iconTop - 8 }]}><Route seed={c.seed} /></View>
       <Text style={[styles.km, { top: cap(TYPE.cardKm, GRID.cardH - GRID.kmCapFromBottom) }]}>{c.km}</Text>
     </Animated.View>
   </Pressable>;
@@ -104,6 +121,6 @@ const styles = StyleSheet.create({
     shadowColor: COLOR.shadow, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0,
   },
   date: { position: 'absolute', fontFamily: FONT.medium, fontSize: TYPE.cardDate, color: COLOR.date },
-  icon: { position: 'absolute', left: (GRID.cardW - GRID.iconW) / 2 },
+  icon: { position: 'absolute', left: (GRID.cardW - ROUTE.w) / 2 },
   km: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontFamily: FONT.heavy, fontSize: TYPE.cardKm, color: COLOR.ink },
 });

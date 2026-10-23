@@ -1,16 +1,14 @@
 import Foundation
 
 extension MoodOrbJarSim {
-    /// Advances the autoplay script in wall time while keeping physics bounded to fixed steps.
+    /// Advances the same fixed-step clock as the React Native worklet.
     mutating func step(_ g: MoodOrbJarGeometry, frameDelta: Double, autoPlay: Bool, uncapped: Bool = false) {
         let wallDelta = max(0, frameDelta)
-        stepAutoplay(g, autoPlay: autoPlay, delta: wallDelta)
-        clock += wallDelta
         accumulator = uncapped
             ? accumulator + wallDelta
             : min(accumulator + wallDelta, Motion.step * Double(Motion.maxSteps))
         while accumulator >= Motion.step {
-            fixedStep(g)
+            fixedStep(g, autoPlay: autoPlay)
             accumulator -= Motion.step
         }
     }
@@ -49,8 +47,8 @@ extension MoodOrbJarSim {
     /// One step of the orbs in the jar: springs (pile) or gravity (landing), then collisions on predicted positions.
     mutating func stepJar(_ g: MoodOrbJarGeometry, settleAll: Bool) {
         let dt = Motion.step
-        // The source's glass rims overlap: collision circles are 90% of the drawn radius.
-        let r = MoodOrbJarTokens.Layout.orb * g.scale * 0.9
+        // Glass beads pack at almost their full drawn radius; leave only an antialiasing hairline.
+        let r = MoodOrbJarTokens.Layout.orb * g.scale * 0.98
         let damp = exp(-Motion.Pile.damping * dt)
         let count = Self.poolCount
         var px: [Double] = []
@@ -139,8 +137,32 @@ extension MoodOrbJarSim {
 
     // MARK: One fixed step
 
-    private mutating func fixedStep(_ g: MoodOrbJarGeometry) {
+    private mutating func fixedStep(_ g: MoodOrbJarGeometry, autoPlay: Bool) {
         let dt = Motion.step
+
+        if demoOn {
+            let t0 = demoTime
+            var t1 = t0 + dt
+            runDemo(g, from: t0, to: t1)
+            if t1 * 1000 >= Motion.loopMS {
+                t1 -= Motion.loopMS / 1000
+                for i in 0..<Self.pileCount where orbs[i].state == .pile {
+                    orbs[i].x = orbs[i].homeX
+                    orbs[i].y = orbs[i].homeY
+                    orbs[i].vx = 0
+                    orbs[i].vy = 0
+                }
+            }
+            demoTime = t1
+        } else if autoPlay && held < 0 && !swiping {
+            quiet += dt
+            var busy = false
+            for i in Self.pileCount..<Self.poolCount where orbs[i].state != .off { busy = true }
+            if quiet * 1000 >= Motion.resumeMS && !busy {
+                demoOn = true
+                demoTime = 0
+            }
+        }
 
         // Flight, return and departure are kinematic; landing and the pile are physics.
         let r = MoodOrbJarTokens.Layout.orb * g.scale
@@ -193,42 +215,13 @@ extension MoodOrbJarSim {
             rowVelocity += (-Motion.Undo.rowStiffness * rowX - Motion.Undo.rowDamping * rowVelocity) * dt
             rowX += rowVelocity * dt
         }
-    }
-
-    private mutating func stepAutoplay(_ g: MoodOrbJarGeometry, autoPlay: Bool, delta: Double) {
-        if demoOn {
-            let t0 = demoTime
-            var t1 = t0 + delta
-            runDemo(g, from: t0, to: t1)
-            if t1 * 1000 >= Motion.loopMS {
-                t1 -= Motion.loopMS / 1000
-                for i in 0..<Self.pileCount where orbs[i].state == .pile {
-                    orbs[i].x = orbs[i].homeX
-                    orbs[i].y = orbs[i].homeY
-                    orbs[i].vx = 0
-                    orbs[i].vy = 0
-                }
-            }
-            demoTime = t1
-        } else if autoPlay && held < 0 && !swiping {
-            quiet += delta
-            var busy = false
-            for i in Self.pileCount..<Self.poolCount where orbs[i].state != .off {
-                busy = true
-            }
-            if quiet * 1000 >= Motion.resumeMS && !busy {
-                demoOn = true
-                demoTime = 0
-            }
-        }
+        clock += dt
     }
 
     private mutating func flyStep(_ i: Int, _ g: MoodOrbJarGeometry, r: Double, dt: Double) {
         orbs[i].vy += Motion.Throw.gravity * g.scale * dt
         orbs[i].x += orbs[i].vx * dt
         orbs[i].y += orbs[i].vy * dt
-        let direction: Double = (orbs[i].vx == 0 ? 1 : orbs[i].vx) < 0 ? -1 : 1
-        orbs[i].spin += Motion.Throw.spin * dt * direction
         if orbs[i].vy > 0 && orbs[i].y > g.mouthY + r && abs(orbs[i].x - g.centerX) < g.mouthHalf {
             orbs[i].state = .settling
             orbs[i].restTime = 0
@@ -293,14 +286,14 @@ extension MoodOrbJarSim {
         orbs[i].squash = max(-Motion.Soft.max, min(Motion.Soft.max, orbs[i].squash + orbs[i].squashVelocity * dt))
     }
 
-    /// Ambient: deterministic hops at 1, 3, ... 11 s of every autoplay loop.
+    /// Ambient: deterministic hops at 1.5, 3.5 and 5.5 s; the pile is still at the seam.
     private mutating func hopStep(_ g: MoodOrbJarGeometry) {
         let loopTime = demoOn ? demoTime : clock
         let hop = Int(floor((loopTime + Motion.Hop.phase) / Motion.Hop.every))
         guard hop != hopIndex else { return }
         hopIndex = hop
         let k = (hop * 7) % Self.pileCount
-        if hop != 0, !reduced, orbs[k].state == .pile {
+        if hop != 0, loopTime < Motion.Hop.last, !reduced, orbs[k].state == .pile {
             orbs[k].vy -= Motion.Hop.speed * g.scale
         }
     }

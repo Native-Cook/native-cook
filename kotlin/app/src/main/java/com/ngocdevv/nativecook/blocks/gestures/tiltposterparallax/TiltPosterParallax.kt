@@ -17,14 +17,18 @@ import androidx.compose.ui.unit.dp
 import com.ngocdevv.nativecook.shared.rememberReducedMotion
 import kotlin.math.roundToInt
 
+/** One autoplay period in milliseconds, matching React Native's LOOP_MS. */
+internal const val LOOP = 10_000.0
+
 @Composable
 fun TiltPosterParallax(autoPlay: Boolean = false) {
     val density = LocalDensity.current
     val reduceMotion = rememberReducedMotion()
+    val typography = rememberTiltPosterParallaxTypography()
     val safeTop = (WindowInsets.safeDrawing.getTop(density) / density.density).dp
     val engine = remember(autoPlay, reduceMotion) {
         TiltPosterParallaxEngine(
-            autoPlay = autoPlay,
+            autoPlay = autoPlay && !reduceMotion,
             reduceMotion = reduceMotion,
         )
     }
@@ -43,6 +47,9 @@ fun TiltPosterParallax(autoPlay: Boolean = false) {
         val cardWidth = cardWidthPoints.dp
         val cardHeightPoints = (cardWidthPoints * Tokens.LAYOUT.cardAspect).roundToInt().toFloat()
         val cardHeight = cardHeightPoints.dp
+        val art = remember(cardWidthPoints, cardHeightPoints, density.density) {
+            makeTiltPosterParallaxArt(cardWidthPoints, cardHeightPoints, density.density)
+        }
         val cardLeft = (stageWidth.value - cardWidthPoints).dp / 2f
         val cardTop = safeTop + Tokens.LAYOUT.cardTop.dp
         val infoTop = cardTop + cardHeight + Tokens.LAYOUT.titleGap.dp
@@ -50,7 +57,7 @@ fun TiltPosterParallax(autoPlay: Boolean = false) {
         val firstPillCentreX = Tokens.LAYOUT.gutter + (infoWidth - Tokens.LAYOUT.pillGap) / 4.0
         val pillsY = Tokens.TYPE.titleLineHeight +
             Tokens.LAYOUT.infoGap +
-            Tokens.TYPE.dateLineHeight +
+            Tokens.TYPE.metaLineHeight +
             Tokens.LAYOUT.infoGap +
             Tokens.LAYOUT.pillsMarginTop
         val watchPointX = firstPillCentreX - cardLeft.value
@@ -70,12 +77,19 @@ fun TiltPosterParallax(autoPlay: Boolean = false) {
 
         TiltPosterParallaxBackdrop(
             engine = engine,
+            art = art,
             stageWidth = stageWidth,
             stageHeight = stageHeight,
         )
-        TiltPosterParallaxTopBar(stageWidth = stageWidth, safeTop = safeTop)
+        TiltPosterParallaxTopBar(
+            stageWidth = stageWidth,
+            safeTop = safeTop,
+            typography = typography,
+        )
         TiltPosterParallaxPoster(
             engine = engine,
+            art = art,
+            typography = typography,
             cardWidth = cardWidth,
             cardHeight = cardHeight,
             left = cardLeft,
@@ -85,8 +99,8 @@ fun TiltPosterParallax(autoPlay: Boolean = false) {
         TiltPosterParallaxInfo(
             engine = engine,
             stageWidth = stageWidth,
-            cardHeight = cardHeight,
             top = infoTop,
+            typography = typography,
         )
         if (autoPlay) {
             Canvas(modifier = Modifier.fillMaxSize()) {

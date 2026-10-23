@@ -29,7 +29,6 @@ struct MoodOrbJarOrb {
     var restTime = 0.0
     /// Seconds since the start of a return or departure; -1 while a landing has not made its first impact.
     var time = 0.0
-    var spin = 0.0
     var fade = 0.0
     var fromX = 0.0
     var fromY = 0.0

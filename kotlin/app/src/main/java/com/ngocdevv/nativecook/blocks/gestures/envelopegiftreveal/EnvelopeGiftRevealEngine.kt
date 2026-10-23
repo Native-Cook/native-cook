@@ -4,14 +4,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 
-internal object EnvelopePhase {
+internal object EnvelopeGiftRevealPhase {
     const val sealed = 0
     const val dragging = 1
     const val revealing = 2
@@ -19,49 +17,29 @@ internal object EnvelopePhase {
     const val resetting = 4
 }
 
-internal enum class EnvelopeHaptic { Flap, Commit, Success, Light, Crack }
+internal enum class EnvelopeGiftRevealHaptic { Flap, Commit, Success, Light, Crack }
 
-/** The scripted finger starts on the envelope's lower half. */
 private const val ENVELOPE_FINGER_Y = 170f
-
-/** Floats per petal: x, y, vx, vy, angle, spin, life, colour. */
-private const val PETAL_STRIDE = 8
-
-/** Product override: autoplay resumes two seconds after the last real touch ends. */
 private const val AUTOPLAY_RESUME_AFTER_LAST_TOUCH_MS = 2_000f
 
-/** Seeded noise for the petals, so every loop throws the same ones (use-envelope.ts hash). */
-private fun envelopeHash(n: Int, salt: Int): Double {
-    val x = sin(n * 91.7 + salt * 47.3) * 43758.5453
-    return x - floor(x)
-}
-
-/**
- * The envelope's state (use-envelope.ts). Before the reveal commits, the finger owns `p`
- * (0 sealed to 1 card out). After it commits, every pose is a function of one clock and the commit
- * time, so the loop repeats. `width` and `centreY` place the confetti, `envTop` the scripted finger;
- * the last two are read each time because the safe area can arrive after the first frame.
- */
 internal class EnvelopeGiftRevealEngine(
     private val width: Float,
-    private val centreY: () -> Float,
     private val envTop: () -> Float,
     private val autoPlay: Boolean,
     private val reduced: Boolean,
     private val onPhase: (Int) -> Unit,
-    private val onHaptic: (EnvelopeHaptic) -> Unit,
+    private val onHaptic: (EnvelopeGiftRevealHaptic) -> Unit,
 ) {
-    /** Bumped once per frame; drawing and layer lambdas read it so only they refresh. */
+    /** Only drawing and graphics-layer lambdas observe this per-frame state. */
     var tick by mutableLongStateOf(0L)
         private set
 
-    val frame = EnvelopeFrame()
-
+    val frame = EnvelopeGiftRevealFrame()
     var clock = 0.0
         private set
-    val p = EnvelopeAnimatedFloat()
-    val tilt = EnvelopeAnimatedFloat()
-    var phase = EnvelopePhase.sealed
+    val p = EnvelopeGiftRevealAnimatedFloat()
+    val tilt = EnvelopeGiftRevealAnimatedFloat()
+    var phase = EnvelopeGiftRevealPhase.sealed
         private set
     var commitAt = -1.0
         private set
@@ -74,21 +52,6 @@ internal class EnvelopeGiftRevealEngine(
     var breath = 0f
         private set
 
-    /**
-     * Ambient effects use the deterministic script clock during autoplay. Once reset starts, the
-     * returning envelope is already rendered at the canonical rest sample, so frame 8_000 equals
-     * frame 0 even though the ambient source periods do not divide the loop.
-     */
-    val visualClock: Double
-        get() = if (autoPlay && scriptOn) {
-            if (scriptT >= EnvelopeScript.reset) 0.0 else scriptT.toDouble()
-        } else {
-            clock
-        }
-
-    /** Petals: [PETAL_STRIDE] numbers each. */
-    val confetti = DoubleArray(EnvelopeReveal.confetti * PETAL_STRIDE)
-
     private var touchActive = false
     private var touchScripted = false
     private var touchX0 = 0f
@@ -96,12 +59,11 @@ internal class EnvelopeGiftRevealEngine(
     private var touchP0 = 0f
     private var touchFlapped = false
     private var touchCracked = false
-
     private var scriptOn = autoPlay
     private var scriptT = 0f
     private var scriptQuiet = 0f
     private var scriptTouching = false
-    private var fired = false
+    private var successFired = false
 
     private fun setPhase(next: Int) {
         if (phase == next) return
@@ -109,40 +71,38 @@ internal class EnvelopeGiftRevealEngine(
         onPhase(next)
     }
 
-    /** Scripted fingers feel nothing; only a real touch gets haptics. */
-    private fun haptic(kind: EnvelopeHaptic) {
+    private fun haptic(kind: EnvelopeGiftRevealHaptic) {
         if (!touchScripted) onHaptic(kind)
     }
 
-    private fun doCommit() {
+    private fun commit() {
         commitAt = clock
         commitP0 = p.value
         commitTilt0 = tilt.value
-        fired = false
-        setPhase(EnvelopePhase.revealing)
-        haptic(EnvelopeHaptic.Commit)
+        successFired = false
+        setPhase(EnvelopeGiftRevealPhase.revealing)
+        haptic(EnvelopeGiftRevealHaptic.Commit)
     }
 
-    /** Interruption: a touch while the envelope is still opening (before the card leaves) reverses it. */
     private fun cancelReveal(): Boolean {
         val elapsed = (clock - commitAt).toFloat()
-        val fin = envelopeFinishMs(commitP0, reduced)
-        if (commitAt < 0.0 || elapsed >= fin) return false
-        val u = envelopeClamp01(elapsed / fin)
-        val now = commitP0 + (1f - commitP0) * (1f - (1f - u).pow(3))
+        val finish = envelopeGiftRevealFinishMs(commitP0, reduced)
+        if (commitAt < 0.0 || elapsed >= finish) return false
+        val progress = envelopeGiftRevealClamp01(elapsed / finish)
+        val current = commitP0 + (1f - commitP0) * (1f - (1f - progress).pow(3))
         commitAt = -1.0
         commitP0 = 0f
         commitTilt0 = 0f
-        p.set(now)
+        p.set(current)
         closeFromCurrent()
-        setPhase(EnvelopePhase.sealed)
-        haptic(EnvelopeHaptic.Light)
+        setPhase(EnvelopeGiftRevealPhase.sealed)
+        haptic(EnvelopeGiftRevealHaptic.Light)
         return true
     }
 
     fun down(x: Float, y: Float, scripted: Boolean) {
-        if (phase == EnvelopePhase.revealing && !scripted && cancelReveal()) return
-        if (phase != EnvelopePhase.sealed) return
+        if (phase == EnvelopeGiftRevealPhase.revealing && !scripted && cancelReveal()) return
+        if (phase != EnvelopeGiftRevealPhase.sealed) return
         touchActive = true
         touchScripted = scripted
         touchX0 = x
@@ -150,96 +110,76 @@ internal class EnvelopeGiftRevealEngine(
         touchP0 = p.value
         touchFlapped = false
         touchCracked = false
-        // Freeze p where it is: a closing spring must not fight the finger.
         p.set(p.value)
-        setPhase(EnvelopePhase.dragging)
+        setPhase(EnvelopeGiftRevealPhase.dragging)
     }
 
     fun move(x: Float, y: Float) {
-        if (!touchActive || phase != EnvelopePhase.dragging) return
-        var next = touchP0 + (touchY0 - y) / EnvelopeOpen.travel
+        if (!touchActive || phase != EnvelopeGiftRevealPhase.dragging) return
+        var next = touchP0 + (touchY0 - y) / EnvelopeGiftRevealOpen.travel
         if (next < 0f) next = 0f
         if (next > 1f) next = 1f + (next - 1f) * 0.2f
         p.set(next)
-        val out = max(0f, (next - EnvelopeOpen.flapShare) / (1f - EnvelopeOpen.flapShare))
-        tilt.set(
-            if (reduced) {
-                0f
-            } else {
-                max(-EnvelopeOpen.tiltMax, min(EnvelopeOpen.tiltMax, (x - touchX0) * 0.08f)) * min(1f, out * 2f)
-            },
+        val cardOut = max(
+            0f,
+            (next - EnvelopeGiftRevealOpen.flapShare) / (1f - EnvelopeGiftRevealOpen.flapShare),
         )
-        // The seal cracks early in the lift (rigid tap), the flap clears at the fold (light tap).
-        if (!touchCracked && next >= EnvelopeOpen.flapShare * 0.22f) {
+        val horizontal = ((x - touchX0) * 0.08f).coerceIn(
+            -EnvelopeGiftRevealOpen.tiltMax,
+            EnvelopeGiftRevealOpen.tiltMax,
+        )
+        tilt.set(if (reduced) 0f else horizontal * min(1f, cardOut * 2f))
+        if (!touchCracked && next >= EnvelopeGiftRevealOpen.flapShare * 0.22f) {
             touchCracked = true
-            haptic(EnvelopeHaptic.Crack)
+            haptic(EnvelopeGiftRevealHaptic.Crack)
         }
-        if (!touchFlapped && next >= EnvelopeOpen.flapShare) {
+        if (!touchFlapped && next >= EnvelopeGiftRevealOpen.flapShare) {
             touchFlapped = true
-            haptic(EnvelopeHaptic.Flap)
+            haptic(EnvelopeGiftRevealHaptic.Flap)
         }
     }
 
-    /** [vy] is the finger's vertical velocity in dp per second (negative is up). */
-    fun up(vy: Float) {
+    fun up(velocityY: Float) {
         if (!touchActive) return
         touchActive = false
-        if (phase != EnvelopePhase.dragging) return
-        if (p.value >= EnvelopeOpen.commit || (vy < -900f && p.value > 0.15f)) {
-            doCommit()
+        if (phase != EnvelopeGiftRevealPhase.dragging) return
+        if (p.value >= EnvelopeGiftRevealOpen.commit ||
+            (velocityY < -900f && p.value > 0.15f)
+        ) {
+            commit()
             return
         }
-        setPhase(EnvelopePhase.sealed)
-        if (p.value > 0.08f) haptic(EnvelopeHaptic.Light)
-        closeFromCurrent(velocity = -vy / EnvelopeOpen.travel)
+        setPhase(EnvelopeGiftRevealPhase.sealed)
+        if (p.value > 0.08f) haptic(EnvelopeGiftRevealHaptic.Light)
+        closeFromCurrent(velocity = -velocityY / EnvelopeGiftRevealOpen.travel)
     }
 
-    /** The button, and the accessible alternative: open without dragging. */
     fun open() {
-        if (phase != EnvelopePhase.sealed) return
+        if (phase != EnvelopeGiftRevealPhase.sealed) return
         touchScripted = false
-        doCommit()
+        commit()
     }
 
     fun reset() {
-        if (phase != EnvelopePhase.revealed && phase != EnvelopePhase.revealing) return
+        if (phase != EnvelopeGiftRevealPhase.revealed && phase != EnvelopeGiftRevealPhase.revealing) return
         resetAt = clock
-        setPhase(EnvelopePhase.resetting)
+        setPhase(EnvelopeGiftRevealPhase.resetting)
     }
 
-    /** Reanimated's system Reduce Motion setting makes `withSpring` finish immediately. */
     private fun closeFromCurrent(velocity: Float = 0f) {
         if (reduced) {
             p.set(0f)
             tilt.set(0f)
             return
         }
-        p.springTo(0f, EnvelopeSprings.close, velocity)
-        tilt.springTo(0f, EnvelopeSprings.close)
+        p.springTo(0f, EnvelopeGiftRevealSprings.close, velocity)
+        tilt.springTo(0f, EnvelopeGiftRevealSprings.close)
     }
 
-    private fun spawn() {
-        if (reduced) return
-        for (n in 0 until EnvelopeReveal.confetti) {
-            val o = n * PETAL_STRIDE
-            val angle = -PI / 2 + (envelopeHash(n, 1) - 0.5) * PI * 1.5
-            val speed = 260 + envelopeHash(n, 2) * 620
-            confetti[o] = width / 2.0 + (envelopeHash(n, 3) - 0.5) * 120
-            confetti[o + 1] = centreY() + (envelopeHash(n, 4) - 0.5) * 60
-            confetti[o + 2] = cos(angle) * speed
-            confetti[o + 3] = sin(angle) * speed
-            confetti[o + 4] = envelopeHash(n, 5) * PI
-            confetti[o + 5] = (envelopeHash(n, 6) - 0.5) * 16
-            confetti[o + 6] = EnvelopeReveal.confettiLife * (0.6 + 0.4 * envelopeHash(n, 7))
-            confetti[o + 7] = floor(envelopeHash(n, 8) * 6)
-        }
-    }
-
-    /** A touch starts: the script stops, and its own finger lets the flap fall closed. */
     fun takeOver() {
         if (scriptOn && touchScripted && touchActive) {
             touchActive = false
-            setPhase(EnvelopePhase.sealed)
+            setPhase(EnvelopeGiftRevealPhase.sealed)
             closeFromCurrent()
         }
         scriptOn = false
@@ -252,88 +192,76 @@ internal class EnvelopeGiftRevealEngine(
         scriptQuiet = 0f
     }
 
-    /** One frame (the useFrameCallback body). [dtMs] is capped at 64 by the caller. */
-    fun onFrame(dtMs: Float) {
-        val dt = dtMs
-        val now = clock + dt
+    fun onFrame(deltaMs: Float) {
+        val now = clock + deltaMs
         clock = now
-        p.step(dt / 1000f)
-        tilt.step(dt / 1000f)
-
+        p.step(deltaMs / 1_000f)
+        tilt.step(deltaMs / 1_000f)
         if (commitAt >= 0.0) {
-            val fin = envelopeFinishMs(commitP0, reduced)
-            val done = fin + (if (reduced) 0f else EnvelopeReveal.flyMs)
+            val finish = envelopeGiftRevealFinishMs(commitP0, reduced)
             val sinceCommit = (now - commitAt).toFloat()
-            if (!fired && sinceCommit >= fin + EnvelopeReveal.flyMs * 0.45f) {
-                fired = true
-                spawn()
-                haptic(EnvelopeHaptic.Success)
+            val done = finish + if (reduced) 0f else EnvelopeGiftRevealReveal.flyMs
+            if (!successFired && sinceCommit >= finish + EnvelopeGiftRevealReveal.flyMs * 0.45f) {
+                successFired = true
+                haptic(EnvelopeGiftRevealHaptic.Success)
             }
-            if (phase == EnvelopePhase.revealing && sinceCommit >= done) setPhase(EnvelopePhase.revealed)
+            if (phase == EnvelopeGiftRevealPhase.revealing && sinceCommit >= done) {
+                setPhase(EnvelopeGiftRevealPhase.revealed)
+            }
         }
-        if (resetAt >= 0.0 && (now - resetAt).toFloat() >= (if (reduced) REDUCED_MS else EnvelopeReset.fadeMs)) {
+        val resetDuration = if (reduced) REDUCED_MS else EnvelopeGiftRevealReset.fadeMs
+        if (resetAt >= 0.0 && (now - resetAt).toFloat() >= resetDuration) {
             resetAt = -1.0
             commitAt = -1.0
             commitP0 = 0f
             commitTilt0 = 0f
             p.set(0f)
             tilt.set(0f)
-            setPhase(EnvelopePhase.sealed)
+            setPhase(EnvelopeGiftRevealPhase.sealed)
         }
-        if (!reduced) stepConfetti(dt / 1000f)
-
-        // The flap lifts a little now and then while sealed, to say it opens.
-        breath = (if (scriptOn) scriptT else (now % EnvelopeOpen.breathMs.toDouble()).toFloat()) % EnvelopeOpen.breathMs
-        if (autoPlay) stepScript(dt)
+        val breathClock = if (scriptOn) scriptT else now.toFloat()
+        breath = (breathClock + EnvelopeGiftRevealOpen.breathLead) % EnvelopeGiftRevealOpen.breathMs
+        if (autoPlay) stepScript(deltaMs)
         frame.update(this, reduced)
-        tick += 1
+        tick += 1L
     }
 
-    private fun stepConfetti(k: Float) {
-        for (n in 0 until EnvelopeReveal.confetti) {
-            val o = n * PETAL_STRIDE
-            if (confetti[o + 6] <= 0.0) continue
-            confetti[o + 2] *= EnvelopeReveal.drag
-            confetti[o + 3] = confetti[o + 3] * EnvelopeReveal.drag + EnvelopeReveal.gravity * k
-            confetti[o] += confetti[o + 2] * k + sin(confetti[o + 4] * 2) * 0.4
-            confetti[o + 1] += confetti[o + 3] * k
-            confetti[o + 4] += confetti[o + 5] * k
-            confetti[o + 6] -= k
-        }
-    }
-
-    /** The scripted finger: one clock, looping every [LOOP_MS]. */
-    private fun stepScript(dt: Float) {
+    private fun stepScript(deltaMs: Float) {
         if (!scriptOn) {
-            val idle = !scriptTouching && !touchActive
-            val quiet = if (idle) scriptQuiet + dt else 0f
-            if (quiet >= AUTOPLAY_RESUME_AFTER_LAST_TOUCH_MS && phase == EnvelopePhase.revealed) {
+            val quiet = if (!scriptTouching && !touchActive) scriptQuiet + deltaMs else 0f
+            if (quiet >= AUTOPLAY_RESUME_AFTER_LAST_TOUCH_MS && phase == EnvelopeGiftRevealPhase.revealed) {
                 reset()
-                // Keep the elapsed quiet time: restart as soon as the reset reaches sealed.
                 scriptQuiet = quiet
                 return
             }
             scriptQuiet = quiet
             scriptOn = quiet >= AUTOPLAY_RESUME_AFTER_LAST_TOUCH_MS &&
-                phase == EnvelopePhase.sealed &&
+                phase == EnvelopeGiftRevealPhase.sealed &&
                 p.value < 0.01f
             scriptT = 0f
             return
         }
-        val prev = scriptT
-        val holdAt = QA_HOLD_AT
-        val t = if (holdAt != null && prev >= holdAt) prev else prev + dt
+        val previous = scriptT
+        val hold = QA_HOLD_AT
+        val time = if (hold != null && previous >= hold) previous else previous + deltaMs
         val x0 = width / 2f + 10f
         val y0 = envTop() + ENVELOPE_FINGER_Y
-        if (prev < EnvelopeScript.down && t >= EnvelopeScript.down) down(x0, y0, true)
-        if (t > EnvelopeScript.down && prev < EnvelopeScript.up) {
-            val u = envelopeClamp01((t - EnvelopeScript.down - 80f) / (EnvelopeScript.up - EnvelopeScript.down - 150f))
-            val e = envelopeEaseInOut(u)
-            // Up with a slight drift to the right and back, so the card swings as it comes out.
-            move(x0 + 34f * sin(PI.toFloat() * e), y0 - EnvelopeScript.rise * e)
+        if (previous < EnvelopeGiftRevealScript.down && time >= EnvelopeGiftRevealScript.down) {
+            down(x0, y0, scripted = true)
         }
-        if (prev < EnvelopeScript.up && t >= EnvelopeScript.up) up(0f)
-        if (prev < EnvelopeScript.reset && t >= EnvelopeScript.reset) reset()
-        scriptT = if (t >= LOOP_MS) t - LOOP_MS else t
+        if (time > EnvelopeGiftRevealScript.down && previous < EnvelopeGiftRevealScript.up) {
+            val progress = envelopeGiftRevealClamp01(
+                (time - EnvelopeGiftRevealScript.down - 80f) /
+                    (EnvelopeGiftRevealScript.up - EnvelopeGiftRevealScript.down - 150f),
+            )
+            val eased = envelopeGiftRevealEaseInOut(progress)
+            move(
+                x0 + 34f * sin(PI.toFloat() * eased),
+                y0 - EnvelopeGiftRevealScript.rise * eased,
+            )
+        }
+        if (previous < EnvelopeGiftRevealScript.up && time >= EnvelopeGiftRevealScript.up) up(0f)
+        if (previous < EnvelopeGiftRevealScript.reset && time >= EnvelopeGiftRevealScript.reset) reset()
+        scriptT = if (time >= LOOP_MS) time - LOOP_MS else time
     }
 }

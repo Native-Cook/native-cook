@@ -1,41 +1,32 @@
 import SwiftUI
 
-/// A skeuomorphic tape deck: keys that click and latch, reels driven by the tape, and cassettes you
-/// slide or turn by hand. The simulation and the clock live in `CassetteDeckModel`; this view is the artboard.
+/// A full-screen mechanical cassette deck ported from the approved React Native block.
 struct CassetteDeck: View {
-    /// Seconds in one autoplay loop (`CassetteDeckMotion.loopMS` / 1000); it starts and ends at rest on the first cassette.
-    static let loop: Double = 9
+    /// Seconds in one autoplay loop (`LOOP_MS / 1000` in the React Native reference).
+    static let loop: Double = 10
 
     var autoPlay = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var model: CassetteDeckModel
-
-    init(autoPlay: Bool = false) {
-        self.autoPlay = autoPlay
-        _model = State(initialValue: CassetteDeckModel(autoPlay: autoPlay))
-    }
 
     var body: some View {
-        GeometryReader { proxy in
-            let metrics = CassetteDeckMetrics(size: proxy.size)
-            ZStack(alignment: .topLeading) {
-                CassetteDeckTheme.Palette.bg
-                CassetteDeckStage(model: model, metrics: metrics)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                CassetteDeckTouchView(model: model)
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-        }
-        .ignoresSafeArea()
-        .preferredColorScheme(.dark)
-        .onChange(of: reduceMotion, initial: true) { _, value in
-            model.setReduceMotion(value)
-        }
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
+        CassetteDeckSurfaceView(autoPlay: autoPlay && !reduceMotion, reduceMotion: reduceMotion)
+            .background(Color(uiColor: CassetteDeckTheme.plate))
+            .ignoresSafeArea()
+            .preferredColorScheme(.light)
+    }
+}
+
+private struct CassetteDeckSurfaceView: UIViewRepresentable {
+    let autoPlay: Bool
+    let reduceMotion: Bool
+
+    func makeUIView(context: Context) -> CassetteDeckSurface {
+        CassetteDeckSurface(autoPlay: autoPlay, reduceMotion: reduceMotion)
+    }
+
+    func updateUIView(_ view: CassetteDeckSurface, context: Context) {
+        view.configure(autoPlay: autoPlay, reduceMotion: reduceMotion)
     }
 }
 

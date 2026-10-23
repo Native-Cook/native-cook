@@ -1,39 +1,35 @@
 /**
- * State and input for the gift slot. The carousel and the pull are springs under the finger; once the
- * slot takes a card, everything that follows (insert, activation, print, confetti) is a pure function
- * of one clock and the moment the card was released, so the loop repeats exactly.
+ * State and input for the gift slot. The carousel and the pull are springs under the finger; once the slot takes a
+ * card, everything that follows (sink, read, rise, turn) is a pure function of one clock and the moment the card was
+ * released, so the loop repeats exactly. Fingers and the demo script call the same worklets.
  */
 import { useMemo } from 'react';
 import { useFrameCallback, useSharedValue, withSpring } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { ACTIVATE, CLOSE, DRAG, INSERT, LOOP_MS, PRINT, QA_HOLD_AT, REDUCED_MS, RESUME_AFTER_MS, SCRIPT, SPRINGS } from './motion';
-import { GIFTS, LAYOUT, START_INDEX } from './theme';
+import { CLOSE, DRAG, LOOP_MS, REDUCED_MS, RESUME_MS, SCRIPT, SEQ, SPRINGS } from './motion';
+import { GIFTS, LAYOUT, START_INDEX, type Layout } from './theme';
 
-export const PHASE = { choosing: 0, pulling: 1, swiping: 2, inserting: 3, activating: 4, offer: 5, closing: 6 } as const;
+export const PHASE = { choosing: 0, pulling: 1, swiping: 2, inserting: 3, reading: 4, offer: 5, closing: 6 } as const;
 export type Haptic = 'select' | 'armed' | 'insert' | 'success' | 'light';
 
 /** Milestones after a release, in ms from the release. */
 export function milestones(reduced: boolean) {
   'worklet';
   if (reduced) {
-    return { sunk: REDUCED_MS, printStart: REDUCED_MS + ACTIVATE.ms, printed: REDUCED_MS + ACTIVATE.ms + REDUCED_MS, risen: REDUCED_MS + ACTIVATE.ms + REDUCED_MS };
+    const read = REDUCED_MS + SEQ.read;
+    return { sunk: REDUCED_MS, read, risen: read, turned: read + REDUCED_MS, shown: read + REDUCED_MS };
   }
-  const sunk = INSERT.centreMs + INSERT.sinkMs;
-  const printStart = sunk + ACTIVATE.ms;
-  const printed = printStart + PRINT.feeds * (PRINT.feedMs + PRINT.feedGap);
-  return { sunk, printStart, printed, risen: printed + 700 };
+  const sunk = SEQ.sink;
+  const read = sunk + SEQ.read;
+  const risen = read + SEQ.rise;
+  const turned = risen + SEQ.pause + SEQ.flip;
+  return { sunk, read, risen, turned, shown: turned + SEQ.detailsIn };
 }
-
-const hash = (n: number, salt: number) => {
-  'worklet';
-  const x = Math.sin(n * 127.1 + salt * 311.7) * 43758.5453;
-  return x - Math.floor(x);
-};
 
 type Callbacks = { onPhase: (p: number) => void; onArmed: (armed: boolean) => void; onIndex: (i: number) => void; onHaptic: (k: Haptic) => void };
 
-export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, cb: Callbacks) {
+export function useGiftSlot(lay: Layout, autoPlay: boolean, reduced: boolean, cb: Callbacks) {
   const clock = useSharedValue(0);
   const offset = useSharedValue<number>(START_INDEX);
   const pullX = useSharedValue(0);
@@ -42,21 +38,39 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
   const phase = useSharedValue<number>(PHASE.choosing);
   const selected = useSharedValue<number>(START_INDEX);
   const armed = useSharedValue(false);
+  /** When the title last changed (for its out-then-in), and which title it was before. */
+  const titleAt = useSharedValue(-1e6);
+  const titleWas = useSharedValue(0);
   const releasedAt = useSharedValue(-1);
-  const releasedFrom = useSharedValue({ x: 0, y: 0, s: 1 });
+  const releasedFrom = useSharedValue({ x: 0, y: 0 });
   const closeAt = useSharedValue(-1);
+  const fired = useSharedValue({ success: false });
   const touch = useSharedValue({ active: false, scripted: false, mode: 0, x0: 0, y0: 0, o0: 0, onCard: false });
-  /** Confetti: x, y, vx, vy, angle, spin, life, colour per piece. */
-  const confetti = useSharedValue<number[]>(new Array(PRINT.confetti * 8).fill(0));
-  const fired = useSharedValue({ confetti: false, offer: false, done: false });
-  const script = useSharedValue({ on: autoPlay, t: 0, quiet: 0, touching: false, lastX: 0, lastT: 0 });
+  const script = useSharedValue({ on: autoPlay, t: 0, quiet: 0, touching: false });
+  const ghost = useSharedValue({ x: 0, y: 0, o: 0 });
 
   const { onPhase, onArmed, onIndex, onHaptic } = cb;
-  const centreX = width / 2;
+  const cx = lay.cx;
 
+  // ——— Helpers (declared before every worklet that calls them) ———
+  /** Which title the screen shows: 0 choose, 1 release, 2 reading, 3 ready. */
+  const titleOf = (ph: number, a: boolean) => {
+    'worklet';
+    if (ph === PHASE.inserting || ph === PHASE.reading) return 2;
+    if (ph === PHASE.offer) return 3;
+    return a ? 1 : 0;
+  };
+  const retitle = (before: number, after: number) => {
+    'worklet';
+    if (before === after) return;
+    titleWas.set(before);
+    titleAt.set(clock.get());
+  };
   const setPhase = (p: number) => {
     'worklet';
-    if (phase.get() === p) return;
+    const before = phase.get();
+    if (before === p) return;
+    retitle(titleOf(before, armed.get()), titleOf(p, armed.get()));
     phase.set(p);
     scheduleOnRN(onPhase, p);
   };
@@ -67,15 +81,11 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
   const setArmed = (a: boolean) => {
     'worklet';
     if (armed.get() === a) return;
+    retitle(titleOf(phase.get(), armed.get()), titleOf(phase.get(), a));
     armed.set(a);
     scheduleOnRN(onArmed, a);
     if (a) haptic('armed');
   };
-  const pullScale = (y: number) => {
-    'worklet';
-    return 1 - (1 - DRAG.minScale) * Math.min(1, Math.max(0, y / DRAG.full));
-  };
-
   const snapTo = (i: number, velocity: number) => {
     'worklet';
     const target = Math.max(0, Math.min(GIFTS.length - 1, i));
@@ -86,21 +96,19 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
       haptic('select');
     }
   };
-
   const release = () => {
     'worklet';
-    releasedFrom.set({ x: pullX.get(), y: pullY.get(), s: pullScale(pullY.get()) * lift.get() });
+    releasedFrom.set({ x: pullX.get(), y: pullY.get() });
     releasedAt.set(clock.get());
-    fired.set({ confetti: false, offer: false, done: false });
+    fired.set({ success: false });
     setPhase(PHASE.inserting);
     haptic('insert');
   };
 
   const down = (x: number, y: number, scripted: boolean) => {
     'worklet';
-    const ph = phase.get();
-    if (ph !== PHASE.choosing) return;
-    const onCard = Math.abs(x - centreX) < LAYOUT.cardW / 2 + 12 && Math.abs(y - LAYOUT.cardY) < LAYOUT.cardH / 2 + 12;
+    if (phase.get() !== PHASE.choosing) return;
+    const onCard = Math.abs(x - cx) < LAYOUT.cardW / 2 + 12 && Math.abs(y - lay.cardY) < LAYOUT.cardH / 2 + 12;
     touch.set({ active: true, scripted, mode: 0, x0: x, y0: y, o0: offset.get(), onCard });
     offset.set(offset.get());
     if (onCard) lift.set(withSpring(DRAG.lift, SPRINGS.lift));
@@ -120,14 +128,14 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
       if (mode === 2) lift.set(withSpring(1, SPRINGS.lift));
     }
     if (mode === 2) {
-      let o = t.o0 - dx / LAYOUT.spacing;
+      let o = t.o0 - dx / lay.spacing;
       // Rubber band past the first and last gift.
       if (o < 0) o *= 0.3;
       if (o > GIFTS.length - 1) o = GIFTS.length - 1 + (o - GIFTS.length + 1) * 0.3;
       offset.set(o);
     } else if (mode === 1) {
-      pullX.set(dx * 0.3);
-      pullY.set(dy < 0 ? dy * DRAG.upResist : dy);
+      pullX.set(dx * DRAG.sideResist);
+      pullY.set(dy < 0 ? dy * DRAG.upResist : Math.min(dy, DRAG.full + (dy - DRAG.full) * 0.2));
       setArmed(dy >= DRAG.commit);
     }
   };
@@ -139,12 +147,15 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
     touch.set({ ...t, active: false });
     lift.set(withSpring(1, SPRINGS.lift));
     if (t.mode === 2) {
-      const o = offset.get();
       const fling = Math.abs(vx) > DRAG.swipeVelocity ? -Math.sign(vx) * 0.5 : 0;
-      snapTo(Math.round(o + fling), -vx / LAYOUT.spacing);
+      snapTo(Math.round(offset.get() + fling), -vx / lay.spacing);
       setPhase(PHASE.choosing);
     } else if (t.mode === 1) {
-      if (armed.get()) { setArmed(false); release(); return; }
+      if (armed.get()) {
+        setArmed(false);
+        release();
+        return;
+      }
       pullX.set(withSpring(0, { ...SPRINGS.back, velocity: vx }));
       pullY.set(withSpring(0, { ...SPRINGS.back, velocity: vy }));
       setPhase(PHASE.choosing);
@@ -153,13 +164,11 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
     }
   };
 
-  /** Accessible alternative: activate the selected gift without dragging. */
+  /** VoiceOver: activate the centred gift without dragging, or move along the gifts. */
   const activate = () => {
     'worklet';
     if (phase.get() !== PHASE.choosing) return;
     touch.set({ ...touch.get(), scripted: false });
-    pullX.set(0);
-    pullY.set(0);
     release();
   };
   const step = (dir: number) => {
@@ -167,35 +176,12 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
     if (phase.get() !== PHASE.choosing) return;
     snapTo(selected.get() + dir, 0);
   };
-
   const close = () => {
     'worklet';
     if (phase.get() !== PHASE.offer) return;
     closeAt.set(clock.get());
     setPhase(PHASE.closing);
     haptic('light');
-  };
-
-  const spawnConfetti = () => {
-    'worklet';
-    if (reduced) return;
-    confetti.modify((c) => {
-      'worklet';
-      for (let n = 0; n < PRINT.confetti; n += 1) {
-        const o = n * 8;
-        const a = -Math.PI / 2 + (hash(n, 1) - 0.5) * 1.9;
-        const s = 380 + hash(n, 2) * 520;
-        c[o] = centreX + (hash(n, 3) - 0.5) * LAYOUT.slotW * 0.8;
-        c[o + 1] = LAYOUT.slotY - 4;
-        c[o + 2] = Math.cos(a) * s;
-        c[o + 3] = Math.sin(a) * s;
-        c[o + 4] = hash(n, 4) * Math.PI;
-        c[o + 5] = (hash(n, 5) - 0.5) * 18;
-        c[o + 6] = PRINT.confettiLife * (0.7 + 0.3 * hash(n, 6));
-        c[o + 7] = Math.floor(hash(n, 7) * 3);
-      }
-      return c;
-    });
   };
 
   const takeOver = () => {
@@ -206,6 +192,7 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
       setArmed(false);
       up(0, 0);
     }
+    ghost.set({ ...ghost.get(), o: 0 });
     script.set({ ...s, on: false, quiet: 0, touching: true });
   };
   const letGo = () => {
@@ -213,27 +200,31 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
     script.set({ ...script.get(), touching: false, quiet: 0 });
   };
 
+  const ease = (u: number) => {
+    'worklet';
+    const c = Math.min(1, Math.max(0, u));
+    return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
+  };
+
   useFrameCallback((info) => {
     const dt = Math.min(info.timeSincePreviousFrame ?? 16, 64);
     const now = clock.get() + dt;
     clock.set(now);
 
-    // Timeline after a release.
+    // The slot's sequence after a release.
     const at = releasedAt.get();
     if (at >= 0) {
       const m = milestones(reduced);
-      const f = fired.get();
       const ph = phase.get();
-      if (ph === PHASE.inserting && now - at >= m.sunk) setPhase(PHASE.activating);
-      if (ph === PHASE.activating && now - at >= m.printStart) setPhase(PHASE.offer);
-      if (!f.confetti && now - at >= m.printed) {
-        fired.set({ ...f, confetti: true });
-        spawnConfetti();
+      if (ph === PHASE.inserting && now - at >= m.sunk) setPhase(PHASE.reading);
+      if (ph === PHASE.reading && now - at >= m.read) setPhase(PHASE.offer);
+      if (!fired.get().success && now - at >= m.turned) {
+        fired.set({ success: true });
         haptic('success');
       }
     }
     const c0 = closeAt.get();
-    if (c0 >= 0 && now - c0 >= (reduced ? REDUCED_MS : CLOSE.ms + CLOSE.returnMs)) {
+    if (c0 >= 0 && now - c0 >= (reduced ? REDUCED_MS : CLOSE.out + CLOSE.back)) {
       closeAt.set(-1);
       releasedAt.set(-1);
       pullX.set(0);
@@ -241,80 +232,77 @@ export function useGiftSlot(width: number, autoPlay: boolean, reduced: boolean, 
       setPhase(PHASE.choosing);
     }
 
-    if (!reduced) {
-      const k = dt / 1000;
-      confetti.modify((c) => {
-        'worklet';
-        for (let n = 0; n < PRINT.confetti; n += 1) {
-          const o = n * 8;
-          if (c[o + 6] <= 0) continue;
-          c[o + 3] += PRINT.gravity * k;
-          c[o + 2] *= 0.985;
-          c[o] += c[o + 2] * k;
-          c[o + 1] += c[o + 3] * k;
-          c[o + 4] += c[o + 5] * k;
-          c[o + 6] -= k;
-        }
-        return c;
-      });
-    }
-
     if (!autoPlay) return;
     const s = script.get();
     if (!s.on) {
       const resting = phase.get() === PHASE.offer || (phase.get() === PHASE.choosing && Math.abs(offset.get() - Math.round(offset.get())) < 0.01);
-      const idle = !s.touching && resting;
-      const quiet = idle ? s.quiet + dt : 0;
-      if (quiet >= RESUME_AFTER_MS && phase.get() === PHASE.offer && !s.touching) {
-        // Left on the offer: close it, then the carousel comes back and the demo can start again.
+      const quiet = !s.touching && resting ? s.quiet + dt : 0;
+      if (quiet >= RESUME_MS && phase.get() === PHASE.offer) {
+        // Left on the gift: close it; the cards come back and the demo can start again.
         close();
         script.set({ ...s, quiet: 0 });
         return;
       }
-      if (quiet >= RESUME_AFTER_MS && selected.get() !== START_INDEX) {
-        // Back to the first gift before the demo starts again.
+      if (quiet >= RESUME_MS && selected.get() !== START_INDEX) {
         snapTo(START_INDEX, 0);
         script.set({ ...s, quiet: 0 });
         return;
       }
-      script.set({ ...s, quiet, on: quiet >= RESUME_AFTER_MS && phase.get() === PHASE.choosing, t: 0 });
+      script.set({ ...s, quiet, on: quiet >= RESUME_MS && phase.get() === PHASE.choosing, t: 0 });
       return;
     }
     const prev = s.t;
-    const t = QA_HOLD_AT !== null && prev >= QA_HOLD_AT ? prev : prev + dt;
-    let lastX = s.lastX;
-    const ease = (u: number) => {
-      'worklet';
-      const c = Math.min(1, Math.max(0, u));
-      return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
-    };
+    const t = prev + dt;
+    let gx = ghost.get().x;
+    let gy = ghost.get().y;
+    let go = ghost.get().o;
     const swipe = (from: number, to: number, x0: number, x1: number) => {
       'worklet';
-      if (prev < from && t >= from) { down(x0, LAYOUT.cardY, true); lastX = x0; }
-      if (t > from && prev < to) {
-        const x = x0 + (x1 - x0) * ease((t - from) / (to - from));
-        move(x, LAYOUT.cardY + 4 * Math.sin(Math.PI * Math.min(1, (t - from) / (to - from))));
-        lastX = x;
+      if (prev < from && t >= from) {
+        down(x0, lay.cardY, true);
+        gx = x0;
+        gy = lay.cardY;
+        go = 1;
       }
-      if (prev < to && t >= to) up(((x1 - x0) / (to - from)) * 1000 * 0.6, 0);
+      if (t > from && prev < to) {
+        const u = Math.min(1, (t - from) / (to - from));
+        gx = x0 + (x1 - x0) * ease(u);
+        gy = lay.cardY + 4 * Math.sin(Math.PI * u);
+        move(gx, gy);
+      }
+      if (prev < to && t >= to) {
+        up(((x1 - x0) / (to - from)) * 1000 * 0.6, 0);
+        go = 0;
+      }
     };
     for (let n = 0; n < SCRIPT.swipes.length; n += 1) {
       const w = SCRIPT.swipes[n];
-      swipe(w.at, w.at + w.ms, centreX - w.dx / 2, centreX + w.dx / 2);
+      swipe(w.at, w.at + w.ms, cx - w.dx / 2, cx + w.dx / 2);
     }
-    if (prev < SCRIPT.pullDown && t >= SCRIPT.pullDown) down(centreX + 12, LAYOUT.cardY + 30, true);
+    if (prev < SCRIPT.pullDown && t >= SCRIPT.pullDown) {
+      down(cx + 12, lay.cardY + 40, true);
+      gx = cx + 12;
+      gy = lay.cardY + 40;
+      go = 1;
+    }
     if (t > SCRIPT.pullDown && prev < SCRIPT.pullUp) {
-      // A beat of stillness, then a pull that accelerates and slows into the slot.
+      // A beat of stillness, then a pull that gathers speed and slows into the slot.
       const u = ease((t - SCRIPT.pullDown - 120) / (SCRIPT.pullUp - SCRIPT.pullDown - 220));
-      move(centreX + 12 - 23 * u, LAYOUT.cardY + 30 + SCRIPT.pullBy * u);
+      gx = cx + 12 - 14 * u;
+      gy = lay.cardY + 40 + SCRIPT.pullBy * u;
+      move(gx, gy);
     }
-    if (prev < SCRIPT.pullUp && t >= SCRIPT.pullUp) up(0, 0);
+    if (prev < SCRIPT.pullUp && t >= SCRIPT.pullUp) {
+      up(0, 0);
+      go = 0;
+    }
     if (prev < SCRIPT.done && t >= SCRIPT.done) close();
-    script.set({ ...script.get(), t: t >= LOOP_MS ? t - LOOP_MS : t, lastX });
+    ghost.set({ x: gx, y: gy, o: go });
+    script.set({ ...script.get(), t: t >= LOOP_MS ? t - LOOP_MS : t });
   });
 
   return useMemo(() => ({
-    values: { clock, offset, pullX, pullY, lift, phase, selected, armed, releasedAt, releasedFrom, closeAt, confetti },
+    values: { clock, offset, pullX, pullY, lift, phase, selected, armed, titleAt, titleWas, releasedAt, releasedFrom, closeAt, ghost },
     input: { down, move, up, takeOver, letGo, activate, step, close },
   // Worklets close over shared values whose identity never changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps

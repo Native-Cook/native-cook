@@ -1,108 +1,75 @@
-// Every motion value of the block. Seconds unless the name ends in _MS; points and radians unless noted.
+/**
+ * Every number the motion uses. Springs are (duration ms, damping ratio), stepped by the model each frame so the
+ * picture, the haptics and VoiceOver read the same values. Ease-out enters, ease-in-out moves across; nothing eases in.
+ */
+export const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+export const EASE_IN_OUT = [0.77, 0, 0.175, 1] as const;
 
-export const STEP = 1 / 120;
-export const MAX_STEPS = 30; // per frame: the sim keeps wall-clock time through dropped frames, so the loop stays 12 s
+export type Spring = { duration: number; dampingRatio: number };
 
-export const PILE = {
-  settleSteps: 900, // the pile is dropped and settled once, before the first frame; that pose is home
-  settleGravity: 1400,
-  home: 40, // spring back to the slot
-  damping: 5, // per second
-  passes: 3,
-  kick: 260, // speed given to the lower balls at each detent
-  tremble: 0.35, // share of the kick for the upper balls
-};
+export const SPRINGS = {
+  /** The handle settling into a detent after its pawl clicks: a stiff, slightly underdamped metal part. */
+  detent: { duration: 180, dampingRatio: 0.45 },
+  /** Gumballs pulled back to their place in the pile. */
+  pile: { duration: 520, dampingRatio: 0.55 },
+  /** The prize card rising out of the capsule: a light object settling, no bounce past its place. */
+  card: { duration: 480, dampingRatio: 0.82 },
+  /** The wallet pill catching the coins. */
+  wallet: { duration: 260, dampingRatio: 0.5 },
+  reduced: { duration: 200, dampingRatio: 1 },
+} as const;
 
 export const CRANK = {
-  grab: 70, // touches within this of the knob turn it
-  detent: Math.PI / 2,
-  turn: Math.PI * 2,
-  back: 0.1, // ratchet: rubber limit backwards (6°)
-  overshoot: { stiffness: 300, damping: 14, kick: 1.6 }, // knob wobble after each click (radians per second)
-  press: 1.06,
+  /** A full turn in four detents; the pawl stops the handle going back. */
+  detents: 4,
+  /** How far the handle strains backwards against the pawl (rad). */
+  back: 0.22,
+  /** Touches within this of the plate's centre turn the handle (pt). */
+  grab: 70,
+  /** Speed each gumball is kicked with when a detent clicks (pt/s), more for the ones low in the globe. */
+  kick: 220,
+  gravity: 900,
 };
 
-// Capsule timeline after the turn completes.
+/** After the turn: seconds from the last detent. */
 export const DISPENSE = {
-  drop: 0.34,
-  bounce: 0.18,
-  rollStart: 0.56,
-  roll: 0.5,
-  wobbleStart: 1.1,
-  wobble: 0.3,
-  split: 1.4,
-  splitLength: 0.5,
-  cardRise: 0.45,
-  done: 1.9,
+  drop: 0.25, // the capsule falls inside the body to the chute
+  flap: [0.22, 0.5] as const, // the chute's flap swings open
+  roll: [0.3, 0.95] as const, // it rolls out of the door and toward you, onto the table
+  wobble: [0.95, 1.3] as const,
+  split: [1.32, 1.7] as const, // the halves part
+  card: 1.45, // the card starts rising out of it
+  ready: 1.95,
 };
 
-export const COLLECT = { duration: 0.6, bagBounce: { stiffness: 380, damping: 12, kick: -3 } };
-
-export const HAPTIC = { grab: 1, detent: 2, ratchet: 3, dispense: 4, open: 5, collect: 6 } as const;
-
-export const REDUCED = { fade: 0.2 };
-
-// Autoplay: 12 s.
-export const LOOP_MS = 12_000;
-export const RESUME_MS = 3_500;
-export const SCRIPT = {
-  turn: [1.0, 2.7] as const, // one circular drag of 370° around the knob
-  turnAngle: Math.PI * 2 + 0.18,
-  turnRadius: 52,
-  collectAt: 7.8,
-};
-
-// Replica loop (the source ad, 10 s): rest, a half turn of the knob with a jostle, the pot comes out of the door and
-// grows toward the viewer, holds, and goes back in.
-export const REPLICA_LOOP_MS = 10_000;
-export const REPLICA_T = { turn: [2.8, 3.6] as const, kick: 3.0, out: [3.8, 5.0] as const, back: [9.0, 9.6] as const };
-// The source's camera pushes in while the pot comes out.
-export const REPLICA_CAMERA = {
-  // [scale, tx, ty] in screen px, fitted with ECC on the machine's base and kept at the knob (similarity).
-  a: [1.0946, -15.3, 13.9],
-  b: [1.117, -49.3, -18.1],
-  t: [3.8, 4.3, 5.5] as const, // push in to a by 4.3 s, on to b by 5.5 s; back out with the pot
-};
-export const REPLICA_HOLD = -1; // QA only: pins the clock (seconds) for reference screenshots
-
-// Upgrade (built on the accepted replica).
-export const KNOB = {
-  grab: 80, // touches within this of the knob's centre turn it
-  friction: 2.2, // per second: a released knob coasts with its angular velocity
-  catchSpin: 0.8, // below this (rad/s) the ratchet's pawl catches and the knob stops
-  commitSpin: 3, // released past half a turn faster than this: the knob spins on to finish (velocity OR distance)
-  finish: 0.35, // s to finish such a turn
-  maxSpin: 9, // rad/s handed over on release
-  press: 1.06,
-  backMax: 0.3, // backwards strain (rad)
-};
-export const UP_T = {
-  squash: 0.18, // machine anticipation
-  out: [0.18, 1.18] as const, // tub out of the door (easeOutBack)
-  confetti: 0.35,
-  morph: [1.7, 2.25] as const, // label panel → reward card
-  done: 2.4,
-  collect: 0.8, // coins fly from the coupon into the pill (8 coins, 40 ms stagger, 0.45 s each)
-  coinFly: 0.45,
-  coinStagger: 0.04,
+/** Collect: seconds from the press. */
+export const COLLECT = {
   coins: 8,
-  couponOut: [0.45, 0.8] as const, // the coupon drops and fades after its coins have left
-  back: 0.5, // tub back into the door
-  sweep: 0.9, // glass specular sweep
-  idleSweep: 4, // s between idle glints
+  stagger: 0.05,
+  fly: 0.5,
+  card: [0.35, 0.75] as const, // the card drops and fades after its coins leave
+  capsule: [0.45, 0.85] as const, // the halves fade off the table
+  done: 0.95,
 };
-export const CONFETTI = { count: 24, speed: 560, spread: 1.2, gravity: 1100, life: 1.6, size: [8, 16] as const, spin: 7 };
-// The pill rests at 1,290; under the scrim it quietly drops to 1,240 and the collect counts it back up, so the
-// loop's first and last frames match.
-export const COINS = { from: 1290, add: 50, countSteps: 5, countStep: 70 };
-export const UP_LOOP_MS = 12_000;
-export const UP_SCRIPT = { turn: [1.0, 2.5] as const, angle: Math.PI * 2 + 0.2, radius: 48, collectAt: 7.8 };
-export const QA_SPEED = 1; // QA only: slows the simulation for slow-motion captures
-// Parallax against the camera fit, in screen px at pose a and pose b (measured per element on the reference
-// frames): the globe sits behind the machine's front, the table's fruit in front of it. c, r: the patch (px).
-export const REPLICA_PARALLAX = {
-  globe: { a: [-9, 15] as const, b: [-7, -8] as const },
-  fruitR: { a: [-24, -43] as const, b: [-8, -32] as const, c: [1110, 2060] as const, r: 420, blur: 3.5 },
-  fruitL: { a: [0, -20] as const, b: [0, -6] as const, c: [100, 2200] as const, r: 300, blur: 2 },
-  // blur (px): the table's fruit is softer than the plate shows it.
+
+export const TIMING = {
+  fingerIn: 0.15,
+  fingerOut: 0.12,
+  press: 0.12, // Collect pressed
+  scrimIn: 0.3,
+  scrimOut: 0.25,
+  walletBack: 0.5, // autoplay only: the wallet returns to its starting balance before the loop ends
+};
+
+export const HAPTIC = { tick: 1, drop: 2, open: 3, collect: 4, strain: 5 } as const;
+
+/** Autoplay, seconds from rest; the screen is back at rest before the loop ends. */
+export const LOOP_MS = 10_000;
+export const RESUME_MS = 2_000;
+export const DEMO = {
+  down: 0.5,
+  turn: [0.7, 2.5] as const, // one circular drag of the handle, a quarter turn at a time
+  up: 2.65,
+  tap: 5.7, // Collect
+  walletBack: 9.0,
 };

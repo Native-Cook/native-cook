@@ -76,16 +76,18 @@ struct MoodOrbJarSim {
             orb.fade = isPile ? 1 : 0
             orbs.append(orb)
         }
-        for _ in 0..<Motion.Pile.settleSteps {
-            stepJar(g, settleAll: true)
-        }
-        let sourceScale = g.width / 1206
-        for i in 0..<Self.pileCount {
-            let source = Tokens.replicaPile[i]
-            orbs[i].x = source.x * sourceScale
-            orbs[i].y = source.y * sourceScale
-            orbs[i].mood = source.mood
-            orbs[i].spin = Tokens.replica ? -source.turn * .pi / 180 : 0
+        for _ in 0..<Motion.Pile.settleSteps { stepJar(g, settleAll: true) }
+        // Let the dropped pile find a stable spring pose. Taking each settled result as the next
+        // home prevents a one-point pop when autoplay wraps to its seam.
+        for _ in 0..<4 {
+            for i in 0..<Self.pileCount {
+                orbs[i].state = .pile
+                orbs[i].homeX = orbs[i].x
+                orbs[i].homeY = orbs[i].y
+                orbs[i].vx = 0
+                orbs[i].vy = 0
+            }
+            for _ in 0..<240 { stepJar(g, settleAll: false) }
         }
         for i in 0..<Self.pileCount {
             orbs[i].state = .pile
@@ -146,7 +148,6 @@ struct MoodOrbJarSim {
         let flight = (-vy + sqrt(vy * vy + 2 * gravity * target)) / gravity
         orbs[i].vx = (g.centerX - orbs[i].x) / max(0.2, flight)
         orbs[i].state = .flying
-        orbs[i].spin = 0
         slotScale[orbs[i].mood] = 0
         emit(.haptic(.throwOrb))
     }

@@ -56,13 +56,13 @@ float hash21(float2 q) {
   return fract(sin(dot(q, float2(12.9898, 78.233))) * 43758.5453);
 }
 
-// The back of the sheet: off-white paper with the print showing through, mirrored, and a fine grain.
+// The back of the sheet: ivory paper with the print showing through, mirrored, and a fine grain.
 float3 backAt(float2 q) {
   half4 f = pageAt(frontIdx, clamp(q, float2(0.0), size));
   float lum = (float(f.r) + float(f.g) + float(f.b)) / 3.0;
   float v = bg * (1.0 - ba * (1.0 - lum));
   v *= 1.0 + grain * (hash21(floor(q * px)) - 0.5);
-  return float3(v);
+  return float3(v) * float3(1.0, 0.972, 0.918);
 }
 
 // A soft paper sheen where the roll faces the key light (top-left), around 0.78 of half a turn.

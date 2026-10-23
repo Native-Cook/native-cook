@@ -106,8 +106,8 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
   const cut = useSharedValue(0);
   const held = useSharedValue(0);
   const step = useSharedValue(-1);
-  const morphBack = useSharedValue(0);
   const armed = useSharedValue(0);
+  const paperO = useSharedValue(1); // only Reduce Motion fades the paper (its retract is a cross-fade)
 
   const report = useCallback((s: number) => setStage(s), []);
   const haptic = useCallback((kind: 'tick' | 'open' | 'tear', scripted: boolean) => {
@@ -145,7 +145,8 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
     if (ph !== GRID_ && ph !== MENU) return;
     // A plain tap names its tile; from the menu, the long-pressed one is already set.
     if (tile >= 0) pressed.set(tile);
-    morphBack.set(0);
+    cancelAnimation(paperO);
+    paperO.set(1);
     toStage(PRINTING);
     haptic('open', scripted);
     // The picked card becomes the slot.
@@ -178,9 +179,12 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
         withSpring(0, { ...UPGRADE.cutSpring, reduceMotion: never })));
       haptic('open', scripted);
     })));
-  }, [barIn, cut, develop, fed, feed, gridIn, haptic, lift, menuIn, morph, morphBack, morphFrom, phase, pressed, reduceMotion, scroll, slotIn, step, toStage]);
+  }, [barIn, cut, develop, fed, feed, gridIn, haptic, lift, menuIn, morph, morphFrom, paperO, phase, pressed, reduceMotion, scroll, slotIn, step, toStage]);
 
-  /** The paper is drawn back up into the slot, then the list returns. */
+  /**
+   * The paper is drawn back up into the slot. The list is revealed under it as it rises and the island closes back to
+   * the hardware island as the paper's foot slips in, so the hand-over has no empty frame.
+   */
   const retract = useCallback((scripted: boolean) => {
     'worklet';
     if (phase.get() !== READING) return;
@@ -188,31 +192,43 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
     haptic('tear', scripted);
     cancelAnimation(scroll);
     barIn.set(withTiming(0, { duration: SCROLL.barMs, reduceMotion: never }));
-    const done = () => {
+    const back = (ok?: boolean) => {
+      'worklet';
+      if (ok) toStage(GRID_);
+    };
+    const gone = () => {
       'worklet';
       fed.set(0);
       feed.set(0);
       scroll.set(0);
-      slotIn.set(reduceMotion ? 0 : withSpring(0, { ...ISLAND_SPRING, reduceMotion: never }));
-      // The slot goes back to the tile it came from (spatial consistency), landing as the grid fades in.
-      morph.set(0);
-      if (!reduceMotion) {
-        morphBack.set(1);
-        morph.set(1);
-        morph.set(withTiming(0, { duration: POLISH.returnMs * QA_SLOWMO, easing: EASE_OUT, reduceMotion: never }));
-      }
-      gridIn.set(withTiming(1, { duration: SCREEN.gridInMs, easing: EASE_OUT, reduceMotion: never }, (ok) => { if (ok) toStage(GRID_); }));
+      paperO.set(1);
     };
     if (reduceMotion) {
-      done();
+      // Nothing travels: the paper fades out over the list as it fades in, then the island snaps shut.
+      const fade = { duration: RETRACT.reducedMs, easing: EASE_OUT, reduceMotion: never };
+      gridIn.set(withTiming(1, fade, back));
+      paperO.set(withTiming(0, fade, (ok) => {
+        if (!ok) return;
+        gone();
+        slotIn.set(0);
+      }));
       return;
     }
+    // The list fades in under the rising paper, starting a quarter into the pull (the paper still covers the screen).
+    gridIn.set(withDelay((UPGRADE.tugMs + RETRACT.gridLeadMs) * QA_SLOWMO,
+      withTiming(1, { duration: RETRACT.gridInMs * QA_SLOWMO, easing: EASE_OUT, reduceMotion: never }, back)));
     const s0 = scroll.get();
     scroll.set(withSequence(
-      withTiming(s0 - UPGRADE.tug, { duration: UPGRADE.tugMs, easing: Easing.out(Easing.quad), reduceMotion: never }),
-      withTiming(paperTop + RECEIPT.length, { duration: RETRACT.ms, easing: EASE_IN_OUT, reduceMotion: never }, (ok) => { if (ok) done(); }),
+      withTiming(s0 - UPGRADE.tug, { duration: UPGRADE.tugMs * QA_SLOWMO, easing: Easing.out(Easing.quad), reduceMotion: never }),
+      // Up until the torn foot has just passed under the island: nothing keeps moving out of sight.
+      withTiming(RECEIPT.length + RECEIPT.edge.depth, { duration: RETRACT.ms * QA_SLOWMO, easing: EASE_IN_OUT, reduceMotion: never }, (ok) => {
+        if (!ok) return;
+        gone();
+        // The printer closes back into the Dynamic Island while the list finishes fading in.
+        slotIn.set(withSpring(0, { ...ISLAND_SPRING, reduceMotion: never }));
+      }),
     ));
-  }, [barIn, fed, feed, gridIn, haptic, morph, morphBack, paperTop, phase, reduceMotion, scroll, slotIn, toStage]);
+  }, [barIn, fed, feed, gridIn, haptic, paperO, phase, reduceMotion, scroll, slotIn, toStage]);
 
   const rubber = (x: number) => {
     'worklet';
@@ -275,7 +291,8 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
     const want = phase.get() === READING && scroll.get() > maxScroll - SCROLL.barWithin ? 1 : 0;
     if (want === 1 && barIn.get() < 0.999 && phase.get() === READING) barIn.set(Math.min(1, barIn.get() + dt / SCROLL.barMs));
     if (want === 0 && barIn.get() > 0.001 && phase.get() === READING) barIn.set(Math.max(0, barIn.get() - dt / SCROLL.barMs));
-    if (!autoPlay) return;
+    // Reduce Motion: no demo; a finger still prints and tears.
+    if (!autoPlay || reduceMotion) return;
     const sc = script.get();
     if (sc.paused) {
       const quiet = sc.realDown ? 0 : sc.quiet + dt;
@@ -340,10 +357,17 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
     const i = Math.max(0, pressed.get());
     const cx = GRID.gutter + (i % 3) * (GRID.cardW + GRID.gap);
     const x = Math.min(cx, width - GRID.gutter - GRID.menu.w);
+    // Below the pressed tile, clear of it; above it when the tile is too low for the menu to fit under it.
+    const tileTop = Math.floor(i / 3) * GRID.rowPitch;
+    const below = tileTop + GRID.cardH + SPACE.sm;
+    const fits = GRID.menu.y + shift + below + GRID.menu.h < height - insets.bottom - SPACE.lg;
+    const dy = fits ? below : tileTop - GRID.menu.h - SPACE.sm;
+    const k = menuIn.get();
     return {
-      opacity: menuIn.get(),
-      transformOrigin: [cx - x, 0, 0],
-      transform: [{ translateX: x - GRID.menu.x }, { translateY: Math.floor(i / 3) * GRID.rowPitch }, { scale: reduceMotion ? 1 : 0.95 + 0.05 * menuIn.get() }],
+      // Gone means gone: under 2 % the menu is not drawn at all.
+      opacity: k < 0.02 ? 0 : Math.min(1, k),
+      transformOrigin: [cx - x, fits ? 0 : GRID.menu.h, 0],
+      transform: [{ translateX: x - GRID.menu.x }, { translateY: dy }, { scale: reduceMotion ? 1 : 0.95 + 0.05 * k }],
     };
   });
   // The reveal: a clip whose foot is the paper's fed length, the paper counter-moved so it stays put.
@@ -378,15 +402,14 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
     const sx = 1 + (ISLAND.openW / GRID.cardW - 1) * t;
     const sy = 1 + (ISLAND.openH / GRID.cardH - 1) * t;
     return {
-      // Out: solid while it travels, gone into the slot over the last 30 %. Back: out of the slot over the first 15 %,
-      // solid while it travels, handing over to the fading-in tile over the last 25 %.
-      opacity: t > 0 && t < 1 ? (morphBack.get() ? Math.min(1, (1 - t) / 0.15, t / 0.25) : Math.min(1, (1 - t) / 0.3)) : 0,
-      // Out it darkens only as it reaches the island; back it leaves the island already the card's grey, so no black slab crosses the list.
-      backgroundColor: morphBack.get() ? interpolateColor(t, [0.85, 1], [COLOR.card, ISLAND.color]) : interpolateColor(t, [0.55, 0.95], [COLOR.cardPressed, ISLAND.color]),
+      // Solid while it travels, gone into the slot over the last 30 %; it darkens only as it reaches the island.
+      opacity: t > 0 && t < 1 ? Math.min(1, (1 - t) / 0.3) : 0,
+      backgroundColor: interpolateColor(t, [0.55, 0.95], [COLOR.cardPressed, ISLAND.color]),
       borderRadius: GRID.radius + (ISLAND.openH / 2 - GRID.radius) * t,
       transform: [{ translateX: cx0 + (cx1 - cx0) * t - GRID.cardW / 2 }, { translateY: cy0 + (cy1 - cy0) * t - GRID.cardH / 2 }, { scaleX: sx }, { scaleY: sy }],
     };
   });
+  const paperFade = useAnimatedStyle(() => ({ opacity: paperO.get() }));
   const developStyle = useAnimatedStyle(() => ({ opacity: develop.get() * UPGRADE.developOpacity }));
   const ledStyle = useAnimatedStyle(() => {
     const blink = phase.get() === PRINTING ? 0.5 + 0.5 * Math.sin((clock.get() / 1000) * UPGRADE.ledBlinkHz * 2 * Math.PI) : 0;
@@ -433,7 +456,7 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
       {/* The printer: ring behind, paper over its lower lip, the upper lip and slit over the paper. */}
       <Animated.View style={[styles.morph, morphStyle]} pointerEvents="none" />
       <GestureDetector gesture={pan}>
-        <View style={[styles.paperClipOuter, { top: paperTop }]} pointerEvents={reading ? 'auto' : 'none'}
+        <Animated.View style={[styles.paperClipOuter, { top: paperTop }, paperFade]} pointerEvents={reading ? 'auto' : 'none'}
           accessible accessibilityRole="scrollbar" accessibilityLabel="Run receipt"
           accessibilityActions={[{ name: 'increment', label: 'Scroll down' }, { name: 'decrement', label: 'Scroll up' }, { name: 'escape', label: COPY.tear }]}
           onAccessibilityAction={(e) => {
@@ -446,7 +469,7 @@ export function ReceiptPrinter({ autoPlay = false }: ReceiptPrinterProps) {
               <ReceiptPaper />
             </Animated.View>
           </Animated.View>
-        </View>
+        </Animated.View>
       </GestureDetector>
       <Animated.View style={[StyleSheet.absoluteFill, slotStyle]} pointerEvents="none">
         {/* The island's shadow falls on the paper just under its lower edge. */}

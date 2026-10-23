@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// A mood journal: a glass jar with a metal lid fills with glossy face orbs. Flick an orb up from the
+/// A mood journal: a clear glass jar with a metal lid fills with glossy glass beads. Flick one up from the
 /// five-mood picker and it flies into the jar on an arc solved for the mouth; swipe the new entry to
 /// undo. Ported from `react-native/src/blocks/gestures/mood-orb-jar`.
 struct MoodOrbJar: View {
-    /// The autoplay period, in seconds (motion.ts LOOP_MS = 12 000).
+    /// The autoplay period, in seconds (motion.ts LOOP_MS = 10 000).
     static let loop: Double = MoodOrbJarTokens.Motion.loopMS / 1000
 
     @State private var controller: MoodOrbJarController
@@ -24,7 +24,6 @@ struct MoodOrbJar: View {
                 screen(geometry)
                     .frame(width: size.width, height: size.height, alignment: .topLeading)
                     .onAppear {
-                        MoodOrbJarAssets.assertAllLoaded()
                         assert(Self.loop * 1000 == MoodOrbJarTokens.Motion.loopMS, "loop and LOOP_MS disagree")
                         controller.configure(
                             width: size.width,

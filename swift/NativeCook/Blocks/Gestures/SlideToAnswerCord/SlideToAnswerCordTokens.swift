@@ -1,6 +1,4 @@
-import CoreImage
 import SwiftUI
-import UIKit
 
 /// Literal theme values for the slide-to-answer cord block.
 ///
@@ -24,88 +22,61 @@ enum SlideToAnswerCordTheme {
             Color(.sRGB, red: red / 255.0, green: green / 255.0, blue: blue / 255.0, opacity: alpha)
         }
 
-        // RN theme.ts:7-8.
-        static let sky: [Color] = [
-            hex(0x050409), hex(0x050409), hex(0x111226),
-            hex(0x1C1C3E), hex(0x2A2B6C), hex(0x262767)
-        ]
-        static let skyStops: [Double] = [0.0, 0.39, 0.47, 0.55, 0.78, 1.0]
-        static let skyTop: Color = hex(0x050409)
-        static let skyMid: Color = hex(0x050409)
-        static let horizon: Color = hex(0x1C1D42)
-        static let ground: Color = hex(0x2A2B6C)
-        static let groundConnected: Color = hex(0x0E3D3A)
-        static let groundEnded: Color = hex(0x3A1328)
-        static let grain: Double = 0.07
-
-        // RN theme.ts:17-35. Neon handset and control colours.
-        static let ring: Color = hex(0xFF1F8E)
-        static let ringDeep: Color = hex(0xC40F6A)
-        static let connected: Color = hex(0x2BE36A)
-        static let connectedDeep: Color = hex(0x12A548)
-        static let off: Color = hex(0x5B2348)
-        static let offDeep: Color = hex(0x3A1630)
-        static let shell: Color = rgba(92.0, 52.0, 178.0, 0.78)
-        static let shellEdge: Color = rgba(164.0, 128.0, 255.0, 0.55)
-        static let grille: Color = rgba(60.0, 0.0, 40.0, 0.55)
-        static let bloom: Color = hex(0xFFFFFF)
-        static let cordBack: Color = hex(0x2C2178)
-        static let cordFront: Color = hex(0x7448E6)
-        static let cordEdge: Color = hex(0xFF4FAE)
-        static let replicaCord: Color = hex(0x302A88)
-        static let replicaRim: Color = hex(0xA5237D)
-        static let replicaRimLeft: Color = hex(0x4C40B4)
-        static let ink: Color = hex(0xF4F2FF)
-        static let mute: Color = rgba(244.0, 242.0, 255.0, 0.58)
-        static let decline: Color = hex(0xFF1450)
-        static let accept: Color = hex(0x22E04A)
+        static let page: Color = hex(0x0C0A09)
+        static let pageTop: Color = hex(0x120F0D)
+        static let pageBottom: Color = hex(0x070606)
+        static let light: Color = rgba(255, 214, 170, 0.20)
+        static let lightEdge: Color = rgba(255, 214, 170, 0)
+        static let lightConnected: Color = rgba(170, 255, 200, 0.12)
+        static let ivoryHi: Color = hex(0xFFF9EE)
+        static let ivory: Color = hex(0xEDE2CC)
+        static let ivoryMid: Color = hex(0xD8CAAE)
+        static let ivoryLo: Color = hex(0xB6A584)
+        static let ivoryEdge: Color = rgba(92, 72, 44, 0.45)
+        static let cupLo: Color = hex(0xB9A889)
+        static let cupHi: Color = hex(0xF6EEDC)
+        static let hole: Color = hex(0x4A3D2B)
+        static let specular: Color = rgba(255, 255, 255, 0.85)
+        static let shadow: Color = rgba(0, 0, 0, 0.55)
+        static let cordFront: Color = hex(0xE2D6BE)
+        static let cordBack: Color = hex(0x7E7058)
+        static let cordHi: Color = rgba(255, 250, 238, 0.75)
+        static let cordEdge: Color = rgba(60, 46, 28, 0.55)
+        static let ink: Color = hex(0xF5F3F0)
+        static let mute: Color = rgba(245, 243, 240, 0.60)
+        static let faint: Color = rgba(245, 243, 240, 0.40)
+        static let decline: Color = hex(0xFF3B30)
+        static let accept: Color = hex(0x34C759)
         static let glyph: Color = hex(0xFFFFFF)
-        static let label: Color = rgba(244.0, 242.0, 255.0, 0.62)
+        static let glass: Color = rgba(255, 255, 255, 0.14)
+        static let glassEdge: Color = rgba(255, 255, 255, 0.20)
+        static let controlOn: Color = rgba(255, 255, 255, 0.92)
+        static let controlOnInk: Color = hex(0x16120F)
     }
 
     enum Handset {
-        // RN theme.ts:41-44. The source asset is 480 × 600 px at 0.348 pt/px.
-        static let imageScale: Double = 0.348
-        static let imageX: Double = -200.0 * 0.348
-        static let imageY: Double = -20.0 * 0.348
-        static let imageW: Double = 480.0 * 0.348
-        static let imageH: Double = 600.0 * 0.348
-        static let earX: Double = 12.0
-        static let earY: Double = 23.0
-        static let mouthX: Double = 12.0
-        static let mouthY: Double = 172.0
-        static let comX: Double = 2.0
+        static let cupRadius: Double = 30
+        static let topCupY: Double = 30
+        static let bottomCupY: Double = 166
+        static let waist: Double = 13
+        static let inner: Double = 21
+        static let comX: Double = 0
         static let comY: Double = 98.0
-        static let bloom: Double = 20.0
-        static let bloomX: Double = 14.0
-        static let bloomY: Double = -14.0
-        static let hit: Double = 190.0
+        static let hit: Double = 200.0
         static let restTilt: Double = -0.33
-        static let offOpacity: Double = 0.42
     }
 
     enum Cord {
         // RN theme.ts:62-79.
         static let anchorY: Double = -12.0
         static let replicaAnchorDX: Double = -26.0
-        static let replicaTurns: Double = 9.7
-        static let replicaWave: Double = 7.0
-        static let replicaPhase: Double = -3.98
-        static let replicaRoll: [(time: Double, angle: Double)] = [
-            (0, 0), (1, -0.39), (1.875, -0.22), (2.9, -0.39), (4, 0)
-        ]
-        static let replicaWidth: Double = 7.0
-        static let replicaRimDX: Double = 2.7
-        static let replicaRimWidthDelta: Double = 1.0
-        static let replicaLeftRimDXMultiplier: Double = 0.8
         static let restRatio: Double = 0.335
         static let links: Int = 14
-        static let turns: Int = 20
-        static let wire: Double = 90.0
-        static let width: Double = 2.6
-        static let edge: Double = 1.1
-        static let maxRadius: Double = 9.0
-        static let samples: Int = 8
+        static let turns: Int = 26
+        static let wire: Double = 46
+        static let tube: Double = 4.2
+        static let maxRadius: Double = 6.5
+        static let samples: Int = 7
     }
 
     enum Space {
@@ -121,31 +92,30 @@ enum SlideToAnswerCordTheme {
     enum Layout {
         // RN theme.ts:72-85.
         static let side: Double = 32.0
-        static let nameTopRatio: Double = 0.655
-        static let copyTopRatio: Double = 0.645
+        static let copyTopRatio: Double = 0.64
         static let nameSize: Double = 34.0
-        static let nameLine: Double = 40.0
-        static let statusSize: Double = 17.0
-        static let statusLine: Double = 22.0
-        static let gap: Double = 8.0
+        static let nameLine: Double = 41.0
+        static let metaSize: Double = 15
+        static let metaLine: Double = 20
+        static let metaGap: Double = 2
+        static let statusSize: Double = 15.0
+        static let statusLine: Double = 20.0
+        static let gap: Double = 12.0
+        static let copyToPill: Double = 24
         static let buttonsBottom: Double = 40.0
-        static let button: Double = 64.0
-        static let buttonGap: Double = 96.0
+        static let button: Double = 72.0
+        static let buttonGap: Double = 104.0
         static let labelSize: Double = 13.0
-        static let labelGap: Double = 8.0
+        static let labelGap: Double = 10.0
         static let labelWidth: Double = 120.0
-        static let glyph: Double = 26.0
-        static let metaSize: Double = 13
-        static let titleTracking: Double = -0.4
-        static let controlMinimumWidth: Double = 64
+        static let glyph: Double = 30.0
+        static let titleTracking: Double = 0.2
+        static let controlMinimumWidth: Double = 80
         static let controlHeight: Double = 52
         static let controlRadius: Double = 26
-        static let controlIconSize: Double = 20
-        static let controlLabelSize: Double = 10
-        static let controlLabelGap: Double = 4
-        static let controlOn: Color = Colors.rgba(255, 255, 255, 0.9)
-        static let controlInk: Color = Colors.hex(0x16122E)
-        static let controlLabel: Color = Colors.rgba(255, 255, 255, 0.75)
+        static let controlIconSize: Double = 22
+        static let controlLabelSize: Double = 12
+        static let controlLabelGap: Double = 8
     }
 
     enum Copy {
@@ -156,53 +126,31 @@ enum SlideToAnswerCordTheme {
         }
 
         // RN theme.ts:89-103.
-        static let meta: String = "mobile · Stockholm"
+        static let meta: String = "mobile"
         static let controls: [Control] = [
             Control(name: "mute", label: "Mute", symbol: "mic.slash.fill"),
             Control(name: "keypad", label: "Keypad", symbol: "circle.grid.3x3.fill"),
             Control(name: "speaker", label: "Speaker", symbol: "speaker.wave.2.fill")
         ]
         static let name: String = "Mara Lindqvist"
-        static let ringing: String = "Incoming call · lift to answer"
+        static let ringing: String = "Lift the receiver to answer"
         static let declined: String = "Call declined"
         static let ended: String = "Call ended"
         static let decline: String = "Decline"
         static let accept: String = "Accept"
         static let end: String = "End"
-        static let a11yHandset: String = "Handset"
-        static let a11yHint: String = "Swipe up to answer, swipe down to decline"
+        static let a11yHandset: String = "Receiver"
+        static let a11yHint: String = "Lift to answer or pull down to decline"
     }
 
     // QA switch from RN theme.ts:108. Upgrade layers remain enabled in the shipped state.
     static let replica: Bool = false
 
     enum Glass {
-        // RN theme.ts:112-121.
-        static let blur: Double = 18.0
-        static let decline: Color = Colors.rgba(255.0, 20.0, 80.0, 0.55)
-        static let accept: Color = Colors.rgba(34.0, 224.0, 74.0, 0.5)
-        static let neutral: Color = Colors.rgba(255.0, 255.0, 255.0, 0.12)
-        static let edgeTop: Color = Colors.rgba(255.0, 255.0, 255.0, 0.75)
-        static let edgeBottom: Color = Colors.rgba(255.0, 255.0, 255.0, 0.08)
-        static let pillY: Double = -96.0
-        static let pillH: Double = 64.0
-        static let field: Double = 300.0
-        static let fieldAlpha: Double = 0.35
-        static let fieldWashTop: Double = 0.85
-        static let fieldWashAlpha: Double = 0.5
-        static let haloExtra: Double = 6.0
-        static let haloGrowth: Double = 8.0
-        static let haloBlur: Double = 16.0
-        static let haloBaseAlpha: Double = 0.35
-        static let haloGrowthAlpha: Double = 0.65
-        static let edgeWidth: Double = 1.2
-        static let rimWidth: Double = 1.5
-        static let rimAlpha: Double = 0.45
-        static let disabledAlpha: Double = 0.55
-        static let glyphFadeMultiplier: Double = 3.0
+        static let pillY: Double = -82
+        static let pillH: Double = 60
     }
 }
-
 /// Literal motion values for the slide-to-answer cord block.
 ///
 /// Durations and simulation values retain the React Native units: seconds
@@ -247,7 +195,7 @@ enum SlideToAnswerCordMotion {
         static let drop: Double = 24.0
         static let lengthEase: Double = 7.0
         static let colorEase: Double = 14.0
-        static let resetAfter: Double = 2.0
+        static let resetAfter: Double = 1.4
     }
 
     enum Ring {
@@ -261,8 +209,6 @@ enum SlideToAnswerCordMotion {
         static let pulse: Double = 1.3
         static let pulseFrom: Double = 44.0
         static let pulseTo: Double = 170.0
-        static let stroke: Double = 2.0
-        static let blur: Double = 3.0
     }
 
     enum Haptic {
@@ -273,15 +219,12 @@ enum SlideToAnswerCordMotion {
         static let tick: Int = 4
     }
 
-    static let loopMS: Double = 12_000.0
-    static let resumeMS: Double = 3_500.0
-    /// Spelled out for the fidelity matrix; this is the unchanged RN literal.
-    static let resumeMilliseconds: Double = 3_500.0
-    /// Swift port policy: interactive idle returns to the saved rest state after 2 s.
-    /// The RN autoplay resume timer remains `resumeMS` above.
+    static let loopMS: Double = 8_000.0
+    static let resumeMS: Double = 2_000.0
+    static let resumeInCall: Double = 3.9
     static let interactiveIdleBeforeReturn: Double = 2.0
     static let prerollLoops: Int = 3
-    static let maximumFrameDelta: Double = 0.1
+    static let maximumFrameDelta: Double = 0.25
 
     struct ScriptSegment {
         let start: Double
@@ -297,12 +240,12 @@ enum SlideToAnswerCordMotion {
 
     // RN motion.ts:55-63. Coordinates are offsets from the handset's grab point.
     static let script: [ScriptSegment] = [
-        ScriptSegment(start: 2.6, end: 3.0, fromDX: 0.0, fromDY: 0.0, toDX: 0.0, toDY: -10.0, downAtStart: 1, upAtEnd: 0),
-        ScriptSegment(start: 3.0, end: 3.55, fromDX: 0.0, fromDY: -10.0, toDX: 6.0, toDY: -84.0, downAtStart: 0, upAtEnd: 0),
-        ScriptSegment(start: 3.55, end: 3.7, fromDX: 6.0, fromDY: -84.0, toDX: 6.0, toDY: -84.0, downAtStart: 0, upAtEnd: 1),
-        ScriptSegment(start: 7.4, end: 7.75, fromDX: 0.0, fromDY: 0.0, toDX: 0.0, toDY: 14.0, downAtStart: 1, upAtEnd: 0),
-        ScriptSegment(start: 7.75, end: 8.25, fromDX: 0.0, fromDY: 14.0, toDX: -4.0, toDY: 92.0, downAtStart: 0, upAtEnd: 0),
-        ScriptSegment(start: 8.25, end: 8.4, fromDX: -4.0, fromDY: 92.0, toDX: -4.0, toDY: 92.0, downAtStart: 0, upAtEnd: 1)
+        ScriptSegment(start: 1.6, end: 2.0, fromDX: 0, fromDY: 0, toDX: 0, toDY: -10, downAtStart: 1, upAtEnd: 0),
+        ScriptSegment(start: 2.0, end: 2.55, fromDX: 0, fromDY: -10, toDX: 6, toDY: -84, downAtStart: 0, upAtEnd: 0),
+        ScriptSegment(start: 2.55, end: 2.7, fromDX: 6, fromDY: -84, toDX: 6, toDY: -84, downAtStart: 0, upAtEnd: 1),
+        ScriptSegment(start: 4.4, end: 4.75, fromDX: 0, fromDY: 0, toDX: 0, toDY: 14, downAtStart: 1, upAtEnd: 0),
+        ScriptSegment(start: 4.75, end: 5.25, fromDX: 0, fromDY: 14, toDX: -4, toDY: 92, downAtStart: 0, upAtEnd: 0),
+        ScriptSegment(start: 5.25, end: 5.4, fromDX: -4, fromDY: 92, toDX: -4, toDY: 92, downAtStart: 0, upAtEnd: 1)
     ]
 
     // QA-only hold from RN motion.ts:65; -1 disables the freeze.
@@ -391,64 +334,4 @@ enum SlideToAnswerCordMotion {
 
     /// Convenience alias for simulation code that groups QA flags with motion.
     static let replicaOnly: Bool = SlideToAnswerCordTheme.replica
-}
-
-/// Flat bundle resources for the block. Every name is prefixed because Swift
-/// compiles all blocks into the same application bundle namespace.
-enum SlideToAnswerCordAssets {
-    static let handset: UIImage = image(named: "SlideToAnswerCord-handset.png")
-    static let handsetGreen: UIImage = image(named: "SlideToAnswerCord-handset-green.png")
-    static let handsetShell: UIImage = image(named: "SlideToAnswerCord-handset-shell.png")
-    static let handsetShellGreen: UIImage = image(named: "SlideToAnswerCord-handset-shell-green.png")
-    static let sourceA: UIImage = image(named: "SlideToAnswerCord-handset-src-a.png")
-    static let sourceRest: UIImage = image(named: "SlideToAnswerCord-handset-src-rest.png")
-    static let sourceB: UIImage = image(named: "SlideToAnswerCord-handset-src-b.png")
-    static let sourceAGreen: UIImage = green(image: sourceA)
-    static let sourceRestGreen: UIImage = green(image: sourceRest)
-    static let sourceBGreen: UIImage = green(image: sourceB)
-    static let grain: UIImage = image(named: "SlideToAnswerCord-grain.png")
-
-    static func image(_ name: String) -> UIImage {
-        image(named: name)
-    }
-
-    static func assertAllLoaded() {
-        #if DEBUG
-        [
-            ("SlideToAnswerCord-handset.png", handset),
-            ("SlideToAnswerCord-handset-green.png", handsetGreen),
-            ("SlideToAnswerCord-handset-shell.png", handsetShell),
-            ("SlideToAnswerCord-handset-shell-green.png", handsetShellGreen),
-            ("SlideToAnswerCord-handset-src-a.png", sourceA),
-            ("SlideToAnswerCord-handset-src-rest.png", sourceRest),
-            ("SlideToAnswerCord-handset-src-b.png", sourceB),
-            ("SlideToAnswerCord-grain.png", grain)
-        ].forEach { name, resource in
-            assert(resource.size != .zero, "Missing Slide To Answer Cord asset: \(name)")
-        }
-        #endif
-    }
-
-    private static func image(named name: String) -> UIImage {
-        guard let image = UIImage(named: name) else {
-            assertionFailure("Missing Slide To Answer Cord asset: \(name)")
-            return UIImage()
-        }
-        return image
-    }
-
-    private static func green(image: UIImage) -> UIImage {
-        guard let input = CIImage(image: image),
-              let filter = CIFilter(name: "CIColorMatrix")
-        else { return image }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        filter.setValue(CIVector(x: -0.599, y: 1.142, z: 0.457, w: 0), forKey: "inputRVector")
-        filter.setValue(CIVector(x: 0.462, y: 0.495, z: 0.043, w: 0), forKey: "inputGVector")
-        filter.setValue(CIVector(x: 0.144, y: 1.631, z: -0.775, w: 0), forKey: "inputBVector")
-        filter.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-        guard let output = filter.outputImage,
-              let cgImage = CIContext().createCGImage(output, from: input.extent)
-        else { return image }
-        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
-    }
 }

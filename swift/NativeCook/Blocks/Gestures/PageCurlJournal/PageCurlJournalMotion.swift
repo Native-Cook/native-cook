@@ -128,11 +128,14 @@ enum PageCurlJournalMotion {
     }
 
     static let fadeMs = 200.0 // Reduce Motion: pages cross-fade
-    static let idleResumeMs = 3500.0
+    static let idleResumeMs = 2000.0
 
-    /// Autoplay: a scripted finger through the same input as a real one. Times in ms on a 14 s loop.
+    /// Autoplay: a scripted finger through the same input as a real one. Times in ms on a 10 s loop.
     /// Each stroke: down at `from`, moves through `via` to `to`, lifts at t1 with the path's speed.
-    static let loopMs = 14000.0
+    static let loopMs = 10000.0
+    // The reference has settled on the title by this point. Canonicalize here, before the recording cut, so the
+    // live SwiftUI page and its animated stack edge have a full second to reach the exact opening frame.
+    static let loopRestMs = 9000.0
     struct Stroke {
         let t0: Double
         let t1: Double
@@ -143,15 +146,15 @@ enum PageCurlJournalMotion {
 
     static let script: [Stroke] = [
         // A hesitant peek at the corner, let go: the page falls back.
-        Stroke(t0: 900, t1: 2500, from: [384, 64], via: [150, 330], to: [310, 170]),
+        Stroke(t0: 600, t1: 1900, from: [384, 64], via: [150, 330], to: [310, 170]),
         // Title page over to the preface: a short drag and a flick.
-        Stroke(t0: 3200, t1: 3700, from: [386, 540], via: [300, 520], to: [150, 480]),
-        Stroke(t0: 5300, t1: 5800, from: [388, 300], via: [300, 310], to: [160, 340]),
-        Stroke(t0: 7400, t1: 7900, from: [388, 690], via: [300, 670], to: [160, 610]),
+        Stroke(t0: 2500, t1: 3000, from: [386, 540], via: [300, 520], to: [150, 480]),
+        Stroke(t0: 4000, t1: 4500, from: [388, 300], via: [300, 310], to: [160, 340]),
+        Stroke(t0: 5500, t1: 6000, from: [388, 690], via: [300, 670], to: [160, 610]),
         // A fast flick right from the cover: the riffle turns every page back to the title.
-        Stroke(t0: 9900, t1: 10180, from: [60, 450], via: [120, 446], to: [260, 438]),
+        Stroke(t0: 7300, t1: 7580, from: [60, 450], via: [120, 446], to: [260, 438]),
     ]
 
-    /// Autoplay: the idle nudge on the title page after the riffle.
-    static let nudgeAtMs = 12200.0
+    /// Autoplay has no idle nudge inside the ten-second recording loop.
+    static let nudgeAtMs = loopMs + 1
 }

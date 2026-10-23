@@ -9,10 +9,9 @@ export const PRESS = {
 } as const;
 
 export const SCREEN = {
-  // Grid out, slot in (frames 7–8), and back (frames 44–47).
+  // Grid out and slot in (frames 7–8); the way back is RETRACT's hand-over (frames 44–47).
   gridOutMs: 260,
   slotInMs: 220,
-  gridInMs: 420,
 } as const;
 
 /** The Dynamic Island opening into the printer and closing again: the system's own feel, one soft overshoot. */
@@ -44,15 +43,21 @@ export const SCROLL = {
 } as const;
 
 export const RETRACT = {
-  // The paper is drawn back into the slot (frames 42–44).
+  // The paper is drawn back into the slot (frames 42–44), ending the moment its torn foot passes under the island.
   ms: 520,
+  // The hand-over: the list is revealed under the rising paper (it starts a quarter into the pull and ends as the
+  // island has nearly closed), so no frame shows the open island over an empty page.
+  gridLeadMs: 130,
+  gridInMs: 680,
+  // Reduce Motion: the paper and the list cross-fade instead.
+  reducedMs: 200,
 } as const;
 
 // One autoplay period; it starts and ends at rest on the grid.
 export const LOOP_MS = 10000;
 
 export const AUTOPLAY = {
-  resumeDelayMs: 3500,
+  resumeDelayMs: 2000,
   pressAt: 500,
   pickAt: 1300,
   // Down to the end, back a little, to the end again (frames 21–41); the feed ends at 3.6 s.
@@ -108,8 +113,6 @@ export const POLISH = {
   pressScale: 0.97,
   pressInMs: 100,
   pressOutMs: 160,
-  // Back to the grid: the slot morphs back into the tile it came from (reverse container transform).
-  returnMs: 380,
   // Pulled past the dismiss point: one tick and the status light goes full bright, so the release is predictable.
   armedLed: 1,
 } as const;

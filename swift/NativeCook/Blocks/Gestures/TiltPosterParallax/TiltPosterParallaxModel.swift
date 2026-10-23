@@ -78,16 +78,27 @@ final class TiltPosterParallaxModel {
     }
 
     func configure(cardSize: CGSize, watchPoint: CGPoint, reduceMotion: Bool) {
+        let wasReduced = self.reduceMotion
         self.cardSize = cardSize
         self.watchPoint = watchPoint
         self.reduceMotion = reduceMotion
+        if reduceMotion {
+            motion.stopDeviceMotionUpdates()
+            paused = true
+            returningToRest = false
+            lastInteraction = nil
+            applyRest()
+        } else if wasReduced {
+            paused = false
+            loopStart = currentTimestamp
+            lastTimestamp = currentTimestamp
+            applyRest()
+            startDeviceMotion()
+        }
     }
 
     func start() {
-        if motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive {
-            motion.deviceMotionUpdateInterval = 1 / 120
-            motion.startDeviceMotionUpdates()
-        }
+        startDeviceMotion()
         lightImpact.prepare()
         mediumImpact.prepare()
         selection.prepare()
@@ -111,12 +122,13 @@ final class TiltPosterParallaxModel {
         let delta = min(max(timestamp - previous, 0), TiltPosterParallaxTokens.Timing.maxFrameDelta)
         lastTimestamp = timestamp
 
-        if autoPlay, !paused {
+        if autoPlay, !reduceMotion, !paused {
             let start = loopStart ?? timestamp
             let elapsed = max(0, timestamp - start)
             let phase = heldPhase ?? elapsed.truncatingRemainder(dividingBy: TiltPosterParallaxTokens.loop)
             applyAutoplay(phase: phase)
         } else {
+            if reduceMotion, reducedMotionIsSettled { return }
             advanceManual(delta: delta, timestamp: timestamp)
         }
     }
@@ -230,7 +242,7 @@ final class TiltPosterParallaxModel {
     }
 
     private func pauseAutoplay(timestamp: CFTimeInterval, touchDown: Bool) {
-        guard autoPlay else { return }
+        guard autoPlay, !reduceMotion else { return }
         paused = true
         realTouchDown = touchDown
         returningToRest = false
@@ -292,7 +304,7 @@ final class TiltPosterParallaxModel {
             return
         }
 
-        guard autoPlay, !realTouchDown, let lastInteraction else { return }
+        guard autoPlay, !reduceMotion, !realTouchDown, let lastInteraction else { return }
         if timestamp - lastInteraction >= TiltPosterParallaxTokens.Timing.interactionResumeDelay {
             returningToRest = true
             flipped = false
@@ -306,6 +318,7 @@ final class TiltPosterParallaxModel {
     }
 
     private func restartAutoplay(at timestamp: CFTimeInterval) {
+        guard !reduceMotion else { return }
         paused = false
         returningToRest = false
         lastInteraction = nil
@@ -334,6 +347,23 @@ final class TiltPosterParallaxModel {
         let driftY = sin(phase * 2) * TiltPosterParallaxTokens.Tilt.driftAmplitude * 0.6
         ambientX += (sensorX + driftX - ambientX) * TiltPosterParallaxTokens.Tilt.sensorSmoothing
         ambientY += (sensorY + driftY - ambientY) * TiltPosterParallaxTokens.Tilt.sensorSmoothing
+    }
+
+    private func startDeviceMotion() {
+        guard !reduceMotion, motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
+        motion.deviceMotionUpdateInterval = 1 / 120
+        motion.startDeviceMotionUpdates()
+    }
+
+    private var reducedMotionIsSettled: Bool {
+        !holdActive
+            && !returningToRest
+            && abs(flipSpring.value - flipSpring.target) < 0.001
+            && abs(liftSpring.value - liftSpring.target) < 0.001
+            && abs(savedSpring.value - savedSpring.target) < 0.001
+            && abs(pressSpring.value - pressSpring.target) < 0.001
+            && abs(offsetX.value - offsetX.target) < 0.001
+            && abs(offsetY.value - offsetY.target) < 0.001
     }
 
     private func applyAutoplay(phase: Double) {

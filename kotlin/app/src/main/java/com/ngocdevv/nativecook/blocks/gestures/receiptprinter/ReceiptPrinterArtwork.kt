@@ -11,11 +11,15 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
-import com.ngocdevv.nativecook.R
-import androidx.core.content.res.ResourcesCompat
+import android.os.Build
+import kotlin.math.PI
 import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.min
@@ -27,13 +31,27 @@ internal class ReceiptPrinterArtwork(context: Context) {
     private companion object {
         const val SOURCE_WIDTH = Tokens.SOURCE.width
         const val PAPER_RASTER_SCALE = Tokens.PAPER.rasterScale
+        const val ASSET_ROOT = "receiptprinter"
+        const val PAPER_GRAIN_SHADER = """
+            float hash(float2 point) {
+                return fract(sin(dot(point, float2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            half4 main(float2 coordinate) {
+                float2 point = coordinate * 0.9;
+                float grain = (hash(floor(point)) + hash(floor(point * 2.0)) * 0.5) / 1.5;
+                return half4(half3(grain), 0.05);
+            }
+        """
     }
 
-    private val regular = requireNotNull(ResourcesCompat.getFont(context, R.font.receiptprinter_mono_regular))
-    private val medium = requireNotNull(ResourcesCompat.getFont(context, R.font.receiptprinter_mono_medium))
-    private val bold = requireNotNull(ResourcesCompat.getFont(context, R.font.receiptprinter_mono_bold))
-    private val heavy = requireNotNull(ResourcesCompat.getFont(context, R.font.receiptprinter_mono_extrabold))
-    private val logo = checkNotNull(BitmapFactory.decodeResource(context.resources, R.drawable.receiptprinter_logo))
+    private val regular = Typeface.createFromAsset(context.assets, "$ASSET_ROOT/receiptprinter_JetBrainsMono-Regular.ttf")
+    private val medium = Typeface.createFromAsset(context.assets, "$ASSET_ROOT/receiptprinter_JetBrainsMono-Medium.ttf")
+    private val bold = Typeface.createFromAsset(context.assets, "$ASSET_ROOT/receiptprinter_JetBrainsMono-Bold.ttf")
+    private val heavy = Typeface.createFromAsset(context.assets, "$ASSET_ROOT/receiptprinter_JetBrainsMono-ExtraBold.ttf")
+    private val logo = context.assets.open("$ASSET_ROOT/receiptprinter_logo.png").use { input ->
+        checkNotNull(BitmapFactory.decodeStream(input))
+    }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
@@ -42,6 +60,10 @@ internal class ReceiptPrinterArtwork(context: Context) {
     }
     private val dotted = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         pathEffect = DashPathEffect(floatArrayOf(1.5f, 2.5f), 0f)
+    }
+    private val paceAverage = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(4f, 3f), 0f)
     }
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val paperGrain = createPaperGrain()
@@ -69,12 +91,15 @@ internal class ReceiptPrinterArtwork(context: Context) {
         Tokens.BAR.shadowRadius,
     )
     private val ledGlow = receiptPrinterLedGlow()
+    private val gridBackdrop = recordGridBackdrop()
+    private val cardBitmaps = Tokens.CARDS.map { recordCard(it, lifted = false) }
+    private val liftedCardBitmaps = Tokens.CARDS.map { recordCard(it, lifted = true) }
 
     fun draw(canvas: Canvas, frame: ReceiptPrinterFrame) {
         canvas.drawColor(Tokens.COLOR.bg)
         drawGrid(canvas, frame.gridOpacity, frame.pressedIndex, frame.cardLift, frame.holdIndex, frame.holdScale, frame.viewportWidth)
-        drawMenu(canvas, frame.menuOpacity, frame.menuScale, frame.menuX, frame.menuY, frame.menuOriginX, frame.menuPressedRow, frame.viewportWidth)
-        drawMorph(canvas, frame.morphProgress, frame.morphBack, frame.morphFrom, frame.islandTop, frame.islandCenterX)
+        drawMenu(canvas, frame.menuOpacity, frame.menuScale, frame.menuX, frame.menuY, frame.menuOriginX, frame.menuOriginY, frame.menuPressedRow, frame.viewportWidth)
+        drawMorph(canvas, frame.morphProgress, frame.morphFrom, frame.islandTop, frame.islandCenterX)
         drawPaper(canvas, frame.paperVisible, frame.paperScroll, frame.paperRotation, frame.paperLift, frame.paperAlpha, frame.cutOffset, frame.paperTop)
         drawPaperOverlay(canvas, frame.islandProgress, frame.paperVisible, frame.paperTop, frame.developOpacity)
         drawIsland(canvas, frame.islandProgress, frame.islandTop, frame.islandCenterX, frame.ledOpacity, frame.ledGlowOpacity)
@@ -94,33 +119,44 @@ internal class ReceiptPrinterArtwork(context: Context) {
         if (opacity <= 0f) return
         val layer = canvas.saveLayerAlpha(0f, 0f, viewportWidth, canvas.height.toFloat(), alpha(opacity))
 
-        drawCapText(canvas, Tokens.COPY.title, Tokens.GRID.gutter, Tokens.GRID.titleCap, Tokens.TYPE.title, heavy, Tokens.COLOR.ink)
-        drawCapText(canvas, Tokens.COPY.subtitle, Tokens.GRID.gutter, Tokens.GRID.subtitleCap, Tokens.TYPE.subtitle, regular, Tokens.COLOR.inkSoft)
-        drawInfoIcon(canvas, Tokens.GRID.info.cx, Tokens.GRID.info.cy, Tokens.GRID.info.r)
-        Tokens.PILLS.forEachIndexed { index, label ->
-            val x = cardX(index)
-            fill.color = Tokens.COLOR.card
-            canvas.drawRoundRect(x, Tokens.GRID.pillTop, x + Tokens.GRID.cardW, Tokens.GRID.pillTop + Tokens.GRID.pillH, Tokens.GRID.radius, Tokens.GRID.radius, fill)
-            drawTextCenteredInBox(canvas, label, x + Tokens.GRID.cardW / 2f, Tokens.GRID.pillTop, Tokens.GRID.pillH, Tokens.TYPE.pill, heavy, Tokens.COLOR.ink)
-        }
-        Tokens.CARDS.forEachIndexed { index, card ->
+        canvas.drawBitmap(gridBackdrop, 0f, 0f, bitmapPaint)
+        Tokens.CARDS.indices.forEach { index ->
             val x = cardX(index % 3)
             val y = Tokens.GRID.rowTop + index / 3 * Tokens.GRID.rowPitch
-            val saved = canvas.save()
             val scale = cardScale(index, pressedIndex, lift, holdIndex, holdScale)
-            canvas.scale(scale, scale, x + Tokens.GRID.cardW / 2f, y + Tokens.GRID.cardH / 2f)
-            drawCard(canvas, x, y, card, if (index == pressedIndex) lift else 0f)
-            canvas.restoreToCount(saved)
+            val dynamic = index == pressedIndex && lift > 0.001f || index == holdIndex && scale != 1f
+            if (dynamic) {
+                val saved = canvas.save()
+                canvas.scale(scale, scale, x + Tokens.GRID.cardW / 2f, y + Tokens.GRID.cardH / 2f)
+                val cardLift = if (index == pressedIndex) lift else 0f
+                if (cardLift > 0f) {
+                    drawShadow(canvas, cardShadow, x, y, 0.12f * cardLift)
+                }
+                canvas.drawBitmap(
+                    if (cardLift > 0.01f) liftedCardBitmaps[index] else cardBitmaps[index],
+                    null,
+                    RectF(x, y, x + Tokens.GRID.cardW, y + Tokens.GRID.cardH),
+                    bitmapPaint,
+                )
+                canvas.restoreToCount(saved)
+            } else {
+                canvas.drawBitmap(
+                    cardBitmaps[index],
+                    null,
+                    RectF(x, y, x + Tokens.GRID.cardW, y + Tokens.GRID.cardH),
+                    bitmapPaint,
+                )
+            }
         }
         canvas.restoreToCount(layer)
     }
 
-    fun drawMenu(canvas: Canvas, opacity: Float, scale: Float, x: Float, y: Float, originX: Float, pressedRow: Int, viewportWidth: Float = SOURCE_WIDTH) {
+    fun drawMenu(canvas: Canvas, opacity: Float, scale: Float, x: Float, y: Float, originX: Float, originY: Float, pressedRow: Int, viewportWidth: Float = SOURCE_WIDTH) {
         if (opacity <= 0f) return
         val menu = Tokens.GRID.menu
         val layer = canvas.saveLayerAlpha(0f, 0f, viewportWidth, canvas.height.toFloat(), alpha(opacity))
         val saved = canvas.save()
-        canvas.scale(scale, scale, x + originX, y)
+        canvas.scale(scale, scale, x + originX, y + originY)
         drawShadow(canvas, menuShadow, x, y, Tokens.GRID.menuShadowOpacity)
         fill.color = Tokens.COLOR.menu
         canvas.drawRoundRect(x, y, x + menu.w, y + menu.h, menu.radius, menu.radius, fill)
@@ -280,7 +316,7 @@ internal class ReceiptPrinterArtwork(context: Context) {
         canvas.restoreToCount(layer)
     }
 
-    fun drawMorph(canvas: Canvas, progress: Float, back: Boolean, from: Int, islandTop: Float, islandCenterX: Float) {
+    fun drawMorph(canvas: Canvas, progress: Float, from: Int, islandTop: Float, islandCenterX: Float) {
         if (progress <= 0f || progress >= 1f || from < 0) return
         val grid = Tokens.GRID
         val x0 = cardX(from % 3)
@@ -288,12 +324,8 @@ internal class ReceiptPrinterArtwork(context: Context) {
         val centerX = x0 + grid.cardW / 2f + (islandCenterX - (x0 + grid.cardW / 2f)) * progress
         val targetY = islandTop + Tokens.ISLAND.openH / 2f
         val centerY = y0 + grid.cardH / 2f + (targetY - (y0 + grid.cardH / 2f)) * progress
-        val opacity = if (back) min(min(1f, (1f - progress) / 0.15f), progress / 0.25f) else min(1f, (1f - progress) / 0.3f)
-        fill.color = if (back) {
-            mixColor(Tokens.COLOR.card, Tokens.ISLAND.color, (progress - 0.85f) / 0.15f, opacity)
-        } else {
-            mixColor(Tokens.COLOR.cardPressed, Tokens.ISLAND.color, (progress - 0.55f) / 0.4f, opacity)
-        }
+        val opacity = min(1f, (1f - progress) / 0.3f)
+        fill.color = mixColor(Tokens.COLOR.cardPressed, Tokens.ISLAND.color, (progress - 0.55f) / 0.4f, opacity)
         val width = grid.cardW + (Tokens.ISLAND.openW - grid.cardW) * progress
         val height = grid.cardH + (Tokens.ISLAND.openH - grid.cardH) * progress
         val radius = grid.radius + (Tokens.ISLAND.openH / 2f - grid.radius) * progress
@@ -308,53 +340,65 @@ internal class ReceiptPrinterArtwork(context: Context) {
         )
     }
 
-    private fun drawCard(canvas: Canvas, x: Float, y: Float, card: Tokens.RunCard, lift: Float) {
+    private fun drawCard(canvas: Canvas, x: Float, y: Float, card: Tokens.RunCard, lifted: Boolean) {
         val grid = Tokens.GRID
-        if (lift > 0f) {
-            drawShadow(canvas, cardShadow, x, y, 0.12f * lift)
-        }
-        fill.color = if (lift > 0.01f) Tokens.COLOR.cardPressed else Tokens.COLOR.card
+        fill.color = if (lifted) Tokens.COLOR.cardPressed else Tokens.COLOR.card
         canvas.drawRoundRect(x, y, x + grid.cardW, y + grid.cardH, grid.radius, grid.radius, fill)
         drawCapText(canvas, card.date[0], x + grid.dateInset, y + grid.dateCap, Tokens.TYPE.cardDate, medium, Tokens.COLOR.date)
         drawCapTextRight(canvas, card.date[1], x + grid.cardW - grid.dateInset, y + grid.dateCap, Tokens.TYPE.cardDate, medium, Tokens.COLOR.date)
-        drawTreadmill(canvas, x + (grid.cardW - grid.iconW) / 2f, y + grid.iconTop)
+        drawRoute(canvas, x + (grid.cardW - grid.iconW) / 2f, y + grid.iconTop, card.seed)
         drawCapTextCentered(canvas, card.km, x + grid.cardW / 2f, y + grid.cardH - grid.kmCapFromBottom, Tokens.TYPE.cardKm, heavy, Tokens.COLOR.ink)
     }
 
-    private fun drawTreadmill(canvas: Canvas, x: Float, y: Float) {
-        // Exact RN SVG treadmill geometry, drawn without adding an asset dependency.
-        val saved = canvas.save()
-        canvas.translate(x, y)
-        fill.color = Tokens.COLOR.icon
-        canvas.drawOval(6f, 30.6f, 10.2f, 32.6f, fill)
-        treadmillBar(canvas, 2.8f, 28.4f, 42.6f, 25.6f, 5.4f)
-        treadmillBar(canvas, 34.6f, 21.8f, 43.4f, 21.2f, 5f)
-        treadmillBar(canvas, 30.6f, 30.4f, 28.2f, 9.8f, 4f)
-        treadmillBar(canvas, 7.6f, 9.8f, 39.2f, 7.4f, 4.2f)
-        val console = Path().apply {
-            moveTo(33.8f, 0.6f)
-            lineTo(38.6f, 6.2f)
-            lineTo(30.4f, 6.8f)
+    private fun drawRoute(canvas: Canvas, x: Float, y: Float, seed: Int) {
+        fun random(index: Int): Float {
+            val value = sin(seed * 91.7 + index * 12.9898) * 43758.5453
+            return (value - floor(value)).toFloat()
+        }
+        val a2 = 0.1f + random(1) * 0.18f
+        val a3 = random(2) * 0.12f
+        val b2 = 0.08f + random(3) * 0.22f
+        val p2 = random(4) * 6.28f
+        val p3 = random(5) * 6.28f
+        val q2 = random(6) * 6.28f
+        val raw = List(64) { index ->
+            val angle = index / 64f * 2f * PI.toFloat()
+            Pair(
+                cos(angle) + a2 * cos(2f * angle + p2) + a3 * cos(3f * angle + p3),
+                sin(angle) + b2 * sin(2f * angle + q2) + a3 * 0.6f * sin(3f * angle + p3),
+            )
+        }
+        val minX = raw.minOf { it.first }
+        val maxX = raw.maxOf { it.first }
+        val minY = raw.minOf { it.second }
+        val maxY = raw.maxOf { it.second }
+        val scale = min(
+            (Tokens.GRID.iconW - 6f) / (maxX - minX),
+            (Tokens.GRID.iconH - 6f) / (maxY - minY),
+        )
+        val offsetX = (Tokens.GRID.iconW - (maxX - minX) * scale) / 2f - minX * scale
+        val offsetY = (Tokens.GRID.iconH - (maxY - minY) * scale) / 2f - minY * scale
+        val points = raw.map { point ->
+            Pair(x + offsetX + point.first * scale, y + offsetY + point.second * scale)
+        }
+        val route = Path().apply {
+            points.forEachIndexed { index, point ->
+                if (index == 0) moveTo(point.first, point.second) else lineTo(point.first, point.second)
+            }
             close()
         }
-        fill.color = Tokens.COLOR.paper
-        canvas.drawPath(console, fill)
         stroke.color = Tokens.COLOR.icon
-        stroke.strokeWidth = 1.3f
-        stroke.strokeJoin = Paint.Join.ROUND
-        canvas.drawPath(console, stroke)
-        canvas.restoreToCount(saved)
-    }
-
-    private fun treadmillBar(canvas: Canvas, x1: Float, y1: Float, x2: Float, y2: Float, width: Float) {
-        stroke.color = Tokens.COLOR.icon
-        stroke.strokeWidth = width + 1.3f
+        stroke.strokeWidth = 1.6f
         stroke.strokeCap = Paint.Cap.ROUND
-        canvas.drawLine(x1, y1, x2, y2, stroke)
-        stroke.color = Tokens.COLOR.paper
-        stroke.strokeWidth = max(0.1f, width - 1.3f)
-        canvas.drawLine(x1, y1, x2, y2, stroke)
+        stroke.strokeJoin = Paint.Join.ROUND
+        canvas.drawPath(route, stroke)
+        val start = points[(random(7) * points.size).toInt().coerceIn(points.indices)]
+        fill.color = Tokens.COLOR.zone
+        canvas.drawCircle(start.first, start.second, 2.6f, fill)
+        stroke.strokeWidth = 1f
+        canvas.drawCircle(start.first, start.second, 2.6f, stroke)
         stroke.strokeCap = Paint.Cap.BUTT
+        stroke.strokeJoin = Paint.Join.MITER
     }
 
     private fun drawInfoIcon(canvas: Canvas, x: Float, y: Float, radius: Float) {
@@ -460,6 +504,49 @@ internal class ReceiptPrinterArtwork(context: Context) {
         return ReceiptPrinterLedGlow(bitmap, inset)
     }
 
+    private fun recordGridBackdrop(): Bitmap {
+        val height = ceil(Tokens.GRID.rowTop).toInt()
+        val bitmap = Bitmap.createBitmap(Tokens.SOURCE.width.toInt(), height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawCapText(canvas, Tokens.COPY.title, Tokens.GRID.gutter, Tokens.GRID.titleCap, Tokens.TYPE.title, heavy, Tokens.COLOR.ink)
+        drawCapText(canvas, Tokens.COPY.subtitle, Tokens.GRID.gutter, Tokens.GRID.subtitleCap, Tokens.TYPE.subtitle, regular, Tokens.COLOR.inkSoft)
+        drawInfoIcon(canvas, Tokens.GRID.info.cx, Tokens.GRID.info.cy, Tokens.GRID.info.r)
+        Tokens.PILLS.forEachIndexed { index, label ->
+            val x = cardX(index)
+            fill.color = Tokens.COLOR.card
+            canvas.drawRoundRect(
+                x,
+                Tokens.GRID.pillTop,
+                x + Tokens.GRID.cardW,
+                Tokens.GRID.pillTop + Tokens.GRID.pillH,
+                Tokens.GRID.radius,
+                Tokens.GRID.radius,
+                fill,
+            )
+            drawTextCenteredInBox(
+                canvas,
+                label,
+                x + Tokens.GRID.cardW / 2f,
+                Tokens.GRID.pillTop,
+                Tokens.GRID.pillH,
+                Tokens.TYPE.pill,
+                heavy,
+                Tokens.COLOR.ink,
+            )
+        }
+        return bitmap
+    }
+
+    private fun recordCard(card: Tokens.RunCard, lifted: Boolean): Bitmap {
+        val bitmap = Bitmap.createBitmap(
+            ceil(Tokens.GRID.cardW).toInt(),
+            ceil(Tokens.GRID.cardH).toInt(),
+            Bitmap.Config.ARGB_8888,
+        )
+        drawCard(Canvas(bitmap), 0f, 0f, card, lifted)
+        return bitmap
+    }
+
     private fun recordPaper(): Bitmap {
         val receipt = Tokens.RECEIPT
         val width = (Tokens.SLOT.paperX1 - Tokens.SLOT.paperX0).roundToInt()
@@ -542,6 +629,34 @@ internal class ReceiptPrinterArtwork(context: Context) {
         stroke.color = Tokens.COLOR.axis
         stroke.strokeWidth = chart.baseW
         canvas.drawLine(left, localY(chart.base), right, localY(chart.base), stroke)
+
+        fun paceY(pace: Float): Float {
+            val progress = (pace - Tokens.PACE.fast) / (Tokens.PACE.slow - Tokens.PACE.fast)
+            return localY(chart.top) + 6f + progress * (localY(chart.base) - localY(chart.top) - 12f)
+        }
+        paceAverage.color = Tokens.COLOR.inkSoft
+        paceAverage.strokeWidth = 0.8f
+        canvas.drawLine(left, paceY(Tokens.PACE.avg), right, paceY(Tokens.PACE.avg), paceAverage)
+        val pacePath = Path()
+        repeat(Tokens.PACE.samples) { index ->
+            val km = index.toFloat() / (Tokens.PACE.samples - 1) * Tokens.PACE.km
+            val settle = 15f * exp((-km / 0.35f).toDouble()).toFloat()
+            val rise = 7f * exp((-((km - 1.9f) * (km - 1.9f)) / 0.05f).toDouble()).toFloat() +
+                6f * exp((-((km - 3.6f) * (km - 3.6f)) / 0.04f).toDouble()).toFloat()
+            val unit = ((km - 4.6f) / 1.4f).coerceIn(0f, 1f)
+            val kick = -20f * unit * unit * (3f - 2f * unit)
+            val breath = 2.2f * sin(index * 1.3f) + 1.4f * sin(index * 0.55f + 0.7f)
+            val pace = 326f + settle + rise + kick + breath
+            val x = left + (right - left) * index / (Tokens.PACE.samples - 1)
+            if (index == 0) pacePath.moveTo(x, paceY(pace)) else pacePath.lineTo(x, paceY(pace))
+        }
+        stroke.color = Tokens.COLOR.ink
+        stroke.strokeWidth = 1.6f
+        stroke.strokeJoin = Paint.Join.ROUND
+        stroke.strokeCap = Paint.Cap.ROUND
+        canvas.drawPath(pacePath, stroke)
+        stroke.strokeJoin = Paint.Join.MITER
+        stroke.strokeCap = Paint.Cap.BUTT
     }
 
     private fun drawReceiptLogo(canvas: Canvas, paperWidth: Float) {
@@ -652,14 +767,22 @@ internal class ReceiptPrinterArtwork(context: Context) {
         val width = (Tokens.SLOT.paperX1 - Tokens.SLOT.paperX0).roundToInt()
         val height = (Tokens.RECEIPT.length - Tokens.RECEIPT.edge.depth).roundToInt()
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        // Android Canvas lacks Skia FractalNoise. This fixed two-octave 0.9-frequency grain is the documented platform difference.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val rendered = runCatching {
+                val shader = RuntimeShader(PAPER_GRAIN_SHADER)
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = shader }
+                Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }.isSuccess
+            if (rendered) return bitmap
+        }
+        // API 26–32 fallback: the same seeded two-octave field is drawn once into the cached paper bitmap.
         for (y in 0 until height) {
             for (x in 0 until width) {
-                if (fractalNoise(x * Tokens.PAPER.grainFrequency, y * Tokens.PAPER.grainFrequency) >
-                    Tokens.PAPER.grainThreshold
-                ) {
-                    bitmap.setPixel(x, y, Tokens.COLOR.paperShade)
-                }
+                val grain = (fractalNoise(
+                    x * Tokens.PAPER.grainFrequency,
+                    y * Tokens.PAPER.grainFrequency,
+                ) * 255f).roundToInt().coerceIn(0, 255)
+                bitmap.setPixel(x, y, (13 shl 24) or (grain shl 16) or (grain shl 8) or grain)
             }
         }
         return bitmap

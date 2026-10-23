@@ -1,281 +1,173 @@
 package com.ngocdevv.nativecook.blocks.gestures.tiltswipeactions
 
-import android.os.Build
+import android.animation.ValueAnimator
 import android.view.HapticFeedbackConstants
-import android.view.View
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
-import com.ngocdevv.nativecook.shared.rememberReducedMotion
-import kotlin.math.atan2
-import kotlin.math.hypot
+import kotlin.math.abs
+
+/** The reference loop is exactly 10 seconds and returns to the untouched ledger. */
+const val LOOP = 10f
 
 /**
- * The flat app drawn through one affine matrix, as TiltSwipeActions.tsx does with `matrix`:
- * screen = M * flat + t. Compose layers have no skew, so M is split (SVD) into a rotation, a
- * scale and a rotation, which two nested layers apply; touches still map back through them.
- */
-private object TiltPlane {
-    private val a = TiltView.scale * TiltView.u[0]
-    private val b = TiltView.scale * TiltView.u[1]
-    private val c = TiltView.scale * TiltView.v[0]
-    private val d = TiltView.scale * TiltView.v[1]
-    val translateX = TiltView.scale * (TiltView.p0[0] - TiltView.cropX - FLAT_HEIGHT * TiltView.v[0])
-    val translateY = TiltView.scale * (TiltView.p0[1] - FLAT_HEIGHT * TiltView.v[1])
-
-    // M = [[a, c], [b, d]] = Rot(outer) * diag(scaleX, scaleY) * Rot(inner)
-    val scaleX: Float
-    val scaleY: Float
-    val outerDegrees: Float
-    val innerDegrees: Float
-
-    init {
-        val e = (a + d) / 2f
-        val f = (a - d) / 2f
-        val g = (b + c) / 2f
-        val h = (b - c) / 2f
-        val q = hypot(e, h)
-        val r = hypot(f, g)
-        scaleX = q + r
-        scaleY = q - r
-        val a1 = atan2(g, f)
-        val a2 = atan2(h, e)
-        innerDegrees = Math.toDegrees(((a2 - a1) / 2f).toDouble()).toFloat()
-        outerDegrees = Math.toDegrees(((a2 + a1) / 2f).toDouble()).toFloat()
-    }
-}
-
-/**
- * "Latest spending": swipe a row left to flag or delete it; it leans with your finger.
- * With [autoPlay] a scripted finger shows the effect and a real touch takes over.
+ * Private Ledger: pull right through person detents to split a bill; swipe left for Flag and
+ * Delete. The renderer uses the same dp geometry and bundled OFL font instances as the approved
+ * React Native block. Static paper and card layers are rasterised once for each viewport size.
  */
 @Composable
-fun TiltSwipeActions(
-    autoPlay: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    val reduceMotion = rememberReducedMotion()
+fun TiltSwipeActions(modifier: Modifier = Modifier, autoPlay: Boolean = false) {
+    val context = LocalContext.current
     val view = LocalView.current
-    val scope = rememberCoroutineScope()
-    val screen = remember(autoPlay, reduceMotion, view) {
-        TiltScreen(autoPlay, reduceMotion, scope) { kind -> performHaptic(view, kind) }
-    }
-    val demo = remember(screen) { TiltDemoScript(screen, autoPlay).also { screen.demo = it } }
-    DisposableEffect(screen) { onDispose { screen.dispose() } }
+    val density = LocalDensity.current
+    val reducedMotion = remember { !ValueAnimator.areAnimatorsEnabled() }
+    val controller = remember(autoPlay, reducedMotion) { TiltSwipeActionsController(autoPlay, reducedMotion) }
+    val painter = remember { TiltSwipeActionsPainter(context.assets) }
 
-    // One frame loop: the script, then every running animation.
-    LaunchedEffect(screen, demo) {
-        var previous = 0L
+    LaunchedEffect(controller, autoPlay, reducedMotion) {
+        if (!autoPlay || reducedMotion) return@LaunchedEffect
+        var previous = withFrameNanos { it }
         while (true) {
             withFrameNanos { now ->
-                val dt = if (previous == 0L) {
-                    0.016f
-                } else {
-                    ((now - previous) / 1_000_000_000f).coerceAtMost(MAX_FRAME_DELTA_SECONDS)
-                }
+                controller.step((now - previous) / 1_000_000_000f)
                 previous = now
-                demo.tick(dt)
-                screen.clock.tick(dt)
+            }
+        }
+    }
+    // With autoplay off (including Reduce Motion), only a live Undo slip owns a frame clock.
+    // The clock stops as soon as its four-second window expires.
+    LaunchedEffect(controller.toast, autoPlay, reducedMotion) {
+        if ((autoPlay && !reducedMotion) || controller.toast == null) return@LaunchedEffect
+        var previous = withFrameNanos { it }
+        while (controller.toast != null) {
+            withFrameNanos { now ->
+                controller.step((now - previous) / 1_000_000_000f)
+                previous = now
             }
         }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(TiltColor.gradient[0])
-            .background(Brush.linearGradient(TiltColor.desk))
-            // Any real touch stops the autoplay (onTouchStart / onTouchEnd of the root view).
-            .pointerInput(demo) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        for (change in event.changes) {
-                            if (change.changedToDownIgnoreConsumed()) {
-                                demo.touchStart()
-                            } else if (change.changedToUpIgnoreConsumed()) {
-                                demo.touchEnd()
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
+        val scene = remember(maxWidth, maxHeight, bottom) {
+            TiltSwipeActionsScene(maxWidth.value, maxHeight.value, 0f, bottom)
+        }
+        val scale = density.density
+
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = "Private account. Latest spending. Swipe a transaction right to split it, or left for Flag and Delete."
+                }
+                .pointerInput(controller, scene, scale) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val start = down.position / scale
+                        val row = controller.rowForSlot(scene.rowAt(start.y))
+                        val tracker = VelocityTracker()
+                        tracker.addPointerInputChange(down)
+                        var lastTarget = if (row in controller.rows.indices) controller.rows[row].target else 1
+                        var armed = false
+                        var last = start
+                        var cancelled = false
+                        controller.touchStart(row)
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            tracker.addPointerInputChange(change)
+                            last = change.position / scale
+                            val dx = last.x - start.x
+                            val dy = last.y - start.y
+                            if (change.pressed) {
+                                if (!cancelled && abs(dy) > 10f && abs(dy) > abs(dx)) {
+                                    cancelled = true
+                                    controller.cancelTouch()
+                                } else if (!cancelled && row in controller.rows.indices && abs(dx) >= 1f) {
+                                    controller.drag(row, dx)
+                                    val state = controller.rows[row]
+                                    if (state.target != lastTarget) {
+                                        lastTarget = state.target
+                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    }
+                                    if (state.armed && !armed) {
+                                        armed = true
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    } else if (!state.armed) {
+                                        armed = false
+                                    }
+                                    change.consume()
+                                }
+                                continue
                             }
+
+                            if (cancelled) {
+                                controller.cancelTouch()
+                            } else if (row in controller.rows.indices) {
+                                val velocity = tracker.calculateVelocity().x / scale
+                                val target = controller.rows[row].target
+                                val wasArmed = controller.rows[row].armed
+                                controller.touchEnd(row, dx, velocity, last.x - 16f)
+                                if ((dx > 0f && target >= 2) || wasArmed) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                }
+                            } else {
+                                handleTap(controller, scene, last, view)
+                                controller.cancelTouch()
+                            }
+                            event.changes.forEach(PointerInputChange::consume)
+                            break
                         }
                     }
-                }
-            },
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .wrapContentSize(Alignment.TopStart, unbounded = true)
-                .graphicsLayer {
-                    transformOrigin = TransformOrigin(0f, 0f)
-                    scaleX = TiltPlane.scaleX
-                    scaleY = TiltPlane.scaleY
-                    rotationZ = TiltPlane.outerDegrees
-                    translationX = TiltPlane.translateX * density
-                    translationY = TiltPlane.translateY * density
-                }
-                .size(PLANE_W.dp, PLANE_H.dp)
-                .graphicsLayer {
-                    transformOrigin = TransformOrigin(0f, 0f)
-                    rotationZ = TiltPlane.innerDegrees
-                    clip = true
-                    shape = RoundedCornerShape(TiltView.screenRadius.dp)
-                }
-                .drawBehind {
-                    drawRect(
-                        Brush.verticalGradient(
-                            TiltColor.gradientStops[0] to TiltColor.gradient[0],
-                            TiltColor.gradientStops[1] to TiltColor.gradient[1],
-                            TiltColor.gradientStops[2] to TiltColor.gradient[2],
-                            TiltColor.gradientStops[3] to TiltColor.gradient[3],
-                            TiltColor.gradientStops[4] to TiltColor.gradient[4],
-                            TiltColor.gradientStops[5] to TiltColor.gradient[5],
-                            TiltColor.gradientStops[6] to TiltColor.gradient[6],
-                            startY = 0f,
-                            endY = size.height,
-                        ),
-                    )
                 },
         ) {
-            PlaneContent(screen, demo, reduceMotion)
+            controller.tick
+            drawIntoCanvas { target -> painter.draw(target.nativeCanvas, scene, scale, controller) }
         }
     }
 }
-
-/** Everything inside the plane, in the flat app's coordinates. */
-@Composable
-private fun PlaneContent(screen: TiltScreen, demo: TiltDemoScript, reduceMotion: Boolean) {
-    val spendingShown = screen.tab == 2
-    // Overview (the cards) and Spending (the list): the source cross-fades and slides the content.
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                alpha = 1f - screen.tabShown.value
-                translationY = (screen.tabShown.value * -TiltTiming.tabSlide).dp.toPx()
-            },
-    ) { CardsView(screen) }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                alpha = screen.tabShown.value * (
-                    1f - TiltDetail.menuFade * screen.menuProgress.value.coerceAtMost(1f)
-                    )
-                translationY = (
-                    (1f - screen.tabShown.value) * TiltTiming.tabSlide -
-                        TiltDetail.menuLift * screen.menuProgress.value
-                    ).dp.toPx()
-            },
-    ) {
-        BalanceCard(screen)
-        SectionTitle()
-        Column(
-            Modifier
-                .at(0f, TiltFlat.rowsTop)
-                .width(FLAT_WIDTH.dp)
-                .height((TiltFlat.Panel.top - 8f - TiltFlat.rowsTop).dp)
-                .clipToBounds(),
-        ) {
-            for (row in screen.rows) {
-                key(row.item.key) {
-                    TiltSwipeRow(
-                        screen = screen,
-                        row = row,
-                        flagged = row.item.key in screen.flagged,
-                        interactive = spendingShown,
-                        reduceMotion = reduceMotion,
-                    )
-                }
-            }
-        }
+private fun handleTap(
+    controller: TiltSwipeActionsController,
+    scene: TiltSwipeActionsScene,
+    point: Offset,
+    view: android.view.View,
+) {
+    if (controller.menuOpen) {
+        controller.closeMenu()
+        return
     }
-    UndoPill(screen, reduceMotion)
-    TabPanel(screen, reduceMotion)
-    if (screen.autoPlay) Ghost(demo)
-}
-
-@Composable
-private fun SectionTitle() {
-    TiltLabel(
-        text = "Latest spending",
-        style = TiltType.section,
-        color = TiltColor.title,
-        modifier = Modifier
-            .at(TiltFlat.Section.left, TiltFlat.Section.centreY - TiltType.section.lineHeight / 2f)
-            .semantics { heading() },
-    )
-}
-
-/** The demo's finger. */
-@Composable
-private fun Ghost(demo: TiltDemoScript) {
-    Box(
-        modifier = Modifier
-            .size(TiltLayout.finger.dp)
-            .graphicsLayer {
-                alpha = demo.ghostO.value
-                translationX = (demo.ghostX.value - TiltLayout.finger / 2f).dp.toPx()
-                translationY = (demo.ghostY.value - TiltLayout.finger / 2f).dp.toPx()
-                val scale = 1f - TiltDetail.fingerPressScale * demo.ghostPress.value
-                scaleX = scale
-                scaleY = scale
-            }
-            .drawBehind {
-                drawCircle(TiltColor.finger)
-                val hairline = 1.dp.toPx()
-                drawCircle(
-                    TiltColor.fingerEdge,
-                    radius = size.minDimension / 2f - hairline / 2f,
-                    style = Stroke(hairline),
-                )
-            },
-    )
-}
-
-/** swipe-haptics.ts: light, discrete moments only. */
-private fun performHaptic(view: View, kind: SwipeHaptic) {
-    val constant = when (kind) {
-        SwipeHaptic.Open -> HapticFeedbackConstants.CLOCK_TICK
-        SwipeHaptic.Arm -> HapticFeedbackConstants.CONTEXT_CLICK
-        SwipeHaptic.Disarm -> HapticFeedbackConstants.CLOCK_TICK
-        SwipeHaptic.Commit -> HapticFeedbackConstants.LONG_PRESS
-        SwipeHaptic.Undo ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                HapticFeedbackConstants.CONFIRM
-            } else {
-                HapticFeedbackConstants.CONTEXT_CLICK
-            }
-        SwipeHaptic.Tap -> HapticFeedbackConstants.VIRTUAL_KEY
+    val toast = controller.scriptToast()
+    if (toast != null && point.y in scene.toastTop..(scene.toastTop + 56f) && point.x >= scene.width - 120f) {
+        controller.undo()
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        return
     }
-    view.performHapticFeedback(constant)
+    val fabCenter = Offset(scene.fabLeft + 24f, scene.fabTop + 25f)
+    if ((point - fabCenter).getDistance() <= 32f) {
+        controller.toggleMenu()
+        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+    }
 }

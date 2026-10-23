@@ -140,19 +140,18 @@ internal object STACK {
 
 internal const val FADE_MS = 200f // Reduce Motion: pages cross-fade
 
-// Preserve the RN source value for parity; the approved interaction behavior resumes after 2 s.
-internal const val IDLE_RESUME_MS = 3500f
-internal const val TOUCH_RESUME_MS = 2000f
+/** A touch pauses autoplay; the scripted loop resumes after two idle seconds. */
+internal const val IDLE_RESUME_MS = 2000f
 
 /** The autoplay idle nudge on the title page after the riffle, ms on the loop. */
-internal const val NUDGE_AT = 12200f
+internal const val NUDGE_AT = 10001f
 
 /**
- * Autoplay: a scripted finger through the same input as a real one. Times in ms on a 14 s loop.
+ * Autoplay: a scripted finger through the same input as a real one. Times in ms on a 10 s loop.
  * Each stroke: down at `from`, moves through `via` to `to`, lifts at t1 with the path's speed.
  */
-internal const val LOOP = 14f // seconds
-internal const val LOOP_MS = 14000f
+internal const val LOOP = 10f // seconds
+internal const val LOOP_MS = 10000f
 
 internal class ScriptStroke(
     val t0: Float,
@@ -164,13 +163,13 @@ internal class ScriptStroke(
 
 internal val SCRIPT = arrayOf(
     // A hesitant peek at the corner, let go: the page falls back.
-    ScriptStroke(900f, 2500f, floatArrayOf(384f, 64f), floatArrayOf(150f, 330f), floatArrayOf(310f, 170f)),
+    ScriptStroke(600f, 1900f, floatArrayOf(384f, 64f), floatArrayOf(150f, 330f), floatArrayOf(310f, 170f)),
     // Title page over to the preface: a short drag and a flick.
-    ScriptStroke(3200f, 3700f, floatArrayOf(386f, 540f), floatArrayOf(300f, 520f), floatArrayOf(150f, 480f)),
-    ScriptStroke(5300f, 5800f, floatArrayOf(388f, 300f), floatArrayOf(300f, 310f), floatArrayOf(160f, 340f)),
-    ScriptStroke(7400f, 7900f, floatArrayOf(388f, 690f), floatArrayOf(300f, 670f), floatArrayOf(160f, 610f)),
+    ScriptStroke(2500f, 3000f, floatArrayOf(386f, 540f), floatArrayOf(300f, 520f), floatArrayOf(150f, 480f)),
+    ScriptStroke(4000f, 4500f, floatArrayOf(388f, 300f), floatArrayOf(300f, 310f), floatArrayOf(160f, 340f)),
+    ScriptStroke(5500f, 6000f, floatArrayOf(388f, 690f), floatArrayOf(300f, 670f), floatArrayOf(160f, 610f)),
     // A fast flick right from the cover: the riffle turns every page back to the title.
-    ScriptStroke(9900f, 10180f, floatArrayOf(60f, 450f), floatArrayOf(120f, 446f), floatArrayOf(260f, 438f)),
+    ScriptStroke(7300f, 7580f, floatArrayOf(60f, 450f), floatArrayOf(120f, 446f), floatArrayOf(260f, 438f)),
 )
 
 /** Ease in and out with the site's curve: twinkle and foil sweep. */

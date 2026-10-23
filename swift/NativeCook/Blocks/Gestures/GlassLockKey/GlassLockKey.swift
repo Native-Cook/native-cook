@@ -1,12 +1,8 @@
 import SwiftUI
 
-/// The interactive upgrade built on the approved, registered Blender layers.
-/// The fixed-step simulation owns time and gesture state; this view owns only
-/// the full-screen coordinate space and SwiftUI lifecycle.
 @MainActor
 struct GlassLockKey: View {
-    /// React Native `G_LOOP_MS / 1000`.
-    static let loop: Double = 12
+    static let loop: Double = 10
 
     let autoPlay: Bool
 
@@ -15,56 +11,65 @@ struct GlassLockKey: View {
 
     init(autoPlay: Bool = false) {
         self.autoPlay = autoPlay
-        _simulation = State(
-            initialValue: GlassLockKeySimulation(
-                width: 402,
-                reducedMotion: false,
-                autoPlay: autoPlay
-            )
-        )
+        _simulation = State(initialValue: GlassLockKeySimulation(
+            width: GlassLockKeyConstants.stageWidth,
+            height: 852,
+            reducedMotion: false,
+            autoPlay: autoPlay
+        ))
     }
 
     var body: some View {
         GeometryReader { safeAreaProxy in
             GeometryReader { proxy in
-                let size = proxy.size
-                let state = simulation.state
-
                 GlassLockKeyScene(
-                    state: state,
-                    size: size,
+                    state: simulation.state,
+                    geometry: simulation.geometry,
+                    size: proxy.size,
                     safeAreaInsets: safeAreaProxy.safeAreaInsets,
                     reducedMotion: reducedMotion,
                     send: simulation.send,
                     command: simulation.command
                 )
-                .frame(width: size.width, height: size.height, alignment: .topLeading)
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
                 .onAppear {
-                    GlassLockKeySceneAssets.assertAllLoaded()
+                    GlassLockKeyAssets.registerFonts()
                     simulation.update(
-                        width: size.width,
+                        width: proxy.size.width,
+                        height: proxy.size.height,
                         reducedMotion: reducedMotion,
                         autoPlay: autoPlay
                     )
                     simulation.start()
                 }
                 .onDisappear(perform: simulation.stop)
-                .onChange(of: size) { _, next in
+                .onChange(of: proxy.size) { _, size in
                     simulation.update(
-                        width: next.width,
+                        width: size.width,
+                        height: size.height,
                         reducedMotion: reducedMotion,
                         autoPlay: autoPlay
                     )
                 }
-            .onChange(of: reducedMotion) { _, next in
-                simulation.update(width: size.width, reducedMotion: next, autoPlay: autoPlay)
-            }
-            .onChange(of: autoPlay) { _, next in
-                simulation.update(width: size.width, reducedMotion: reducedMotion, autoPlay: next)
-            }
+                .onChange(of: reducedMotion) { _, reduced in
+                    simulation.update(
+                        width: proxy.size.width,
+                        height: proxy.size.height,
+                        reducedMotion: reduced,
+                        autoPlay: autoPlay
+                    )
+                }
+                .onChange(of: autoPlay) { _, playing in
+                    simulation.update(
+                        width: proxy.size.width,
+                        height: proxy.size.height,
+                        reducedMotion: reducedMotion,
+                        autoPlay: playing
+                    )
+                }
             }
             .ignoresSafeArea()
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
     }
 }

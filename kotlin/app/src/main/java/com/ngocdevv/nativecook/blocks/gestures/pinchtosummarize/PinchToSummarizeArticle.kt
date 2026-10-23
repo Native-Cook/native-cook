@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.vector.PathParser
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import com.ngocdevv.nativecook.R
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.flow.collectLatest
 
 /** The full article keeps its layout while the outer layer crops and transforms it. */
 @Composable
@@ -69,6 +71,11 @@ internal fun PinchToSummarizeArticle(stage: PtsStage, insetBottom: Float, state:
     val reading = state.mode == PtsMode.Reading
     LaunchedEffect(state.isScrollLocked) {
         if (state.isScrollLocked) scroll.stopScroll()
+    }
+    LaunchedEffect(scroll, state) {
+        snapshotFlow { state.readScroll.value }.collectLatest { y ->
+            scroll.scrollTo(y.toInt().coerceAtLeast(0))
+        }
     }
     Box(
         Modifier.fillMaxSize().graphicsLayer {
@@ -109,7 +116,7 @@ internal fun PinchToSummarizeArticle(stage: PtsStage, insetBottom: Float, state:
             ) {
                 PtsMasthead()
                 PtsArticleHero(stage.width)
-                PtsArticleBody()
+                PtsArticleBody(state)
             }
             Box(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -178,20 +185,40 @@ private fun PtsArticleHero(stageWidth: Float) {
 }
 
 @Composable
-private fun PtsArticleBody() {
+private fun PtsArticleBody(state: PtsState) {
     Column(Modifier.fillMaxWidth().padding(start = PtsLayout.panelPadX.dp, end = PtsLayout.panelPadX.dp, top = PtsLayout.bodyGap.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(PtsCopy.section, style = PtsType.section)
             Spacer(Modifier.weight(1f).height((1f / LocalDensity.current.density).dp).background(PtsColor.rule))
         }
         Spacer(Modifier.height(16.dp))
-        PtsCopy.body.forEachIndexed { index, paragraph ->
-            val article = if (index == 0) buildAnnotatedString {
-                val words = paragraph.split(' ')
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)) { append(words.take(3).joinToString(" ").uppercase()) }
-                append(" ${words.drop(3).joinToString(" ")}")
-            } else buildAnnotatedString { append(paragraph) }
+        var markerIndex = 0
+        PtsCopy.body.forEach { paragraph ->
+            val lock = markerIndex
+            val isMarked = paragraph.leadIn != null || paragraph.key != null
+            val markerProgress = ptsClamp01(state.mark.value - lock) * state.markAlpha.value
+            val muted = ptsMix(1f, .38f, state.dim.value / PtsMark.dimMax)
+            val article = buildAnnotatedString {
+                paragraph.leadIn?.let { lead ->
+                    withStyle(
+                        SpanStyle(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = .6.sp,
+                            background = PtsColor.marker.copy(alpha = markerProgress),
+                        ),
+                    ) { append(lead) }
+                }
+                paragraph.key?.let { key ->
+                    withStyle(SpanStyle(background = PtsColor.marker.copy(alpha = markerProgress))) {
+                        append(key)
+                    }
+                }
+                withStyle(SpanStyle(color = PtsColor.ink.copy(alpha = muted))) {
+                    append(paragraph.rest)
+                }
+            }
             Text(article, style = PtsType.body, modifier = Modifier.padding(bottom = 16.dp))
+            if (isMarked) markerIndex += 1
         }
     }
 }

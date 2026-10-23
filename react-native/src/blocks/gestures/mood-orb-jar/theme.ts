@@ -7,40 +7,44 @@ export const STAGE_WIDTH = 402;
 export const REPLICA = false;
 
 export const COLORS = {
-  // Measured from the source frame f021.
-  bg: '#F4FDFE', // the source's page fades from near white to pale blue
-  bgBottom: '#E3F0FB',
-  card: '#F7FCFF', // the source's cards are a faint blue-white
-  label: '#3A3A3F', // picker labels: dark grey in the source
-  secondary: '#8F9298', // entry tags and time
-  cardShadow: 'rgba(60, 100, 160, 0.08)',
-  ink: '#16233A',
-  mute: 'rgba(22, 35, 58, 0.55)',
-  faint: 'rgba(22, 35, 58, 0.35)',
-  glass: 'rgba(255, 255, 255, 0.38)',
-  glassBack: 'rgba(214, 230, 246, 0.55)',
-  glassEdge: 'rgba(255, 255, 255, 0.95)',
-  glassShade: 'rgba(110, 150, 200, 0.28)',
-  floorShadow: 'rgba(70, 110, 170, 0.18)',
-  lid: ['#8E949C', '#D8DDE3', '#F7F8FA', '#B4BAC2', '#7C828A'],
-  lidStops: [0, 0.2, 0.42, 0.75, 1],
-  lidRidge: 'rgba(60, 66, 74, 0.25)',
+  // Warm paper, lit from the upper left; the jar stands on it.
+  bg: '#F3EFE8',
+  bgBottom: '#E7E0D3',
+  card: '#FBF9F5',
+  cardEdge: 'rgba(60, 48, 30, 0.07)',
+  label: '#4A4338',
+  secondary: '#8A8173',
+  cardShadow: 'rgba(80, 60, 30, 0.10)',
+  ink: '#2A251E',
+  mute: 'rgba(42, 37, 30, 0.58)',
+  faint: 'rgba(42, 37, 30, 0.34)',
+  // Glass: clear with a faint green-grey body, as soda-lime glass reads against paper.
+  glassBody: 'rgba(196, 210, 204, 0.16)',
+  glassBack: 'rgba(150, 170, 165, 0.22)',
+  glassEdge: 'rgba(92, 112, 108, 0.42)',
+  glassEdgeSoft: 'rgba(92, 112, 108, 0.16)',
+  glassLight: 'rgba(255, 255, 255, 0.9)',
+  floorShadow: 'rgba(70, 55, 30, 0.22)',
+  caustic: 'rgba(255, 236, 196, 0.75)',
+  lid: ['#6E6A63', '#C9C4BA', '#F1EEE8', '#A9A398', '#5E5A53'],
+  lidStops: [0, 0.22, 0.45, 0.78, 1],
+  lidRidge: 'rgba(40, 34, 26, 0.22)',
   print: '#0E0E10',
-  danger: '#F4545E',
+  danger: '#B9563E',
   dangerInk: '#FFFFFF',
-  dotsBg: '#EEF1F5',
-  sheetLine: 'rgba(22, 35, 58, 0.1)',
-  dotsInk: '#5B616B',
-  aim: 'rgba(22, 35, 58, 0.18)',
+  dotsBg: '#F1EDE6',
+  sheetLine: 'rgba(42, 37, 30, 0.1)',
+  dotsInk: '#5E574C',
+  aim: 'rgba(42, 37, 30, 0.22)',
 };
 
-// Moods, from awful to great, as in the source: base, light, deep.
+// Moods, from awful to great, in a calm range (dusk, rain, sand, sage, apricot): base, light, deep.
 export const MOODS = [
-  { name: 'Awful', base: '#A24CE6', light: '#E0B0FF', deep: '#6A22A8', tags: 'Angry, Overwhelmed' },
-  { name: 'Bad', base: '#5E7DF6', light: '#BCCBFF', deep: '#2F4CC2', tags: 'Disgusted, Friends' },
-  { name: 'Neutral', base: '#3FC6E6', light: '#B4F0FF', deep: '#1689A8', tags: 'Work, Tired' },
-  { name: 'Good', base: '#57D27A', light: '#C2F5CF', deep: '#22964A', tags: 'Calm, Partner' },
-  { name: 'Great', base: '#F4545E', light: '#FFC2B8', deep: '#B8243A', tags: 'Family, Sunshine' },
+  { name: 'Awful', base: '#6B6F8C', light: '#C3C5DA', deep: '#363954', tags: 'Overwhelmed, Late night' },
+  { name: 'Bad', base: '#5F86A8', light: '#BCD2E4', deep: '#2F4F6B', tags: 'Tired, Commute' },
+  { name: 'Neutral', base: '#B5A486', light: '#EDE3CF', deep: '#7A6B50', tags: 'Work, Errands' },
+  { name: 'Good', base: '#7EA67C', light: '#CFE2CA', deep: '#46694A', tags: 'Calm, Long walk' },
+  { name: 'Great', base: '#E0965A', light: '#F8D4AE', deep: '#A55B26', tags: 'Family, Sunshine' },
 ];
 
 // Spacing, measured on the source: its cards sit 18 pt apart with a 12 pt inner pad, the avatar 25 pt from a card's
@@ -78,13 +82,13 @@ export const LAYOUT = {
   slotLabelH: 63, // the label box below each orb (bottom-aligned)
   labelSize: 13,
   cardRadius: 16,
-  entriesTop: 512, // below the header
-  entryHeight: 106, // the source's entry cards are 106 pt tall
+  entriesTop: 508, // below the header
+  entryHeight: 64, // one row: the orb, the mood and its note on one line
   sectionH: 26, // upgrade: the 'Today' header above the list
   rowHeight: 68, // upgrade: one grouped list, denser rows
   hairlineInset: 70, // separators start at the text, not the edge
-  entryGap: 18, // SPACE.cardGap
-  entryOrb: 22,
+  entryGap: 8,
+  entryOrb: 18,
   orb: 25, // radius in the jar (the source's orbs are ~50 pt across)
 };
 
@@ -94,6 +98,8 @@ export const PILE_MOODS = [3, 0, 1, 2, 0, 1, 2, 4, 0, 1, 2, 0, 3, 2, 0, 3];
 
 export const COPY = {
   today: 'Today',
+  title: 'Mood jar',
+  prompt: 'How are you feeling?',
   entriesWord: 'entries',
   month: 'OCTOBER',
   replicaEntry: { tags: 'Ashamed, Partner', time: '4:21 PM' }, // the source's new entry after the drop
@@ -104,8 +110,8 @@ export const COPY = {
   undo: 'Undo',
   add: (mood: string) => `Add ${mood}`,
   entries: [
-    { mood: 1, tags: 'Disgusted, Friends', time: '4:20 PM' },
-    { mood: 2, tags: 'Work, Tired', time: '1:05 PM' },
+    { mood: 3, tags: 'Calm, Long walk', time: '4:20 PM' },
+    { mood: 2, tags: 'Work, Errands', time: '1:05 PM' },
   ],
   now: 'Just now',
 };

@@ -2,6 +2,7 @@ package com.ngocdevv.nativecook.blocks.gestures.savetocollection
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -9,400 +10,549 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
-import androidx.compose.ui.graphics.toArgb
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.sin
+import kotlin.math.roundToInt
 
-class SaveToCollectionRenderer(
-    private val assets: Map<Int, Bitmap>,
+internal class SaveToCollectionRenderer(
+    private val assets: SaveToCollectionAssets,
 ) {
-    private val tokens = SaveToCollectionTokens
-    private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
     }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = tokens.ink.toArgb()
-        textAlign = Paint.Align.CENTER
-        textSize = tokens.countFontSize
-        typeface = Typeface.create("sans-serif", Typeface.BOLD)
-    }
-    private val bookmarkPath = makeBookmarkPath()
-    private val streamDrops = saveStreamDrops()
+    private val image = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
 
-    fun draw(canvas: Canvas, engine: SaveToCollectionEngine) {
-        drawCards(canvas, engine)
-        drawStream(canvas, engine)
-        drawBookmark(canvas, engine)
-        drawFlights(canvas, engine)
-        drawDraggedCard(canvas, engine)
+    fun renderStaticPage(layout: SaveToCollectionLayout, density: Float): Bitmap {
+        val bitmap = bitmap(layout.width, layout.height, density)
+        val canvas = Canvas(bitmap)
+        canvas.scale(density, density)
+        canvas.drawColor(SaveToCollectionTokens.Page)
+        drawHeader(canvas, layout)
+        drawChips(canvas, layout)
+        layout.tiles.forEachIndexed { index, frame ->
+            drawPhoto(canvas, assets.photos[index], frame, SaveToCollectionTokens.Radius, 1f)
+        }
+        drawBottomFade(canvas, layout)
+        drawTabs(canvas, layout)
+        return bitmap
+    }
+
+    fun renderSheet(layout: SaveToCollectionLayout, density: Float, fresh: Boolean): Bitmap {
+        val panelHeight = layout.height - layout.sheetY + 40f
+        val bitmap = bitmap(layout.width, panelHeight, density)
+        val canvas = Canvas(bitmap)
+        canvas.scale(density, density)
+        drawGlass(canvas, RectF(0f, 0f, layout.width, panelHeight), SaveToCollectionTokens.SheetRadius, true)
+        setFill(0x4DFFFFFF)
+        canvas.drawRoundRect(RectF(layout.width / 2f - 18f, 8f, layout.width / 2f + 18f, 13f), 2.5f, 2.5f, fill)
+
+        drawText(canvas, SaveToCollectionTokens.CollectionName, 16f, 29f, 22f, assets.semibold, SaveToCollectionTokens.Ink)
+        val meta = if (fresh) "13 places · Updated just now" else "12 places · Updated 2 days ago"
+        drawText(canvas, meta, 16f, 59f, 13f, assets.regular, SaveToCollectionTokens.Muted)
+        drawGlass(canvas, RectF(layout.width - 52f, 29f, layout.width - 16f, 65f), 18f, false)
+        drawGlyph(canvas, SaveGlyph.Close, layout.width - 34f, 47f, 18f, SaveToCollectionTokens.Ink, false, 2f)
+
+        SaveToCollectionTokens.CollectionBefore.forEachIndexed { index, photo ->
+            drawCollectionTile(canvas, photo, if (fresh) index + 1 else index, layout, 97f, false)
+        }
+        return bitmap
+    }
+
+    fun draw(
+        canvas: Canvas,
+        engine: SaveToCollectionEngine,
+        sheetBefore: Bitmap,
+        sheetFresh: Bitmap,
+    ) {
+        drawTileState(canvas, engine)
+        drawBar(canvas, engine)
+        drawToast(canvas, engine)
+        drawCarried(canvas, engine)
+        drawSheet(canvas, engine, sheetBefore, sheetFresh)
         drawFinger(canvas, engine)
     }
 
-    private fun drawCards(canvas: Canvas, engine: SaveToCollectionEngine) {
-        val visible = engine.visibleIndices()
-        visible.forEachIndexed { order, index ->
-            val card = tokens.cards[index]
-            val rect = engine.cardRect(index)
-            val deal = engine.dealProgress(order)
-            val phase = index * tokens.cardPhaseStep
-            val amplitude = tokens.saveFloatAmp * (1f + card.blur / tokens.cardBlurDepthDivisor)
-            val floatY = if (engine.reducedMotion) {
-                0f
+    private fun drawHeader(canvas: Canvas, layout: SaveToCollectionLayout) {
+        val centerY = layout.safeTop + SaveToCollectionTokens.TitleHeight / 2f
+        drawTextCenteredVertically(
+            canvas,
+            "Discover",
+            SaveToCollectionTokens.Edge,
+            centerY,
+            28f,
+            assets.semibold,
+            SaveToCollectionTokens.Ink,
+        )
+        val avatar = RectF(layout.width - 52f, centerY - 18f, layout.width - 16f, centerY + 18f)
+        drawGlass(canvas, avatar, 18f, false)
+        drawTextCentered(canvas, "LK", avatar.centerX(), avatar.centerY(), 13f, assets.medium, SaveToCollectionTokens.Ink)
+    }
+
+    private fun drawChips(canvas: Canvas, layout: SaveToCollectionLayout) {
+        val labels = listOf("For you", "Coast", "Mountains", "Rooms")
+        var x = SaveToCollectionTokens.Edge
+        val top = layout.safeTop + SaveToCollectionTokens.ChipsTop
+        labels.forEachIndexed { index, label ->
+            prepareText(14f, assets.medium, if (index == 0) SaveToCollectionTokens.Page else SaveToCollectionTokens.Muted)
+            val width = text.measureText(label) + 28f
+            val frame = RectF(x, top, x + width, top + SaveToCollectionTokens.ChipHeight)
+            if (index == 0) {
+                setFill(SaveToCollectionTokens.Ink)
+                canvas.drawRoundRect(frame, 16f, 16f, fill)
             } else {
-                amplitude * sin((2f * PI.toFloat() * engine.clock.toFloat()) / tokens.saveFloatPeriod + phase)
+                setStroke(SaveToCollectionTokens.Hairline, 0.5f)
+                canvas.drawRoundRect(frame, 16f, 16f, stroke)
             }
-            val alpha = deal * if (engine.dragCard == index) 1f - tokens.cardDim else 1f
-            val pressed = if (engine.pressTarget == index) 1f - 0.03f * engine.pressAmount else 1f
-            val scale = if (engine.reducedMotion) 1f else (tokens.cardDealStartScale + (1f - tokens.cardDealStartScale) * deal) * pressed
-            val centreX = rect.x + rect.width / 2f
-            val centreY = rect.y + rect.height / 2f
+            drawTextCentered(canvas, label, frame.centerX(), frame.centerY(), 14f, assets.medium, if (index == 0) SaveToCollectionTokens.Page else SaveToCollectionTokens.Muted)
+            x += width + 8f
+        }
+    }
+
+    private fun drawBottomFade(canvas: Canvas, layout: SaveToCollectionLayout) {
+        val top = layout.barY - 72f
+        fill.style = Paint.Style.FILL
+        fill.alpha = 255
+        fill.shader = LinearGradient(
+            0f,
+            top,
+            0f,
+            top + (layout.height - top) * 0.7f,
+            intArrayOf(0x000A0A0B, SaveToCollectionTokens.Page),
+            floatArrayOf(0f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawRect(0f, top, layout.width, layout.height, fill)
+        fill.shader = null
+    }
+
+    private fun drawTabs(canvas: Canvas, layout: SaveToCollectionLayout) {
+        val width = layout.width - SaveToCollectionTokens.Edge * 2f - SaveToCollectionTokens.SaveSize - 12f
+        val frame = RectF(16f, layout.barY, 16f + width, layout.barY + SaveToCollectionTokens.BarHeight)
+        drawGlass(canvas, frame, SaveToCollectionTokens.BarHeight / 2f, false)
+        val itemWidth = 64f
+        val available = width - 24f
+        val gap = (available - itemWidth * 3f) / 2f
+        val labels = listOf("Home", "Search", "Inbox")
+        val glyphs = listOf(SaveGlyph.Home, SaveGlyph.Search, SaveGlyph.Inbox)
+        labels.indices.forEach { index ->
+            val left = frame.left + 12f + index * (itemWidth + gap)
+            val centerX = left + itemWidth / 2f
+            val color = if (index == 0) SaveToCollectionTokens.Ink else SaveToCollectionTokens.Muted
+            drawGlyph(canvas, glyphs[index], centerX, layout.barY + 23f, 22f, color, false, if (index == 0) 2f else 1.75f)
+            drawTextCentered(canvas, labels[index], centerX, layout.barY + 47f, 10f, assets.medium, color)
+        }
+    }
+
+    private fun drawTileState(canvas: Canvas, engine: SaveToCollectionEngine) {
+        if (engine.carriedIndex >= 0) {
+            engine.layout.tiles.forEachIndexed { index, frame ->
+                val alpha = if (index == engine.carriedIndex) 0.84f else 0.3f * engine.lift.value
+                if (alpha > 0f) {
+                    setFill(withAlpha(SaveToCollectionTokens.Page, alpha))
+                    canvas.drawRoundRect(frame.rect(), SaveToCollectionTokens.Radius, SaveToCollectionTokens.Radius, fill)
+                }
+            }
+        }
+        val marked = engine.markedIndex
+        if (marked >= 0 && engine.mark.value > 0f) {
+            val tile = engine.layout.tiles[marked]
+            val scale = 0.8f + 0.2f * engine.mark.value
             canvas.save()
-            canvas.scale(scale, scale, centreX, centreY)
-            val drop = if (engine.reducedMotion) 0f else (1f - deal) * tokens.timingDealDrop
-            val pad = tokens.softPad * engine.layoutScale
-            imagePaint.alpha = (255f * alpha).toInt().coerceIn(0, 255)
-            drawBitmapFill(
-                canvas = canvas,
-                bitmap = requireAsset(card.soft),
-                destination = RectF(
-                    rect.x - pad,
-                    rect.y - pad + drop + floatY,
-                    rect.x + rect.width + pad,
-                    rect.y + rect.height + pad + drop + floatY,
-                ),
-                paint = imagePaint,
-            )
+            canvas.scale(scale, scale, tile.x + tile.width - 22f, tile.y + 22f)
+            canvas.saveLayerAlpha(null, (255f * engine.mark.value).roundToInt().coerceIn(0, 255))
+            val frame = RectF(tile.x + tile.width - 36f, tile.y + 8f, tile.x + tile.width - 8f, tile.y + 36f)
+            drawGlass(canvas, frame, 14f, false)
+            drawGlyph(canvas, SaveGlyph.Bookmark, frame.centerX(), frame.centerY(), 16f, SaveToCollectionTokens.Ink, true, 1.75f)
+            canvas.restore()
             canvas.restore()
         }
     }
 
-    private fun drawStream(canvas: Canvas, engine: SaveToCollectionEngine) {
-        if (engine.reducedMotion || engine.rushStart < 0.0) {
-            return
-        }
-        val global = clamp01(((engine.clock - engine.rushStart) / (tokens.streamTotal / 1000.0)).toFloat())
-        if (global <= 0f || global >= 1f) {
-            return
-        }
-        val rise = engine.riseProgress()
-        streamDrops.forEach { drop ->
-            val progress = clamp01((global - drop.start) / drop.duration)
-            if (progress <= 0f || progress >= 1f) {
-                return@forEach
-            }
-            val eased = cubicInOut(progress)
-            val speed = cubicSpeed(progress) / 3f
-            val x = engine.bookmarkX + drop.x * engine.layoutScale * (1f - eased * eased * eased)
-            val targetY = mix(engine.bookmarkY, engine.bookmarkRiseY, rise)
-            val startY = drop.y0 * engine.layoutScale
-            val y = mix(startY, targetY, eased)
-            val scale = (drop.width / tokens.streamCardWidth) * engine.layoutScale * (1f - (1f - tokens.streamEndScale) * eased * eased * eased)
-            val scaleY = 1f + tokens.streamStretch * speed
-            val alphaIn = min(progress * tokens.streamAlphaIn, 1f)
-            val alphaOut = 1f - max(progress - tokens.streamAlphaOutStart, 0f) / (1f - tokens.streamAlphaOutStart)
-            imagePaint.alpha = (255f * alphaIn * alphaOut).toInt().coerceIn(0, 255)
-            canvas.save()
-            canvas.translate(x, y)
-            canvas.scale(scale, scale * scaleY)
-            val halfWidth = tokens.streamWidth / 2f
-            val halfHeight = tokens.streamHeight / 2f
-            drawBitmapFill(
-                canvas,
-                requireAsset(tokens.streaks[drop.art]),
-                RectF(-halfWidth, -halfHeight, halfWidth, halfHeight),
-                imagePaint,
-            )
-            canvas.restore()
-        }
-    }
-
-    private fun drawBookmark(canvas: Canvas, engine: SaveToCollectionEngine) {
-        val rise = engine.riseProgress()
-        val bounce = engine.bounceProgress()
-        val open = engine.dragOpen
-        val translateY = (engine.bookmarkRiseY - engine.bookmarkY) * rise
-        val centreX = engine.bookmarkX
-        val centreY = engine.bookmarkY + translateY
-        val width = tokens.bookmarkWidth
-        val height = tokens.bookmarkHeight
-        val haloAlpha = min(open + max(bounce, 0f), 1f)
+    private fun drawBar(canvas: Canvas, engine: SaveToCollectionEngine) {
+        val pull = engine.pull.value
+        val haloAlpha = 0.9f * pull
         if (haloAlpha > 0f) {
-            fillPaint.color = tokens.glow.toArgb()
-            fillPaint.alpha = (255f * haloAlpha).toInt()
-            canvas.drawCircle(centreX, centreY, tokens.haloSize / 2f * (tokens.ringScaleStart + tokens.haloScaleTravel * open), fillPaint)
+            setFill(withAlpha(Color.WHITE, 0.08f * haloAlpha))
+            canvas.drawCircle(engine.layout.saveX, engine.layout.saveY, 50f * (1f + 0.3f * pull), fill)
         }
-        val ring = engine.ringProgress()
-        if (ring < 1f) {
-            strokePaint.color = tokens.ink.toArgb()
-            strokePaint.alpha = (255f * tokens.ringOpacity * (1f - ring)).toInt().coerceIn(0, 255)
-            strokePaint.strokeWidth = tokens.ringWidth
-            canvas.drawCircle(centreX, centreY, tokens.ringSize / 2f * (tokens.ringScaleStart + tokens.ringScaleTravel * ring), strokePaint)
-        }
-        val pressed = if (engine.pressTarget == -2) 1f - tokens.bookmarkPressScale * engine.pressAmount else 1f
-        val glyphScale = (if (engine.reducedMotion) 1f else 1f + tokens.bookmarkOpenScale * open + tokens.bookmarkBounceScale * bounce) *
-            (1f + tokens.bookmarkRiseScale * rise) * pressed
-        fillPaint.color = tokens.ink.toArgb()
-        fillPaint.alpha = 255
+        val scale = engine.gulp.value * (1f + 0.12f * pull) * (1f - 0.06f * engine.press.value)
         canvas.save()
-        canvas.translate(centreX - width / 2f, centreY - height / 2f)
-        canvas.scale(glyphScale, glyphScale, width / 2f, height / 2f)
-        canvas.drawPath(bookmarkPath, fillPaint)
+        canvas.scale(scale, scale, engine.layout.saveX, engine.layout.saveY)
+        val frame = RectF(
+            engine.layout.saveX - SaveToCollectionTokens.SaveSize / 2f,
+            engine.layout.saveY - SaveToCollectionTokens.SaveSize / 2f,
+            engine.layout.saveX + SaveToCollectionTokens.SaveSize / 2f,
+            engine.layout.saveY + SaveToCollectionTokens.SaveSize / 2f,
+        )
+        drawGlass(canvas, frame, SaveToCollectionTokens.SaveSize / 2f, false)
+        drawGlyph(canvas, SaveGlyph.Bookmark, frame.centerX(), frame.centerY(), 24f, SaveToCollectionTokens.Ink, true, 2f)
+
+        val badge = RectF(frame.right - 18f, frame.top - 4f, frame.right + 4f, frame.top + 18f)
+        setFill(SaveToCollectionTokens.Ink)
+        canvas.drawRoundRect(badge, 11f, 11f, fill)
+        canvas.saveLayerAlpha(null, (255f * engine.roll.value).roundToInt().coerceIn(0, 255))
+        drawTextCentered(
+            canvas,
+            engine.count.toString(),
+            badge.centerX(),
+            badge.centerY() + 6f * (1f - engine.roll.value),
+            11f,
+            assets.semibold,
+            SaveToCollectionTokens.Page,
+        )
         canvas.restore()
-        if (!tokens.replicaOnly) {
-            drawCountPill(canvas, engine, rise, translateY)
-        }
+        canvas.restore()
     }
 
-    private fun drawCountPill(
+    private fun drawToast(canvas: Canvas, engine: SaveToCollectionEngine) {
+        val alpha = engine.toast.value
+        if (alpha <= 0f) return
+        prepareText(14f, assets.medium, SaveToCollectionTokens.Muted)
+        val first = "Saved to "
+        val strong = SaveToCollectionTokens.CollectionName
+        val view = "View"
+        val firstWidth = text.measureText(first)
+        val strongWidth = text.measureText(strong)
+        prepareText(14f, assets.semibold, SaveToCollectionTokens.Ink)
+        val viewWidth = text.measureText(view)
+        val width = 36f + firstWidth + strongWidth + 16f + viewWidth
+        val top = engine.layout.barY - 56f + 8f * (1f - alpha)
+        val left = (engine.layout.width - width) / 2f
+        val frame = RectF(left, top, left + width, top + 44f)
+        canvas.save()
+        canvas.scale(0.96f + 0.04f * alpha, 0.96f + 0.04f * alpha, frame.centerX(), frame.centerY())
+        canvas.saveLayerAlpha(null, (255f * alpha).roundToInt().coerceIn(0, 255))
+        drawGlass(canvas, frame, 22f, false)
+        val baseline = centeredBaseline(frame.centerY(), 14f, assets.medium)
+        var x = frame.left + 18f
+        drawTextAtBaseline(canvas, first, x, baseline, 14f, assets.medium, SaveToCollectionTokens.Muted)
+        x += firstWidth
+        drawTextAtBaseline(canvas, strong, x, baseline, 14f, assets.medium, SaveToCollectionTokens.Ink)
+        drawTextAtBaseline(canvas, view, frame.right - 18f - viewWidth, baseline, 14f, assets.semibold, SaveToCollectionTokens.Ink)
+        canvas.restore()
+        canvas.restore()
+    }
+
+    private fun drawCarried(canvas: Canvas, engine: SaveToCollectionEngine) {
+        val index = engine.carriedIndex
+        if (index < 0) return
+        val tile = engine.layout.tiles[index]
+        val magnet = engine.pull.value * SaveToCollectionTokens.MagnetPull
+        var x = engine.centerX.value + (engine.layout.saveX - engine.centerX.value) * magnet
+        var y = engine.centerY.value + (engine.layout.saveY - engine.centerY.value) * magnet
+        x += (engine.layout.saveX - x) * engine.drop.value
+        y += (engine.layout.saveY - y) * engine.drop.value
+        val scale = (1f + SaveToCollectionTokens.LiftScale * engine.lift.value) *
+            (1f - SaveToCollectionTokens.MagnetShrink * engine.pull.value) * (1f - 0.86f * engine.drop.value)
+        val alpha = if (engine.drop.value <= 0.55f) 1f else 1f - (engine.drop.value - 0.55f) / 0.45f
+        if (alpha <= 0f) return
+        y -= SaveToCollectionTokens.LiftRise * engine.lift.value
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.rotate(engine.lean.value)
+        canvas.scale(scale, scale)
+        val local = RectF(-tile.width / 2f, -tile.height / 2f, tile.width / 2f, tile.height / 2f)
+        val shadowAlpha = 0.22f * engine.lift.value * alpha
+        if (shadowAlpha > 0f) {
+            setFill(withAlpha(Color.BLACK, shadowAlpha * 0.35f))
+            canvas.drawRoundRect(local.expand(18f).offsetBy(0f, 16f), 24f, 24f, fill)
+            setFill(withAlpha(Color.BLACK, shadowAlpha))
+            canvas.drawRoundRect(local.expand(4f).offsetBy(0f, 3f), 17f, 17f, fill)
+        }
+        drawPhoto(canvas, assets.photos[index], local.frame(), SaveToCollectionTokens.Radius, alpha)
+        canvas.restore()
+    }
+
+    private fun drawSheet(
         canvas: Canvas,
         engine: SaveToCollectionEngine,
-        rise: Float,
-        translateY: Float,
+        before: Bitmap,
+        fresh: Bitmap,
     ) {
-        val alpha = max(rise * tokens.countRiseThreshold - 1f, 0f)
-        if (alpha <= 0f) {
-            return
+        val progress = engine.sheet.value
+        if (progress <= 0f) return
+        setFill(withAlpha(Color.BLACK, 0.5f * progress.coerceIn(0f, 1f)))
+        canvas.drawRect(0f, 0f, engine.layout.width, engine.layout.height, fill)
+        val travel = engine.layout.height - engine.layout.sheetY
+        val top = engine.layout.sheetY + (1f - progress) * travel
+        val isFresh = engine.markedIndex >= 0 || engine.count > SaveToCollectionTokens.CountBefore
+        val panel = if (isFresh) fresh else before
+        image.alpha = 255
+        image.shader = null
+        canvas.drawBitmap(panel, null, RectF(0f, top, engine.layout.width, top + panel.height / panel.densityScale(engine.layout.width)), image)
+        if (isFresh) {
+            val entering = engine.arrive.value
+            canvas.save()
+            val width = (engine.layout.width - SaveToCollectionTokens.Edge * 2f - SaveToCollectionTokens.Gap) / 2f
+            val height = (width * 1.2f).roundToInt().toFloat()
+            val centerX = SaveToCollectionTokens.Edge + width / 2f
+            val centerY = top + 97f + height / 2f
+            canvas.translate(0f, -14f * (1f - entering))
+            canvas.scale(0.94f + 0.06f * entering, 0.94f + 0.06f * entering, centerX, centerY)
+            canvas.saveLayerAlpha(null, (255f * entering).roundToInt().coerceIn(0, 255))
+            drawCollectionTile(canvas, SaveToCollectionTokens.DemoTile, 0, engine.layout, top + 97f, true)
+            canvas.restore()
+            canvas.restore()
         }
-        val label = "${engine.pileCount} saved"
-        textPaint.textSize = tokens.countFontSize
-        val pillWidth = textPaint.measureText(label) + tokens.spaceL * 2f
-        val pillHeight = tokens.spaceXxl
-        val baseTop = engine.bookmarkY - tokens.bookmarkHeight / 2f + tokens.bookmarkHeight + tokens.spaceL
-        val top = baseTop + translateY + (1f - rise) * tokens.countRestDrop
-        val left = engine.bookmarkX - pillWidth / 2f
-        fillPaint.color = tokens.ink.copy(alpha = tokens.pillBackgroundAlpha).toArgb()
-        fillPaint.alpha = (255f * alpha).toInt().coerceIn(0, 255)
-        canvas.drawRoundRect(RectF(left, top, left + pillWidth, top + pillHeight), tokens.spaceL, tokens.spaceL, fillPaint)
-        fillPaint.color = tokens.glassEdge.toArgb()
-        fillPaint.alpha = (255f * alpha).toInt().coerceIn(0, 255)
-        canvas.drawRect(left + tokens.spaceM, top, left + pillWidth - tokens.spaceM, top + tokens.pillEdgeHeight, fillPaint)
-        textPaint.alpha = (255f * alpha).toInt().coerceIn(0, 255)
-        val baseline = top + pillHeight / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
-        canvas.drawText(label, engine.bookmarkX, baseline, textPaint)
-    }
-
-    private fun drawFlights(canvas: Canvas, engine: SaveToCollectionEngine) {
-        engine.flights.forEach { flight ->
-            val progress = engine.flightProgress(flight)
-            for (lag in tokens.saveTrail downTo 1) {
-                drawFlightLayer(canvas, engine, flight, progress, lag, smear = false)
-            }
-            drawFlightLayer(canvas, engine, flight, progress, 0, smear = false)
-            drawFlightLayer(canvas, engine, flight, progress, 0, smear = true)
-        }
-    }
-
-    private fun drawFlightLayer(
-        canvas: Canvas,
-        engine: SaveToCollectionEngine,
-        flight: SaveFlight,
-        progress: Float,
-        lag: Int,
-        smear: Boolean,
-    ) {
-        val raw = max(progress - lag * tokens.saveTrailStep, 0f)
-        val eased = cubicInOut(raw)
-        val centre = curvePoint(
-            flight.from.x + flight.from.width / 2f,
-            flight.from.y + flight.from.height / 2f,
-            engine.bookmarkX,
-            engine.bookmarkY,
-            tokens.saveArc,
-            eased,
-        )
-        val ahead = curvePoint(
-            flight.from.x + flight.from.width / 2f,
-            flight.from.y + flight.from.height / 2f,
-            engine.bookmarkX,
-            engine.bookmarkY,
-            tokens.saveArc,
-            min(eased + tokens.flightLookAhead, 1f),
-        )
-        val angle = atan2(ahead.second - centre.second, ahead.first - centre.first) * 180f / PI.toFloat() - 90f
-        val alpha = if (lag == 0) {
-            1f - max(progress - tokens.flightLeadFadeStart, 0f) / tokens.flightLeadFadeSpan
-        } else {
-            (tokens.flightGhostOpacity / lag.toFloat().pow(tokens.flightGhostExponent)) * min(progress * tokens.flightGhostFadeIn, 1f) * (1f - progress)
-        }
-        val speed = cubicSpeed(raw) / 3f
-        val stretch = 1f + tokens.saveStreak * speed * if (lag == 0) {
-            if (smear) tokens.flightSmearStretch else tokens.flightLeadStretch
-        } else {
-            1f + lag * tokens.flightGhostStretchStep
-        }
-        val layerAlpha = if (smear) min(speed * tokens.flightSmearOpacity, 1f) * alpha else alpha
-        if (layerAlpha <= 0f) {
-            return
-        }
-        val scale = mix(1f, tokens.saveEndScale, eased)
-        val radius = mix(tokens.cardRadius, min(flight.from.width, flight.from.height) / 2f, eased * eased)
-        imagePaint.alpha = (255f * layerAlpha).toInt().coerceIn(0, 255)
-        canvas.save()
-        canvas.translate(centre.first, centre.second)
-        canvas.rotate(angle)
-        canvas.scale(scale, scale * stretch)
-        canvas.rotate(-angle)
-        drawBitmapCoverRounded(
-            canvas = canvas,
-            bitmap = requireAsset(tokens.cards[flight.card].art),
-            destination = RectF(
-                -flight.from.width / 2f,
-                -flight.from.height / 2f,
-                flight.from.width / 2f,
-                flight.from.height / 2f,
-            ),
-            radius = radius,
-            paint = imagePaint,
-        )
-        canvas.restore()
-    }
-
-    private fun drawDraggedCard(canvas: Canvas, engine: SaveToCollectionEngine) {
-        if (engine.dragCard < 0) {
-            return
-        }
-        val rect = engine.cardRect(engine.dragCard)
-        val card = tokens.cards[engine.dragCard]
-        val bitmap = requireAsset(card.art)
-        val softBitmap = requireAsset(card.soft)
-        val softPad = tokens.softPad * engine.layoutScale
-        imagePaint.alpha = (255f * tokens.glowUnderOpacity).toInt()
-        canvas.save()
-        canvas.translate(engine.dragX, engine.dragY + tokens.glowUnderDrop)
-        canvas.rotate(engine.dragTilt)
-        canvas.scale(engine.dragScale * 1.05f, engine.dragScale * 1.05f)
-        drawBitmapFill(
-            canvas,
-            softBitmap,
-            RectF(
-                -rect.width / 2f - softPad,
-                -rect.height / 2f - softPad,
-                rect.width / 2f + softPad,
-                rect.height / 2f + softPad,
-            ),
-            imagePaint,
-        )
-        canvas.restore()
-        imagePaint.alpha = 255
-        canvas.save()
-        canvas.translate(engine.dragX, engine.dragY)
-        canvas.rotate(engine.dragTilt)
-        canvas.scale(engine.dragScale, engine.dragScale)
-        drawBitmapCoverRounded(
-            canvas,
-            bitmap,
-            RectF(-rect.width / 2f, -rect.height / 2f, rect.width / 2f, rect.height / 2f),
-            tokens.cardRadius,
-            imagePaint,
-        )
-        canvas.restore()
     }
 
     private fun drawFinger(canvas: Canvas, engine: SaveToCollectionEngine) {
-        if (engine.ghostAlpha <= 0f) {
-            return
-        }
-        val radius = tokens.fingerSize / 2f
-        val scale = 1f - tokens.fingerPressScale * engine.ghostPress
-        fillPaint.color = tokens.finger.toArgb()
-        fillPaint.alpha = (255f * engine.ghostAlpha).toInt().coerceIn(0, 255)
-        strokePaint.color = tokens.fingerEdge.toArgb()
-        strokePaint.alpha = (255f * engine.ghostAlpha).toInt().coerceIn(0, 255)
-        strokePaint.strokeWidth = 1f
+        val alpha = engine.ghostOpacity.value
+        if (alpha <= 0f) return
+        val scale = 1f - 0.12f * engine.ghostPress.value
         canvas.save()
         canvas.scale(scale, scale, engine.ghostX, engine.ghostY)
-        canvas.drawCircle(engine.ghostX, engine.ghostY, radius, fillPaint)
-        canvas.drawCircle(engine.ghostX, engine.ghostY, radius - 0.5f, strokePaint)
+        setFill(withAlpha(SaveToCollectionTokens.Finger, alpha))
+        canvas.drawCircle(engine.ghostX, engine.ghostY, SaveToCollectionTokens.FingerSize / 2f, fill)
+        setStroke(withAlpha(SaveToCollectionTokens.FingerEdge, alpha), 1f)
+        canvas.drawCircle(engine.ghostX, engine.ghostY, SaveToCollectionTokens.FingerSize / 2f - 0.5f, stroke)
         canvas.restore()
     }
 
-    private fun drawBitmapFill(
+    private fun drawCollectionTile(
         canvas: Canvas,
-        bitmap: Bitmap,
-        destination: RectF,
-        paint: Paint,
+        photoIndex: Int,
+        slot: Int,
+        layout: SaveToCollectionLayout,
+        gridTop: Float,
+        justSaved: Boolean,
     ) {
-        canvas.drawBitmap(bitmap, null, destination, paint)
+        val width = (layout.width - SaveToCollectionTokens.Edge * 2f - SaveToCollectionTokens.Gap) / 2f
+        val height = (width * 1.2f).roundToInt().toFloat()
+        val x = SaveToCollectionTokens.Edge + (slot % 2) * (width + SaveToCollectionTokens.Gap)
+        val y = gridTop + (slot / 2) * (height + SaveToCollectionTokens.SheetCaption + SaveToCollectionTokens.Gap)
+        drawPhoto(canvas, assets.photos[photoIndex], SaveToCollectionFrame(x, y, width, height), SaveToCollectionTokens.Radius, 1f)
+        if (justSaved) {
+            prepareText(11f, assets.semibold, SaveToCollectionTokens.Ink)
+            val tagWidth = text.measureText("JUST SAVED") + 16f
+            val tag = RectF(x + 8f, y + height - 30f, x + 8f + tagWidth, y + height - 8f)
+            setFill(0x9E0A0A0B.toInt())
+            canvas.drawRoundRect(tag, 11f, 11f, fill)
+            setStroke(SaveToCollectionTokens.Rim, 0.5f)
+            canvas.drawRoundRect(tag, 11f, 11f, stroke)
+            drawTextCentered(canvas, "JUST SAVED", tag.centerX(), tag.centerY(), 11f, assets.semibold, SaveToCollectionTokens.Ink)
+        }
+        val photo = SaveToCollectionTokens.Photos[photoIndex]
+        drawText(canvas, photo.title, x, y + height + 8f, 12f, assets.medium, SaveToCollectionTokens.Ink)
+        drawText(canvas, photo.place, x, y + height + 24f, 12f, assets.regular, SaveToCollectionTokens.Muted)
     }
 
-    private fun drawBitmapCoverRounded(
+    private fun drawPhoto(
         canvas: Canvas,
         bitmap: Bitmap,
-        destination: RectF,
+        frame: SaveToCollectionFrame,
         radius: Float,
-        paint: Paint,
+        alpha: Float,
     ) {
+        val destination = frame.rect()
+        setFill(SaveToCollectionTokens.Tile)
+        canvas.drawRoundRect(destination, radius, radius, fill)
         val sourceRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
         val destinationRatio = destination.width() / destination.height()
         val source = if (sourceRatio > destinationRatio) {
-            val wantedWidth = bitmap.height * destinationRatio
-            val left = (bitmap.width - wantedWidth) / 2f
-            Rect(left.toInt(), 0, (left + wantedWidth).toInt(), bitmap.height)
+            val wanted = bitmap.height * destinationRatio
+            val left = (bitmap.width - wanted) / 2f
+            Rect(left.roundToInt(), 0, (left + wanted).roundToInt(), bitmap.height)
         } else {
-            val wantedHeight = bitmap.width / destinationRatio
-            val top = (bitmap.height - wantedHeight) / 2f
-            Rect(0, top.toInt(), bitmap.width, (top + wantedHeight).toInt())
+            val wanted = bitmap.width / destinationRatio
+            val top = (bitmap.height - wanted) / 2f
+            Rect(0, top.roundToInt(), bitmap.width, (top + wanted).roundToInt())
         }
+        image.alpha = (255f * alpha).roundToInt().coerceIn(0, 255)
+        image.shader = null
         canvas.save()
-        val clip = Path().apply {
-            addRoundRect(destination, radius, radius, Path.Direction.CW)
-        }
+        val clip = Path().apply { addRoundRect(destination, radius, radius, Path.Direction.CW) }
         canvas.clipPath(clip)
-        canvas.drawBitmap(bitmap, source, destination, paint)
+        canvas.drawBitmap(bitmap, source, destination, image)
         canvas.restore()
     }
 
-    private fun curvePoint(
-        startX: Float,
-        startY: Float,
-        endX: Float,
-        endY: Float,
-        arc: Float,
-        progress: Float,
-    ): Pair<Float, Float> {
-        val middleX = (startX + endX) / 2f
-        val middleY = (startY + endY) / 2f
-        val deltaX = endX - startX
-        val deltaY = endY - startY
-        val side = if (startX < endX) -1f else 1f
-        val controlX = middleX + side * abs(deltaY) * arc
-        val controlY = middleY - abs(deltaX) * arc * 0.5f
-        val inverse = 1f - progress
-        val x = inverse * inverse * startX + 2f * inverse * progress * controlX + progress * progress * endX
-        val y = inverse * inverse * startY + 2f * inverse * progress * controlY + progress * progress * endY
-        return Pair(x, y)
+    private fun drawGlass(canvas: Canvas, frame: RectF, radius: Float, thick: Boolean) {
+        setFill(if (thick) SaveToCollectionTokens.SheetFill else SaveToCollectionTokens.GlassFill)
+        canvas.drawRoundRect(frame, radius, radius, fill)
+        fill.alpha = 255
+        fill.shader = LinearGradient(
+            0f,
+            frame.top,
+            0f,
+            frame.centerY(),
+            intArrayOf(0x24FFFFFF, 0x00FFFFFF),
+            floatArrayOf(0f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawRoundRect(frame, radius, radius, fill)
+        fill.shader = null
+        setStroke(SaveToCollectionTokens.Rim, 0.5f)
+        canvas.drawRoundRect(frame, radius, radius, stroke)
     }
 
-    private fun makeBookmarkPath(): Path {
-        val width = tokens.bookmarkWidth
-        val height = tokens.bookmarkHeight
-        val radius = width * tokens.bookmarkCornerFraction
-        val notch = height * tokens.bookmarkNotchFraction
-        return Path().apply {
-            moveTo(radius, 0f)
-            lineTo(width - radius, 0f)
-            quadTo(width, 0f, width, radius)
-            lineTo(width, height - tokens.bookmarkBottomInset)
-            quadTo(width, height, width - tokens.bookmarkShoulder, height - tokens.bookmarkShoulderInset)
-            lineTo(width / 2f, height - notch)
-            lineTo(tokens.bookmarkShoulder, height - tokens.bookmarkShoulderInset)
-            quadTo(0f, height, 0f, height - tokens.bookmarkBottomInset)
-            lineTo(0f, radius)
-            quadTo(0f, 0f, radius, 0f)
-            close()
+    private fun drawGlyph(
+        canvas: Canvas,
+        glyph: SaveGlyph,
+        centerX: Float,
+        centerY: Float,
+        size: Float,
+        color: Int,
+        filled: Boolean,
+        weight: Float,
+    ) {
+        val path = glyph.path()
+        canvas.save()
+        canvas.translate(centerX - size / 2f, centerY - size / 2f)
+        canvas.scale(size / 24f, size / 24f)
+        if (filled && glyph == SaveGlyph.Bookmark) {
+            setFill(color)
+            canvas.drawPath(path, fill)
         }
+        setStroke(color, weight * 24f / size)
+        canvas.drawPath(path, stroke)
+        canvas.restore()
     }
 
-    private fun requireAsset(resource: Int): Bitmap {
-        return requireNotNull(assets[resource]) {
-            "Missing SaveToCollection drawable $resource"
+    private fun drawText(
+        canvas: Canvas,
+        value: String,
+        x: Float,
+        top: Float,
+        size: Float,
+        typeface: Typeface,
+        color: Int,
+    ) {
+        prepareText(size, typeface, color)
+        canvas.drawText(value, x, top - text.fontMetrics.ascent, text)
+    }
+
+    private fun drawTextCenteredVertically(
+        canvas: Canvas,
+        value: String,
+        x: Float,
+        centerY: Float,
+        size: Float,
+        typeface: Typeface,
+        color: Int,
+    ) {
+        drawTextAtBaseline(canvas, value, x, centeredBaseline(centerY, size, typeface), size, typeface, color)
+    }
+
+    private fun drawTextCentered(
+        canvas: Canvas,
+        value: String,
+        centerX: Float,
+        centerY: Float,
+        size: Float,
+        typeface: Typeface,
+        color: Int,
+    ) {
+        prepareText(size, typeface, color)
+        text.textAlign = Paint.Align.CENTER
+        canvas.drawText(value, centerX, centeredBaseline(centerY, size, typeface), text)
+        text.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawTextAtBaseline(
+        canvas: Canvas,
+        value: String,
+        x: Float,
+        baseline: Float,
+        size: Float,
+        typeface: Typeface,
+        color: Int,
+    ) {
+        prepareText(size, typeface, color)
+        canvas.drawText(value, x, baseline, text)
+    }
+
+    private fun centeredBaseline(centerY: Float, size: Float, typeface: Typeface): Float {
+        prepareText(size, typeface, SaveToCollectionTokens.Ink)
+        return centerY - (text.fontMetrics.ascent + text.fontMetrics.descent) / 2f
+    }
+
+    private fun prepareText(size: Float, typeface: Typeface, color: Int) {
+        text.textSize = size
+        text.typeface = typeface
+        text.color = color
+        text.alpha = Color.alpha(color)
+        text.textAlign = Paint.Align.LEFT
+        text.shader = null
+    }
+
+    private fun setFill(color: Int) {
+        fill.style = Paint.Style.FILL
+        fill.color = color
+        fill.alpha = Color.alpha(color)
+        fill.shader = null
+    }
+
+    private fun setStroke(color: Int, width: Float) {
+        stroke.style = Paint.Style.STROKE
+        stroke.color = color
+        stroke.alpha = Color.alpha(color)
+        stroke.strokeWidth = width
+        stroke.shader = null
+    }
+
+    private fun bitmap(width: Float, height: Float, density: Float): Bitmap {
+        return Bitmap.createBitmap(
+            max(1, (width * density).roundToInt()),
+            max(1, (height * density).roundToInt()),
+            Bitmap.Config.ARGB_8888,
+        ).apply { this.density = Bitmap.DENSITY_NONE }
+    }
+}
+
+private enum class SaveGlyph {
+    Home,
+    Search,
+    Inbox,
+    Bookmark,
+    Close;
+
+    fun path(): Path {
+        return when (this) {
+            Home -> Path().apply {
+                moveTo(4f, 10.5f); lineTo(12f, 4f); lineTo(20f, 10.5f); lineTo(20f, 19f)
+                quadTo(20f, 20f, 19f, 20f); lineTo(14.5f, 20f); lineTo(14.5f, 14.5f)
+                lineTo(9.5f, 14.5f); lineTo(9.5f, 20f); lineTo(5f, 20f); quadTo(4f, 20f, 4f, 19f); close()
+            }
+            Search -> Path().apply {
+                addCircle(10.5f, 10.5f, 6.5f, Path.Direction.CW)
+                moveTo(15.2f, 15.2f); lineTo(20f, 20f)
+            }
+            Inbox -> Path().apply {
+                moveTo(4f, 13.5f); lineTo(6.2f, 6f); quadTo(6.6f, 5f, 7.6f, 5f)
+                lineTo(16.4f, 5f); quadTo(17.4f, 5f, 17.8f, 6f); lineTo(20f, 13.5f)
+                lineTo(20f, 18f); quadTo(20f, 19f, 19f, 19f); lineTo(5f, 19f)
+                quadTo(4f, 19f, 4f, 18f); close()
+                moveTo(4f, 13.5f); lineTo(8.5f, 13.5f); lineTo(9.7f, 15.5f)
+                lineTo(14.3f, 15.5f); lineTo(15.5f, 13.5f); lineTo(20f, 13.5f)
+            }
+            Bookmark -> Path().apply {
+                moveTo(7f, 4.5f); lineTo(17f, 4.5f); quadTo(18f, 4.5f, 18f, 5.5f)
+                lineTo(18f, 20f); lineTo(12f, 15.8f); lineTo(6f, 20f); lineTo(6f, 5.5f)
+                quadTo(6f, 4.5f, 7f, 4.5f); close()
+            }
+            Close -> Path().apply {
+                moveTo(7f, 7f); lineTo(17f, 17f); moveTo(17f, 7f); lineTo(7f, 17f)
+            }
         }
     }
+}
+
+private fun SaveToCollectionFrame.rect(): RectF = RectF(x, y, x + width, y + height)
+
+private fun RectF.frame(): SaveToCollectionFrame = SaveToCollectionFrame(left, top, width(), height())
+
+private fun RectF.expand(amount: Float): RectF = RectF(left - amount, top - amount, right + amount, bottom + amount)
+
+private fun RectF.offsetBy(x: Float, y: Float): RectF = RectF(left + x, top + y, right + x, bottom + y)
+
+private fun Bitmap.densityScale(targetWidth: Float): Float = width / targetWidth
+
+private fun withAlpha(color: Int, alpha: Float): Int {
+    val combined = (Color.alpha(color) * alpha.coerceIn(0f, 1f)).roundToInt().coerceIn(0, 255)
+    return (color and 0x00FFFFFF) or (combined shl 24)
 }

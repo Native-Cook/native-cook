@@ -1,132 +1,234 @@
 import SwiftUI
+import UIKit
 
-struct DragCardToSendHome: View {
-    typealias T = DragCardToSendTokens
-    @ObservedObject var motion: DragCardToSendMotion
+struct DragCardToSendScene<DragGestureType: Gesture>: View {
+    let layout: DragCardToSendLayout
+    let frame: DragCardToSendFrame
+    let dragGesture: DragGestureType
+    let onUndo: () -> Void
 
     var body: some View {
-        let pull = motion.phase == .pulling ? max(0, motion.cardOffset.height) : 0
-        let sink = 1 - T.pull.listSink * min(pull / T.replica.pullFrame, 1)
-        let open = min(max((motion.g - 1) / T.replica.sheetMorphSpan, 0), 1)
-        let spread = T.layout.headerSpread * smooth(min(motion.g / T.replica.spreadProgress, 1))
-
         ZStack(alignment: .topLeading) {
-            HStack {
-                DragCardToSendGridIcon()
-                    .frame(width: T.layout.headerButton, height: T.layout.headerButton)
-                    .background(T.ColorToken.headerButton, in: Circle())
-                    .offset(x: -spread)
-                Spacer()
-                Image(systemName: "plus")
-                    .font(.system(size: T.replica.icon, weight: .regular))
-                    .frame(width: T.layout.headerButton, height: T.layout.headerButton)
-                    .background(T.ColorToken.headerButton, in: Circle())
-                    .offset(x: spread)
-            }
-            .padding(.horizontal, T.layout.side)
-            .offset(y: T.layout.headerCenter - T.layout.headerButton / 2)
-
-            ZStack(alignment: .topLeading) {
-                VStack(spacing: T.layout.rowGap) {
-                    ForEach(motion.transactions.prefix(T.replica.maxRows)) { transaction in
-                        DragCardToSendTransactionRow(transaction: transaction)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .padding(.horizontal, T.layout.side)
-                .offset(y: T.layout.rowTop)
-
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Last").font(.system(size: T.type.title, weight: .regular))
-                        Text("Transactions").font(.system(size: T.type.title, weight: .bold)).tracking(-0.3)
-                    }
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: T.replica.icon, weight: .regular))
-                        .frame(width: T.home.titleButton, height: T.home.titleButton)
-                        .background(T.ColorToken.headerButton, in: Circle())
-                }
-                .foregroundStyle(T.ColorToken.ink)
-                .padding(.leading, T.layout.side + T.home.listTitleInset)
-                .padding(.trailing, T.layout.side)
-                .offset(y: T.layout.listTitleTop)
-            }
-            .offset(y: pull)
-            .scaleEffect(sink)
-            .animation(.spring(response: T.replica.listSpringResponse, dampingFraction: T.replica.listSpringDamping), value: motion.transactions.count)
+            DragCardToSendPalette.page
+            DragCardToSendHeader(width: layout.width)
+            DragCardToSendWalletCard(frame: frame, layout: layout)
+                .frame(width: layout.cardWidth, height: layout.cardHeight)
+                .position(x: layout.width / 2, y: layout.cardTop + layout.cardHeight / 2 + frame.cardOffset)
+                .scaleEffect(frame.cardScale)
+                .gesture(dragGesture)
+            DragCardToSendPeople(frame: frame, layout: layout)
+            DragCardToSendActivityList(frame: frame, layout: layout)
+            DragCardToSendLiquid(frame: frame, layout: layout, onUndo: onUndo)
         }
-        .opacity(1 - (1 - T.fade.homeDim) * open)
-        .allowsHitTesting(false)
-    }
-
-    private func smooth(_ value: Double) -> Double { value * value * (3 - 2 * value) }
-}
-
-struct DragCardToSendGridIcon: View {
-    typealias T = DragCardToSendTokens
-    var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(T.home.dot), spacing: T.home.dotGap), count: 3), spacing: T.home.dotGap) {
-            ForEach(0..<9, id: \.self) { _ in Circle().fill(T.ColorToken.ink).frame(width: T.home.dot, height: T.home.dot) }
-        }
-        .frame(width: T.home.gridWidth)
+        .coordinateSpace(name: "DragCardToSendScreen")
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
     }
 }
 
-struct DragCardToSendTransactionRow: View {
-    typealias T = DragCardToSendTokens
-    let transaction: T.Transaction
+struct DragCardToSendHeader: View {
+    let width: CGFloat
 
     var body: some View {
-        HStack(spacing: 0) {
-            DragCardToSendTransactionGlyph(incoming: transaction.incoming)
-                .stroke(T.ColorToken.ink, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                .frame(width: T.home.rowGlyph, height: T.home.rowGlyph)
-                .frame(width: T.layout.rowIcon, height: T.layout.rowIcon)
-                .background(T.ColorToken.rowIcon, in: Circle())
-            VStack(alignment: .leading, spacing: T.home.rowDateGap) {
-                Text(transaction.name).font(.system(size: T.type.rowName - 1, weight: .semibold)).lineLimit(1)
-                Text(transaction.date).font(.system(size: T.type.rowMeta)).foregroundStyle(T.ColorToken.mute)
-            }
-            .padding(.leading, T.home.rowTextGap)
-            Spacer(minLength: T.replica.rowMinGap)
-            Text((transaction.amount > 0 ? "+" : "") + DragCardToSendFormat.money(transaction.amount))
-                .font(.system(size: T.home.rowAmount, weight: .semibold).monospacedDigit())
-                .foregroundStyle(transaction.amount > 0 ? T.ColorToken.positive : T.ColorToken.ink)
+        HStack {
+            Text("Wallet")
+                .font(.system(size: 32, weight: .bold))
+                .tracking(-0.7)
+                .foregroundStyle(DragCardToSendPalette.ink)
+            Spacer()
+            DragCardToSendAvatar(name: "jules", size: 36)
+                .accessibilityLabel("Account, Jules Morrow")
         }
-        .padding(.horizontal, T.home.rowInset)
-        .frame(height: T.layout.rowHeight)
-        .background(T.ColorToken.rowFill, in: Capsule())
-        .foregroundStyle(T.ColorToken.ink)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(transaction.name), \(transaction.date), \(DragCardToSendFormat.money(transaction.amount))")
+        .frame(width: width - 32, height: 40)
+        .position(x: width / 2, y: 104)
     }
 }
 
-private struct DragCardToSendTransactionGlyph: Shape {
-    let incoming: Bool
+struct DragCardToSendPeople: View {
+    let frame: DragCardToSendFrame
+    let layout: DragCardToSendLayout
 
-    func path(in rect: CGRect) -> Path {
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: rect.minX + rect.width * x / 20, y: rect.minY + rect.height * y / 20)
-        }
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Text("Send to")
+                .font(.system(size: 19, weight: .semibold))
+                .tracking(-0.4)
+                .foregroundStyle(DragCardToSendPalette.ink)
+                .frame(height: 24)
+                .offset(x: 16, y: layout.sectionTop)
 
-        var path = Path()
-        if incoming {
-            path.move(to: point(14, 3))
-            path.addLine(to: point(5, 12))
-            path.addLine(to: point(5, 5.5))
-            path.move(to: point(5, 12))
-            path.addLine(to: point(11.5, 12))
-        } else {
-            path.move(to: point(14, 12))
-            path.addLine(to: point(5, 3))
-            path.addLine(to: point(5, 9.5))
-            path.move(to: point(5, 3))
-            path.addLine(to: point(11.5, 3))
+            Text(hint)
+                .font(.system(size: 15))
+                .tracking(-0.2)
+                .foregroundStyle(frame.amount == nil ? DragCardToSendPalette.mute : DragCardToSendPalette.ink)
+                .frame(height: 20)
+                .fixedSize()
+                .position(x: layout.width - 16 - hintWidth / 2, y: layout.sectionTop + 12)
+
+            ForEach(Array(DragCardToSendData.people.enumerated()), id: \.element.id) { index, person in
+                let selected = frame.selectedPerson == index
+                VStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .stroke(DragCardToSendPalette.accent, lineWidth: 2.5)
+                            .frame(width: 60, height: 60)
+                            .opacity(selected ? 1 : 0)
+                        DragCardToSendAvatar(name: person.id, size: 52)
+                            .scaleEffect(selected ? 1 - 0.1 * frame.catchProgress : 1)
+                    }
+                    .frame(width: 60, height: 60)
+                    Text(person.name)
+                        .font(.system(size: 13, weight: .medium))
+                        .tracking(-0.1)
+                        .foregroundStyle(selected ? DragCardToSendPalette.ink : DragCardToSendPalette.mute)
+                        .frame(height: 16)
+                }
+                .position(x: layout.avatarCenters[index], y: layout.avatarTop + 38)
+            }
         }
-        path.move(to: point(4, 16.5))
-        path.addLine(to: point(16, 16.5))
-        return path
+    }
+
+    private var hint: String {
+        if let amount = frame.amount, let person = frame.selectedPerson {
+            return frame.sending
+                ? "Sending $\(amount) to \(DragCardToSendData.people[person].name)"
+                : "Let go to send $\(amount) to \(DragCardToSendData.people[person].name)"
+        }
+        return "Pull the card to send"
+    }
+
+    private var hintWidth: CGFloat {
+        (hint as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 15)]).width
+    }
+}
+
+struct DragCardToSendActivityList: View {
+    let frame: DragCardToSendFrame
+    let layout: DragCardToSendLayout
+
+    private var rows: [DragCardToSendActivity] {
+        guard frame.sentCommitted else { return DragCardToSendData.rows }
+        let person = DragCardToSendData.people[frame.receiptPerson]
+        return [DragCardToSendActivity(id: "sent", name: person.fullName, meta: "Just now", cents: -frame.receiptAmount * 100,
+                                       person: frame.receiptPerson, merchant: nil)] + Array(DragCardToSendData.rows.prefix(3))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Text("Activity")
+                .font(.system(size: 19, weight: .semibold))
+                .tracking(-0.4)
+                .foregroundStyle(DragCardToSendPalette.ink)
+                .frame(height: 24)
+                .offset(x: 16, y: layout.activityTop)
+            Text("See all")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(DragCardToSendPalette.accent)
+                .frame(height: 20)
+                .offset(x: layout.width - 64, y: layout.activityTop + 2)
+
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                DragCardToSendActivityRow(row: row)
+                    .frame(width: layout.width - 32, height: 56)
+                    .offset(x: 16, y: layout.rowTop + CGFloat(index) * 56)
+            }
+        }
+    }
+}
+
+struct DragCardToSendActivityRow: View {
+    let row: DragCardToSendActivity
+
+    var body: some View {
+        HStack(spacing: 12) {
+            DragCardToSendActivityIcon(row: row)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(row.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(DragCardToSendPalette.ink)
+                    .frame(height: 20)
+                Text(row.meta)
+                    .font(.system(size: 13))
+                    .tracking(-0.1)
+                    .foregroundStyle(DragCardToSendPalette.mute)
+                    .frame(height: 16)
+            }
+            Spacer(minLength: 8)
+            Text(DragCardToSendFormat.money(row.cents, signed: true))
+                .font(.system(size: 16, weight: .semibold))
+                .tracking(-0.3)
+                .monospacedDigit()
+                .foregroundStyle(row.cents > 0 ? DragCardToSendPalette.accent : DragCardToSendPalette.ink)
+        }
+    }
+}
+
+struct DragCardToSendActivityIcon: View {
+    let row: DragCardToSendActivity
+
+    var body: some View {
+        Group {
+            if let person = row.person {
+                DragCardToSendAvatar(name: DragCardToSendData.people[person].id, size: 40)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(iconBackground)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(DragCardToSendPalette.hairline))
+                    Image(systemName: iconName)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(iconColor)
+                }
+                .frame(width: 40, height: 40)
+            }
+        }
+    }
+
+    private var iconName: String {
+        switch row.merchant { case .coffee: "cup.and.saucer.fill"; case .grocer: "leaf.fill"; case .transit: "tram.fill"; case nil: "" }
+    }
+    private var iconBackground: Color {
+        switch row.merchant {
+        case .coffee: Color(red: 245/255, green: 235/255, blue: 224/255)
+        case .grocer: Color(red: 225/255, green: 239/255, blue: 229/255)
+        case .transit: Color(red: 248/255, green: 240/255, blue: 207/255)
+        case nil: .clear
+        }
+    }
+    private var iconColor: Color {
+        switch row.merchant {
+        case .coffee: Color(red: 105/255, green: 63/255, blue: 37/255)
+        case .grocer: Color(red: 46/255, green: 113/255, blue: 72/255)
+        case .transit: Color(red: 120/255, green: 91/255, blue: 12/255)
+        case nil: .clear
+        }
+    }
+}
+
+struct DragCardToSendAvatar: View {
+    let name: String
+    let size: CGFloat
+
+    var body: some View {
+        Image(uiImage: DragCardToSendImages.photo(named: name))
+            .resizable()
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(DragCardToSendPalette.hairline, lineWidth: 1))
+    }
+}
+
+enum DragCardToSendImages {
+    private static var cache: [String: UIImage] = [:]
+
+    static func photo(named name: String) -> UIImage {
+        if let image = cache[name] { return image }
+        let resource = "DragCardToSend-\(name)"
+        let image = Bundle.main.path(forResource: resource, ofType: "jpg")
+            .flatMap(UIImage.init(contentsOfFile:)) ?? UIImage()
+        cache[name] = image
+        return image
     }
 }

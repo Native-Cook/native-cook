@@ -5,15 +5,16 @@ struct HabitBubbleCluster: View {
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @State private var model: HabitBubbleClusterModel
-    private let assets = HabitBubbleClusterAssets()
+    private let assets = HabitBubbleClusterAssets.shared
 
     init(autoPlay: Bool = false) {
-        _model = State(initialValue: HabitBubbleClusterModel(autoPlay: autoPlay, reducedMotion: false))
+        _model = State(initialValue: HabitBubbleClusterModel(autoPlay: autoPlay))
     }
 
     var body: some View {
         GeometryReader { safeAreaProxy in
             let safeTop = safeAreaProxy.safeAreaInsets.top
+            let safeBottom = safeAreaProxy.safeAreaInsets.bottom
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
                     HabitBubbleClusterCanvas(model: model, assets: assets)
@@ -24,12 +25,22 @@ struct HabitBubbleCluster: View {
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
                 .onAppear {
                     assert(Self.loop * 1000 == HabitBubbleClusterTokens.loopMs, "loop and LOOP_MS disagree")
-                    model.reducedMotion = accessibilityReduceMotion
-                    model.update(size: proxy.size, safeTop: safeTop)
+                    model.update(size: proxy.size, safeTop: safeTop, safeBottom: safeBottom)
+                    model.updateReducedMotion(accessibilityReduceMotion)
                     model.start()
                 }
-                .onChange(of: proxy.size) { _, size in model.update(size: size, safeTop: safeTop) }
-                .onChange(of: accessibilityReduceMotion) { _, value in model.reducedMotion = value }
+                .onChange(of: proxy.size) { _, size in
+                    model.update(size: size, safeTop: safeTop, safeBottom: safeBottom)
+                }
+                .onChange(of: safeTop) { _, value in
+                    model.update(size: proxy.size, safeTop: value, safeBottom: safeBottom)
+                }
+                .onChange(of: safeBottom) { _, value in
+                    model.update(size: proxy.size, safeTop: safeTop, safeBottom: value)
+                }
+                .onChange(of: accessibilityReduceMotion) { _, value in
+                    model.updateReducedMotion(value)
+                }
                 .onDisappear { model.stop() }
             }
             .ignoresSafeArea()
@@ -39,17 +50,17 @@ struct HabitBubbleCluster: View {
     }
 }
 
-struct HabitBubbleClusterAccessibility: View {
+private struct HabitBubbleClusterAccessibility: View {
     let model: HabitBubbleClusterModel
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(HabitBubbleClusterSimulation.entities.indices, id: \.self) { index in
                 let entity = HabitBubbleClusterSimulation.entities[index]
-                if entity.set == model.tab && !entity.quiet {
+                if entity.set == model.tab, !entity.quiet {
                     Button(entity.name) { model.toggle(index) }
                         .accessibilityValue(model.simulation.doneTarget[index] > 0.5 ? "Completed" : "Open")
-                        .accessibilityHint(model.simulation.doneTarget[index] > 0.5 ? "Double tap to reopen" : "Double tap to complete")
+                        .accessibilityHint(model.simulation.doneTarget[index] > 0.5 ? "Double tap to reopen" : "Double tap to mark it done")
                 }
             }
         }

@@ -99,11 +99,14 @@ internal class PageCurlFallback(
         canvas.translate(-axisX, -axisY)
         canvas.clipRect(0f, 0f, widthDp, heightDp)
         val showThrough = u.bg * u.ba / 3f
+        val paper = u.bg * (1f - u.ba)
+        val greenTint = 0.972f
+        val blueTint = 0.918f
         val matrix = ColorMatrix(
             floatArrayOf(
-                showThrough, showThrough, showThrough, 0f, 255f * u.bg * (1f - u.ba),
-                showThrough, showThrough, showThrough, 0f, 255f * u.bg * (1f - u.ba),
-                showThrough, showThrough, showThrough, 0f, 255f * u.bg * (1f - u.ba),
+                showThrough, showThrough, showThrough, 0f, 255f * paper,
+                showThrough * greenTint, showThrough * greenTint, showThrough * greenTint, 0f, 255f * paper * greenTint,
+                showThrough * blueTint, showThrough * blueTint, showThrough * blueTint, 0f, 255f * paper * blueTint,
                 0f, 0f, 0f, 1f, 0f,
             ),
         )

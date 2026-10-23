@@ -1,218 +1,307 @@
 package com.ngocdevv.nativecook.blocks.gestures.tiltswipeactions
 
-import androidx.compose.animation.core.Easing
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.exp
-import kotlin.math.sin
-import kotlin.math.sqrt
+import kotlin.math.max
+import kotlin.math.min
 
-/**
- * Reanimated's Easing.inOut(Easing.quad): the default easing of withTiming, which the reference
- * uses for the tile colour, the finger's fade, the tab switch and the reduced-motion steps.
- */
-internal val EaseInOutQuad = Easing { t ->
-    if (t < 0.5f) 2f * t * t else 1f - 2f * (1f - t) * (1f - t)
-}
+internal const val TILT_SWIPE_RESUME = 2f
+internal const val TILT_SWIPE_TIDY = 0.8f
 
-/**
- * The frame clock of every [MotionValue] of one block. The reference writes Reanimated shared
- * values from worklets (an assignment takes effect at once, withSpring/withTiming start on the next
- * frame, and a new animation replaces the running one and inherits its velocity); this keeps the
- * same semantics on Compose state so a read in a graphicsLayer or draw lambda only redraws that.
- */
-internal class MotionClock {
-    private val running = ArrayList<MotionValue>(16)
-    private var elapsedSeconds = 0.0
+internal class TiltSwipeActionsRowMotion {
+    var pull by mutableFloatStateOf(0f)
+    var tx by mutableFloatStateOf(0f)
+    var split by mutableIntStateOf(0)
+    var flagged by mutableStateOf(false)
+    var deleted by mutableStateOf(false)
+    var target by mutableIntStateOf(1)
+    var pressed = false
+    var armed = false
+    var dragOriginTx = 0f
 
-    fun add(value: MotionValue) {
-        if (value.queued) return
-        value.queued = true
-        running.add(value)
-    }
-
-    /** Advances from frame-clock deltas; clamping at the caller prevents a stall from skipping motion. */
-    fun tick(deltaSeconds: Float) {
-        elapsedSeconds += deltaSeconds
-        var index = 0
-        // A callback may start animations (appended, so they get their first tick in this pass).
-        while (index < running.size) {
-            val value = running[index]
-            value.tick(elapsedSeconds)
-            if (value.isAnimating) {
-                index += 1
-            } else {
-                value.queued = false
-                running.removeAt(index)
-            }
-        }
+    fun reset() {
+        pull = 0f
+        tx = 0f
+        split = 0
+        flagged = false
+        deleted = false
+        target = 1
+        pressed = false
+        armed = false
+        dragOriginTx = 0f
     }
 }
+internal sealed interface TiltSwipeActionsToast {
+    data class Split(val row: Int, val count: Int) : TiltSwipeActionsToast
+    data class Delete(val row: Int) : TiltSwipeActionsToast
+}
 
-/** A Reanimated shared value holding one Float, with the animation that currently drives it. */
-internal class MotionValue(initial: Float, private val clock: MotionClock) {
-    private val state = mutableFloatStateOf(initial)
+internal class TiltSwipeActionsController(
+    private val autoPlay: Boolean,
+    val reducedMotion: Boolean,
+) {
+    val rows = List(Transactions.size) { TiltSwipeActionsRowMotion() }
+    var tick by mutableFloatStateOf(0f)
+        private set
+    var scriptTime by mutableFloatStateOf(0f)
+        private set
+    var playing = false
+        private set
+    var touching = false
+        private set
+    var quiet = if (autoPlay && !reducedMotion) TILT_SWIPE_RESUME else 0f
+        private set
+    var tidy = if (autoPlay && !reducedMotion) 0f else -1f
+        private set
+    var toast: TiltSwipeActionsToast? by mutableStateOf(null)
+        private set
+    var toastAge by mutableFloatStateOf(0f)
+        private set
+    var menuOpen by mutableStateOf(false)
+    var activeRow = -1
+        private set
 
-    val value: Float get() = state.floatValue
-
-    /** Velocity of the running spring in units per second, the part a new spring inherits. */
-    private var velocity = 0f
-    private var animation: MotionAnimation? = null
-    internal var queued = false
-
-    val isAnimating: Boolean get() = animation != null
-
-    /** value = x: an assignment cancels the running animation (its callback gets finished = false). */
-    fun set(next: Float) {
-        stop(finished = false)
-        state.floatValue = next
-    }
-
-    /** cancelAnimation(value): stops where it is. */
-    fun cancelAnimation() {
-        stop(finished = false)
-    }
-
-    /**
-     * withSpring(target, { damping, stiffness, mass, velocity }), optionally behind withDelay.
-     * Like Reanimated the new spring starts from the value with the previous spring's velocity
-     * plus [velocity].
-     */
-    fun spring(
-        target: Float,
-        spec: TiltSpring,
-        velocity: Float = 0f,
-        delaySeconds: Float = 0f,
-        onEnd: ((Boolean) -> Unit)? = null,
-    ) {
-        val initial = if (animation != null) this.velocity + velocity else velocity
-        start(SpringAnimation(target, spec, initial, delaySeconds, onEnd))
-    }
-
-    /** withTiming(target, { duration, easing }). */
-    fun timing(
-        target: Float,
-        durationMs: Int,
-        easing: Easing = EaseInOutQuad,
-        onEnd: ((Boolean) -> Unit)? = null,
-    ) {
-        // A timing animation has no velocity to hand on.
-        velocity = 0f
-        start(TimingAnimation(target, durationMs, easing, onEnd))
-    }
-
-    internal fun tick(nowSeconds: Double) {
-        val running = animation ?: return
-        if (running.step(nowSeconds)) {
-            animation = null
-            velocity = 0f
-            running.onEnd?.invoke(true)
+    fun step(dtSeconds: Float) {
+        val dt = dtSeconds.coerceIn(0f, 0.05f)
+        tick += dt
+        if (toast != null && !playing) {
+            toastAge += dt
+            if (toastAge >= 4f) toast = null
+        }
+        if (!autoPlay || reducedMotion || touching) return
+        if (!playing) {
+            quiet += dt
+            if (tidy < 0f && quiet >= TILT_SWIPE_RESUME) {
+                resetRows()
+                tidy = 0f
+            }
+            if (tidy >= 0f) {
+                tidy += dt
+                if (tidy >= TILT_SWIPE_TIDY) {
+                    tidy = -1f
+                    scriptTime = 0f
+                    playing = true
+                }
+            }
+            return
+        }
+        scriptTime += dt
+        if (scriptTime >= LOOP) {
+            scriptTime %= LOOP
+            resetRows()
         }
     }
 
-    private fun start(next: MotionAnimation) {
-        val previous = animation
-        animation = next
-        previous?.onEnd?.invoke(false)
-        clock.add(this)
-    }
-
-    private fun stop(finished: Boolean) {
-        val previous = animation ?: return
-        animation = null
-        velocity = 0f
-        previous.onEnd?.invoke(finished)
-    }
-
-    private abstract inner class MotionAnimation(val onEnd: ((Boolean) -> Unit)?) {
-        var startedAt = Double.NaN
-
-        /** Returns true when the animation is over (the value then equals the target). */
-        abstract fun step(nowSeconds: Double): Boolean
-    }
-
-    private inner class TimingAnimation(
-        private val target: Float,
-        private val durationMs: Int,
-        private val easing: Easing,
-        onEnd: ((Boolean) -> Unit)?,
-    ) : MotionAnimation(onEnd) {
-        private var from = 0f
-
-        override fun step(nowSeconds: Double): Boolean {
-            if (startedAt.isNaN()) {
-                startedAt = nowSeconds
-                from = state.floatValue
-            }
-            val elapsedMs = (nowSeconds - startedAt) * 1000.0
-            if (elapsedMs >= durationMs) {
-                state.floatValue = target
-                return true
-            }
-            val progress = easing.transform((elapsedMs / durationMs).toFloat())
-            state.floatValue = from + (target - from) * progress
-            return false
+    fun touchStart(row: Int) {
+        touching = true
+        quiet = 0f
+        tidy = -1f
+        if (playing) {
+            applyScriptAsManual(scriptTime)
+            playing = false
+        }
+        activeRow = row
+        if (row in rows.indices) {
+            rows.forEachIndexed { index, state -> if (index != row && state.tx < -1f) state.tx = 0f }
+            rows[row].pressed = true
+            rows[row].dragOriginTx = rows[row].tx
         }
     }
 
-    /**
-     * Reanimated's closed-form spring: m x'' = -k (x - target) - c x', started from the current
-     * value, at rest when the speed is under 2 and the distance under 0.01 (its defaults).
-     */
-    private inner class SpringAnimation(
-        private val target: Float,
-        spec: TiltSpring,
-        private val initialVelocity: Float,
-        private val delaySeconds: Float,
-        onEnd: ((Boolean) -> Unit)?,
-    ) : MotionAnimation(onEnd) {
-        private val omega = sqrt(spec.stiffness / spec.mass)
-        private val zeta = spec.damping / (2f * sqrt(spec.stiffness * spec.mass))
-        private var begun = false
-        private var begunAt = 0.0
-        private var offset0 = 0f
+    fun rowForSlot(slot: Int): Int = rows.indices.filterNot { rows[it].deleted }.getOrElse(slot) { -1 }
 
-        override fun step(nowSeconds: Double): Boolean {
-            if (startedAt.isNaN()) startedAt = nowSeconds
-            if (!begun) {
-                if (nowSeconds - startedAt < delaySeconds) return false
-                begun = true
-                begunAt = nowSeconds
-                offset0 = state.floatValue - target
-                velocity = initialVelocity
-            }
-            val t = (nowSeconds - begunAt).toFloat()
-            val offset: Float
-            val speed: Float
-            if (zeta < 1f) {
-                val damped = omega * sqrt(1f - zeta * zeta)
-                val decay = zeta * omega
-                val sine = (initialVelocity + decay * offset0) / damped
-                val envelope = exp(-decay * t)
-                val c = cos(damped * t)
-                val s = sin(damped * t)
-                offset = envelope * (offset0 * c + sine * s)
-                speed = envelope * ((sine * damped - decay * offset0) * c + (-offset0 * damped - decay * sine) * s)
+    fun drag(row: Int, dx: Float) {
+        if (row !in rows.indices) return
+        val state = rows[row]
+        if (dx >= 0f && state.tx >= -1f) {
+            val lastDetent = 72f + 3f * 60f
+            state.pull = if (dx > lastDetent) lastDetent + (dx - lastDetent) * 0.35f else dx
+            state.target = splitTarget(state.pull, state.target)
+            state.tx = 0f
+        } else {
+            var x = min(0f, state.dragOriginTx + dx)
+            val soft = -370f * 0.85f
+            if (x < soft) x = soft + (x - soft) * 0.35f
+            state.tx = x
+            state.pull = 0f
+            state.armed = -x > 370f * 0.55f
+        }
+    }
+
+    fun touchEnd(row: Int, dx: Float, velocityX: Float, tapX: Float) {
+        if (row in rows.indices) {
+            val state = rows[row]
+            if (abs(dx) < 8f) {
+                settleTap(row, tapX)
+            } else if (state.pull > 0f) {
+                if (state.target >= 2) commitSplit(row, state.target) else state.pull = 0f
             } else {
-                // Critically damped (an over-damped config would only be slower to settle).
-                val k = initialVelocity + omega * offset0
-                val envelope = exp(-omega * t)
-                offset = envelope * (offset0 + k * t)
-                speed = envelope * (k - omega * (offset0 + k * t))
+                val width = 370f
+                val revealed = -state.tx
+                if (state.armed || (velocityX < -1400f && revealed > width * 0.4f)) {
+                    state.deleted = true
+                    state.tx = -400f
+                    toast = TiltSwipeActionsToast.Delete(row)
+                    toastAge = 0f
+                } else if ((revealed > 78f && velocityX < 300f) || velocityX < -500f) {
+                    state.tx = TiltSwipeActionsLayout.OPEN_X
+                } else {
+                    state.tx = 0f
+                }
             }
-            velocity = speed
-            if (abs(speed) < REST_SPEED && abs(offset) < REST_DISTANCE) {
-                state.floatValue = target
-                return true
+            state.pressed = false
+        }
+        touching = false
+        quiet = 0f
+        activeRow = -1
+    }
+
+    fun cancelTouch() {
+        if (activeRow in rows.indices) {
+            val state = rows[activeRow]
+            state.pull = 0f
+            state.tx = if (-state.tx > 78f) TiltSwipeActionsLayout.OPEN_X else 0f
+            state.pressed = false
+        }
+        touching = false
+        quiet = 0f
+        activeRow = -1
+    }
+
+    fun undo() {
+        when (val current = toast) {
+            is TiltSwipeActionsToast.Split -> rows[current.row].split = 0
+            is TiltSwipeActionsToast.Delete -> {
+                rows[current.row].deleted = false
+                rows[current.row].tx = 0f
             }
-            state.floatValue = target + offset
-            return false
+            null -> Unit
+        }
+        toast = null
+        toastAge = 0f
+    }
+
+    fun toggleMenu() {
+        menuOpen = !menuOpen
+    }
+
+    fun closeMenu() {
+        menuOpen = false
+    }
+
+    private fun settleTap(row: Int, x: Float) {
+        val state = rows[row]
+        if (state.tx > -1f) return
+        val flagLeft = 370f - 144f
+        val deleteLeft = flagLeft + 72f
+        when {
+            x in deleteLeft..(deleteLeft + 72f) -> {
+                state.deleted = true
+                state.tx = -400f
+                toast = TiltSwipeActionsToast.Delete(row)
+                toastAge = 0f
+            }
+            x in flagLeft..deleteLeft -> {
+                state.flagged = !state.flagged
+                state.tx = 0f
+            }
+            else -> state.tx = 0f
         }
     }
 
-    private companion object {
-        const val REST_SPEED = 2f
-        const val REST_DISTANCE = 0.01f
+    private fun commitSplit(row: Int, count: Int) {
+        val state = rows[row]
+        state.split = count
+        state.pull = 0f
+        state.target = 1
+        toast = TiltSwipeActionsToast.Split(row, count)
+        toastAge = 0f
+    }
+
+    private fun splitTarget(pull: Float, previous: Int): Int {
+        var result = previous.coerceIn(1, 5)
+        for (count in 2..5) {
+            val at = 72f + (count - 2) * 60f
+            if (pull >= at) result = count
+            if (pull < at - 8f && result >= count) result = count - 1
+        }
+        return result.coerceIn(1, 5)
+    }
+
+    private fun applyScriptAsManual(time: Float) {
+        resetRows()
+        if (time >= 2.9f && time < 5.75f) {
+            rows[2].split = 3
+            toast = TiltSwipeActionsToast.Split(2, 3)
+            toastAge = max(0f, time - 3.06f)
+        }
+        if (time in 3.7f..7.22f) rows[3].tx = if (time < 4.25f) scriptedOpen(time) else TiltSwipeActionsLayout.OPEN_X
+    }
+
+    private fun resetRows() {
+        rows.forEach(TiltSwipeActionsRowMotion::reset)
+        toast = null
+        toastAge = 0f
+        menuOpen = false
+    }
+
+    fun scriptedPull(): Float = scriptedAlong(
+        scriptTime,
+        floatArrayOf(0.7f, 1.25f, 1.6f, 2.1f, 2.9f),
+        floatArrayOf(0f, 100f, 100f, 170f, 170f),
+    )
+
+    fun scriptedOpen(time: Float = scriptTime): Float = scriptedAlong(
+        time,
+        floatArrayOf(3.7f, 4.25f),
+        floatArrayOf(0f, -150f),
+    )
+
+    fun scriptSplitCount(): Int = when {
+        scriptedPull() >= 132f -> 3
+        scriptedPull() >= 72f -> 2
+        else -> 1
+    }
+
+    fun scriptToast(): TiltSwipeActionsToast? =
+        if (playing && scriptTime in 3.06f..<5.75f) TiltSwipeActionsToast.Split(2, 3) else toast
+
+    fun scriptToastProgress(): Float {
+        if (!playing) return if (toast == null) 0f else min(1f, toastAge / 0.28f) * min(1f, (4f - toastAge) / 0.14f)
+        val t = scriptTime
+        return when {
+            t < 3.06f -> 0f
+            t < 3.34f -> smooth((t - 3.06f) / 0.28f)
+            t < 5.61f -> 1f
+            t < 5.75f -> 1f - smooth((t - 5.61f) / 0.14f)
+            else -> 0f
+        }
+    }
+
+    fun scriptFinger(): Triple<Float, Float, Float>? {
+        if (!playing) return null
+        val t = scriptTime
+        return when {
+            t in 0.7f..2.9f -> Triple(16f + 193f + scriptedPull(), 24f, 1f)
+            t in 3.7f..4.25f -> Triple(16f + 300f + scriptedOpen(), 0f, 1f)
+            t in 5.6f..5.75f -> Triple(-40f, -40f, 1f)
+            t in 7.1f..7.22f -> Triple(16f + 120f, 0f, 1f)
+            else -> null
+        }
+    }
+
+    private fun scriptedAlong(time: Float, times: FloatArray, values: FloatArray): Float {
+        if (time <= times.first()) return values.first()
+        for (index in 1 until times.size) {
+            if (time <= times[index]) {
+                val u = cosineEase((time - times[index - 1]) / (times[index] - times[index - 1]))
+                return lerp(values[index - 1], values[index], u)
+            }
+        }
+        return values.last()
     }
 }

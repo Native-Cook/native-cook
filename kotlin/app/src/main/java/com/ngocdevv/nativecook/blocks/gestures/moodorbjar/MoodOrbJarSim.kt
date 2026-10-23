@@ -270,14 +270,17 @@ internal fun initialSim(g: MoodOrbJarGeometry, reduced: Boolean, autoPlay: Boole
         s.fade[i] = if (on) 1.0 else 0.0
     }
     repeat(MoodOrbJarPile.SETTLE_STEPS) { stepJar(s, g, true) }
-    val sourceScale = g.w / 1206.0
+    repeat(4) {
+        for (i in 0 until PILE_N) {
+            s.state[i] = MoodOrbJarOrb.PILE
+            s.hx[i] = s.x[i]
+            s.hy[i] = s.y[i]
+            s.vx[i] = 0.0
+            s.vy[i] = 0.0
+        }
+        repeat(240) { stepJar(s, g, false) }
+    }
     for (i in 0 until PILE_N) {
-        val source = MoodOrbJarTokens.REPLICA_PILE[i]
-        s.x[i] = source.x * sourceScale
-        s.y[i] = source.y * sourceScale
-        s.mood[i] = source.mood
-        s.spin[i] = if (MoodOrbJarTheme.REPLICA) -source.turn * PI / 180.0 else 0.0
-        s.state[i] = MoodOrbJarOrb.PILE
         s.hx[i] = s.x[i]
         s.hy[i] = s.y[i]
         s.vx[i] = 0.0
@@ -484,49 +487,15 @@ private fun runDemo(s: MoodOrbJarSim, g: MoodOrbJarGeometry, t0: Double, t1: Dou
     if (t0 < w[1] && w[1] <= t1 && s.swiping) applyInput(s, g, MoodOrbJarInput.Up(0.0, 0.0))
 }
 
-/** Restores every visible value at the loop seam, including tiny spring residues. */
-private fun resetLoopRest(s: MoodOrbJarSim) {
+private fun resetPileAtLoopSeam(s: MoodOrbJarSim) {
     for (i in 0 until POOL) {
-        if (i < PILE_N) {
-            s.state[i] = MoodOrbJarOrb.PILE
+        if (s.state[i] == MoodOrbJarOrb.PILE && i < PILE_N) {
             s.x[i] = s.hx[i]
             s.y[i] = s.hy[i]
-            s.fade[i] = 1.0
-        } else {
-            s.state[i] = MoodOrbJarOrb.OFF
-            s.fade[i] = 0.0
-        }
-        s.vx[i] = 0.0
-        s.vy[i] = 0.0
-        s.restT[i] = 0.0
-        s.t[i] = 0.0
-        s.spin[i] = 0.0
-        s.sq[i] = 0.0
-        s.sqv[i] = 0.0
-        s.pvy[i] = 0.0
-    }
-    s.held = -1
-    s.swiping = false
-    s.rowX = 0.0
-    s.rowV = 0.0
-    s.lastAdded = -1
-    s.lid = 0.0
-    s.lidV = 0.0
-    s.lidHold = 0.0
-    s.slotScale.fill(1.0)
-    s.ghostT = -1.0
-    s.growT = -1.0
-    s.rippleT = -1.0
-    s.hopAt = 0
-}
-
-private fun hasTransientOrb(s: MoodOrbJarSim): Boolean {
-    for (i in PILE_N until POOL) {
-        if (s.state[i] != MoodOrbJarOrb.OFF) {
-            return true
+            s.vx[i] = 0.0
+            s.vy[i] = 0.0
         }
     }
-    return false
 }
 
 private fun fixedStep(s: MoodOrbJarSim, g: MoodOrbJarGeometry, autoPlay: Boolean) {
@@ -537,22 +506,16 @@ private fun fixedStep(s: MoodOrbJarSim, g: MoodOrbJarGeometry, autoPlay: Boolean
         runDemo(s, g, t0, t1)
         if (t1 * 1000 >= MoodOrbJarMotion.LOOP_MS) {
             t1 -= MoodOrbJarMotion.LOOP_MS / 1000
-            resetLoopRest(s)
+            resetPileAtLoopSeam(s)
         }
         s.demoT = t1
     } else if (autoPlay && s.held < 0 && !s.swiping) {
         s.quiet += dt
-        if (s.quiet * 1000 >= MoodOrbJarMotion.RESUME_MS) {
-            if (s.lastAdded >= 0 && s.state[s.lastAdded] == MoodOrbJarOrb.PILE) {
-                s.scripted = true
-                undo(s)
-                s.scripted = false
-            } else if (!hasTransientOrb(s)) {
-                resetLoopRest(s)
-                s.demoOn = true
-                s.demoT = 0.0
-                s.quiet = 0.0
-            }
+        var busy = false
+        for (i in PILE_N until POOL) if (s.state[i] != MoodOrbJarOrb.OFF) busy = true
+        if (s.quiet * 1000 >= MoodOrbJarMotion.RESUME_MS && !busy) {
+            s.demoOn = true
+            s.demoT = 0.0
         }
     }
 
@@ -642,7 +605,7 @@ private fun fixedStep(s: MoodOrbJarSim, g: MoodOrbJarGeometry, autoPlay: Boolean
     if (hop != s.hopAt) {
         s.hopAt = hop
         val index = (hop * 7) % PILE_N
-        if (hop != 0 && !s.reduced && s.state[index] == MoodOrbJarOrb.PILE) {
+        if (hop != 0 && loopTime < MoodOrbJarHop.LAST && !s.reduced && s.state[index] == MoodOrbJarOrb.PILE) {
             s.vy[index] -= MoodOrbJarHop.SPEED * g.s
         }
     }
@@ -697,8 +660,7 @@ private fun fixedStep(s: MoodOrbJarSim, g: MoodOrbJarGeometry, autoPlay: Boolean
 }
 
 internal fun stepSim(s: MoodOrbJarSim, g: MoodOrbJarGeometry, frameDt: Double, autoPlay: Boolean, uncapped: Boolean = false) {
-    val delta = if (uncapped) frameDt else min(frameDt, MoodOrbJarMotion.MAX_FRAME_DELTA)
-    s.acc = if (uncapped) s.acc + delta else min(s.acc + delta, MoodOrbJarMotion.STEP * MoodOrbJarMotion.MAX_STEPS)
+    s.acc = if (uncapped) s.acc + frameDt else min(s.acc + frameDt, MoodOrbJarMotion.STEP * MoodOrbJarMotion.MAX_STEPS)
     while (s.acc >= MoodOrbJarMotion.STEP) {
         fixedStep(s, g, autoPlay)
         s.acc -= MoodOrbJarMotion.STEP

@@ -1,82 +1,67 @@
-import { Easing } from 'react-native-reanimated';
+/**
+ * Every number the motion uses. Springs are (duration ms, damping ratio); a finger always ends in a spring, the
+ * slot's sequence after a release is one clock so the loop repeats exactly. Ease-out enters, ease-in-out moves across;
+ * nothing eases in.
+ */
+export const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+export const EASE_IN_OUT = [0.77, 0, 0.175, 1] as const;
 
-/** Every number the motion uses. */
 export const DRAG = {
-  /** Movement that decides between a swipe (carousel) and a pull (drop). */
+  /** Movement that decides between a swipe (carousel) and a pull (into the slot). */
   decide: 8,
-  /** Pull at which the slot will take the card. */
-  commit: 170,
-  /** Pull at which the card has shrunk to `minScale` and leans back by `leanDeg` (it tips into the slot, as in the source). */
-  full: 250,
-  /** The card keeps its width and tips back, so it reads about half height by the time it reaches the pocket (frame 056). */
-  minScale: 0.92,
-  leanDeg: 64,
+  /** Pull at which the slot will take the card, and the pull at which the card has fully leaned into it. */
+  commit: 150,
+  full: 210,
+  /** The card shrinks a little and leans back as it nears the slot, so its bottom edge meets the opening. */
+  minScale: 0.8,
+  leanDeg: 46,
   lift: 1.03,
   upResist: 0.2,
+  sideResist: 0.25,
   swipeVelocity: 600,
 } as const;
 
 export const SPRINGS = {
-  snap: { stiffness: 260, damping: 28, mass: 1 },
-  back: { stiffness: 320, damping: 26, mass: 1 },
-  centre: { stiffness: 420, damping: 30, mass: 0.8 },
-  rise: { stiffness: 170, damping: 20, mass: 1 },
-  lift: { stiffness: 500, damping: 30, mass: 0.6 },
+  snap: { duration: 420, dampingRatio: 0.86 },
+  back: { duration: 380, dampingRatio: 0.8 },
+  lift: { duration: 200, dampingRatio: 1 },
 } as const;
 
-export const INSERT = {
-  centreMs: 160,
-  sinkMs: 300,
-  sinkEase: Easing.bezier(0.77, 0, 0.175, 1),
-  flashMs: 420,
-} as const;
-
-export const ACTIVATE = { ms: 1_150, dotMs: 280 } as const;
-
-export const PRINT = {
-  /** Three feeds, each pushing out this share of the card's height. */
-  feeds: 3,
-  feedShare: 0.22,
-  feedMs: 260,
-  feedGap: 90,
-  feedEase: Easing.out(Easing.back(1.6)),
-  /** The offer comes out narrower than the slot (300 pt × 0.48 = 144 pt), then grows as it rises. */
-  startScale: 0.44,
-  rollMs: 900,
-  detailsDelay: 280,
+/** After a release, ms from the release. */
+export const SEQ = {
+  /** The card slides the rest of the way into the slot. */
+  sink: 380,
+  /** The shelf reads the card: its light breathes twice. */
+  read: 1_000,
+  /** The activated gift rises out of the slot (spring-like ease-out), then turns over to its code. */
+  rise: 700,
+  pause: 140,
+  flip: 560,
+  /** Steps and button come in after the flip, 60 ms apart. */
   stagger: 60,
-  confetti: 72,
-  confettiLife: 1.6,
-  gravity: 820,
+  detailsIn: 260,
 } as const;
 
-/** Upgrade: ambient life and material on the carousel. */
-export const AMBIENT = { floatPt: 3, floatMs: 3_000, rollPerPt: 0.08, rollMax: 7, band: 0.4, bandMs: 6_000, slotBreathMs: 2_400 } as const;
+/** Closing: the gift leaves faster than it came, then the cards come back. */
+export const CLOSE = { out: 220, back: 420 } as const;
 
-/** The chevrons under the card: a slow bob, and the gap they keep ahead of a pulled card's top edge. */
-export const CHEVRON = { bobPt: 4, bobMs: 1_400, gap: 18 } as const;
+/** Titles change out-then-in: the old line leaves up, the new one arrives from below once it has gone. */
+export const TITLE = { out: 140, in: 220, rise: 6 } as const;
 
-/** Closing the offer is an exit: strong ease-out under 300 ms; the cards' return is a slower, rarer beat. */
-export const CLOSE = { ms: 260, ease: Easing.bezier(0.23, 1, 0.32, 1), returnMs: 420 } as const;
-
-/** Press feedback on the offer's buttons. */
-export const BUTTON_PRESS = { scale: 0.97, inMs: 100, outMs: 160 } as const;
+export const PRESS = { scale: 0.97, inMs: 100, outMs: 160 } as const;
 export const REDUCED_MS = 200;
 
-/** Autoplay: one scripted finger on one clock (ms). From the burger card, one swipe right to the parcels card (as the source),
- * pull it into the slot, read the offer, Done, then one swipe back. */
-export const LOOP_MS = 15_000;
-export const RESUME_AFTER_MS = 3_500;
+/** Autoplay: one scripted finger on one clock (ms). */
+export const LOOP_MS = 10_000;
+export const RESUME_MS = 2_000;
 export const SCRIPT = {
+  /** Swipe to Fernhouse, and back to Northline at the end. */
   swipes: [
-    { at: 1_000, ms: 450, dx: 200 },
-    { at: 12_700, ms: 450, dx: -200 },
+    { at: 500, ms: 460, dx: -220 },
+    { at: 8_950, ms: 460, dx: 220 },
   ],
-  pullDown: 2_400,
-  pullUp: 3_450,
-  pullBy: 252,
-  done: 11_000,
+  pullDown: 1_450,
+  pullUp: 2_500,
+  pullBy: 196,
+  done: 7_900,
 } as const;
-
-/** QA only: when set, the script stops at this time (ms) so a state can be photographed. Keep null. */
-export const QA_HOLD_AT: number | null = null;

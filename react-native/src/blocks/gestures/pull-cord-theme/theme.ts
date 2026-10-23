@@ -1,238 +1,183 @@
-// Every colour and size of the block. Sizes are points on a 402 pt wide screen and are scaled by width / 402.
-
-export type Palette = {
-  wallTop: string;
-  wallBottom: string;
-  panelShadow: string;
-  panelLight: string;
-  spill: string;
-  spillFar: string;
-  halo: string;
-  glassTint: string;
-  glassEdge: string;
-  glassEdgeLit: string;
-  glassSpecular: string;
-  filamentCore: string;
-  filamentGlow: string;
-  support: string;
-  wire: string;
-  metal: string[];
-  metalStops: number[];
-  thread: string;
-  cord: string;
-  cordLit: string;
-  brass: string[];
-  brassStops: number[];
-  ink: string;
-  mute: string;
-};
-
-export const DARK: Palette = {
-  // Measured from the source: wall #0C0C0C–#0E1215, blue spill #19498F on the panel edges.
-  wallTop: '#0B0C0E',
-  wallBottom: '#0D1116',
-  panelShadow: '#030405',
-  panelLight: '#3C7EF2',
-  spill: 'rgba(36, 104, 230, 0.34)',
-  spillFar: 'rgba(36, 104, 230, 0)',
-  halo: 'rgba(52, 132, 255, 0.55)',
-  glassTint: 'rgba(40, 112, 255, 0.22)',
-  glassEdge: 'rgba(120, 186, 255, 0.55)',
-  glassEdgeLit: '#BFE0FF',
-  glassSpecular: 'rgba(235, 246, 255, 0.85)',
-  filamentCore: '#E4F3FF',
-  filamentGlow: '#2F86FF',
-  support: 'rgba(170, 210, 255, 0.35)',
-  wire: '#30343A',
-  metal: ['#2A2D31', '#7D838C', '#E9EDF2', '#9AA0A9', '#3A3E44', '#1C1E21'],
-  metalStops: [0, 0.22, 0.42, 0.62, 0.84, 1],
-  thread: 'rgba(0, 0, 0, 0.55)',
-  cord: '#3A414B',
-  cordLit: 'rgba(110, 170, 255, 0.55)',
-  brass: ['#2E2414', '#7A5E2E', '#D6B676', '#8E6C34', '#2A2012'],
-  brassStops: [0, 0.25, 0.45, 0.7, 1],
-  ink: '#EEF3FA',
-  mute: 'rgba(238, 243, 250, 0.56)',
-};
-
-export const LIGHT: Palette = {
-  wallTop: '#F3EEE6',
-  wallBottom: '#E7DFD2',
-  panelShadow: '#CBBFAE',
-  panelLight: '#FFFFFF',
-  spill: 'rgba(255, 196, 110, 0.5)',
-  spillFar: 'rgba(255, 196, 110, 0)',
-  halo: 'rgba(255, 184, 92, 0.6)',
-  glassTint: 'rgba(255, 228, 176, 0.3)',
-  glassEdge: 'rgba(120, 104, 82, 0.5)',
-  glassEdgeLit: '#FFFFFF',
-  glassSpecular: 'rgba(255, 255, 255, 0.95)',
-  filamentCore: '#FFF8E6',
-  filamentGlow: '#FFA733',
-  support: 'rgba(120, 96, 60, 0.35)',
-  wire: '#2F2A25',
-  metal: ['#4A4D52', '#9DA2AA', '#F6F7F9', '#B4B9C0', '#5A5E64', '#3A3C40'],
-  metalStops: [0, 0.22, 0.42, 0.62, 0.84, 1],
-  thread: 'rgba(40, 32, 20, 0.45)',
-  cord: '#3A332B',
-  cordLit: 'rgba(255, 255, 255, 0.5)',
-  brass: ['#5E461E', '#B48A42', '#F6DFA4', '#C29A52', '#5A4320'],
-  brassStops: [0, 0.25, 0.45, 0.7, 1],
-  ink: '#1D1A16',
-  mute: 'rgba(29, 26, 22, 0.58)',
-};
-
-// Warm light that rises inside the glass like a liquid (the alt source).
-export const LIQUID = {
-  top: 'rgba(255, 249, 232, 0.96)',
-  bottom: 'rgba(255, 186, 92, 0.92)',
-  meniscus: '#FFFFFF',
-  lightAlpha: 0.5, // in the light room the warm sprite already glows; the liquid only tints it
-  glow: '#FFA733',
-  filament: '#FFC261',
-  core: '#FFF8E6',
-  spill: 'rgba(255, 190, 100, 0.42)',
-  spillFar: 'rgba(255, 190, 100, 0)',
-  halo: 'rgba(255, 184, 92, 0.6)',
-  haloFar: 'rgba(255, 184, 92, 0)',
-};
+// Every colour, size and word of the block. Sizes are points on a 402 pt wide screen, scaled by width / 402.
+// Spacing sits on a 4 pt grid: page margin 24, header and body blocks on multiples of 4.
 
 export const STAGE_WIDTH = 402;
 
-/**
- * Spacing scale (step 0, 20 Oct): 4 pt base, from the source's panel bevel (3–4 pt) and the stiles' 12.5 % inset.
- * The upgrade's additions sit on it: the copy block 32 pt from the left and 48 pt from the foot with 8 pt between
- * its lines, and the cord 32 pt from the right edge, so the two margins mirror each other.
- */
-export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
-
-// Bulb, measured from the source frame f012 at 0.558 pt per px. Local frame: origin at the socket's top centre.
-export const BULB = {
-  socketTopRatio: 0.265, // of the screen height
-  wire: 700, // pivot above the socket top
-  socketWidth: 56,
-  socketHeight: 50,
-  capWidth: 40,
-  capHeight: 6,
-  threads: 5,
-  neckTop: 46,
-  neckHalf: 25,
-  radius: 68.5,
-  centerY: 156.5,
-  bottom: 225,
-  stemHalf: 8,
-  stemEnd: 108,
-  armHalf: 30,
-  foot: 146,
-  wireWidth: 2.6,
-  halo: 170,
+export type Palette = {
+  paper: string;
+  ink: string;
+  mute: string;
+  accent: string;
+  track: string;
 };
 
-export const CORD = {
-  xRatio: 1 - SPACE.xxl / STAGE_WIDTH, // of the width: 32 pt from the right edge (was 0.925, 30 pt), mirroring the copy's left margin
-  top: -14,
-  restYRatio: 0.56, // bead top at rest, of the height
-  points: 18,
-  width: 2.6,
-  beadWidth: 15,
-  beadHeight: 36,
-  beadRadius: 7.5,
-  crimpWidth: 7,
-  crimpHeight: 6,
-  hit: 56,
+// Day is the lamp on, Night the lamp off. One accent hue: the shade's green enamel, repeated in the page's rule
+// and the reading progress.
+export const DAY: Palette = {
+  paper: '#F1EBE0',
+  ink: '#27231E',
+  mute: '#6E6558', // 4.9:1 on the paper
+  accent: '#2F5D48',
+  track: '#DCD3C4',
 };
 
-// Neon glow of the filament: wide soft bloom, tight bloom, core.
-export const GLOW = {
-  wide: 12,
-  wideBlur: 10,
-  wideAlpha: 0.6,
-  tight: 5,
-  tightBlur: 3,
-  core: 2.2,
-  innerAlpha: 0.5, // blue light filling the dark scene's glass
+export const NIGHT: Palette = {
+  paper: '#121211',
+  ink: '#D8D0C2',
+  mute: '#8E877C', // 5.1:1 on the night paper
+  accent: '#83B097',
+  track: '#2A2926',
 };
 
-export const PANEL = {
-  insetRatio: 0.125, // the source's panel edges at 12.5 % and 87.5 %
-  bottomFromEnd: 36,
-  bevel: 3,
-  line: 1.5,
-  lip: 4, // the lit lip of each stile
-  lipBlur: 3,
+// The lamp's light along a blackbody ramp, by filament heat 0 (cold) to 1 (2,700 K).
+export const BLACKBODY = {
+  heat: [0, 0.3, 0.5, 0.72, 1],
+  color: ['#3A0800', '#B32204', '#F2600F', '#FFA94F', '#FFE4BC'],
+};
+
+// The pendant. Local frame: origin at the top of the cap, y down along the cord.
+export const LAMP = {
+  x: 312, // cord x: the shade clears the island and the heading
+  capTop: 60, // cap top at rest
+  cord: 640, // pivot (the ceiling) above the cap top
+  capHalf: 7,
+  capHeight: 12,
+  rimY: 72, // local
+  rimHalf: 68,
+  rimRy: 9, // the opening seen from a little below
+  lip: 2.4,
+  bulbY: 70, // local bulb centre
+  bulbR: 16,
+  socket: { x: 26, y: 74 }, // where the pull chain leaves the socket, local
+  depth: 120, // distance from the page (the wall) to the bulb
+  coneDeg: 64, // half angle of the light the shade lets out, around its axis
+  penumbraDeg: 8,
+};
+
+export const SHADE = {
+  // Lit room: the outside of the shade still faces away from its own bulb, so it stays deep; the window reflection is
+  // warm, picked up from the lit page below.
+  day: { hi: '#4E7362', mid: '#23402F', low: '#0E1B14', spec: 'rgba(255, 232, 196, 0.3)', lip: '#E2DACB', cord: '#1F1D1A' },
+  night: { hi: '#2A3A32', mid: '#121A16', low: '#090D0B', spec: 'rgba(196, 220, 208, 0.16)', lip: '#363A36', cord: '#2A2926' },
+  // The white enamel inside, lit by the bulb (centre, edge) or cold.
+  litCentre: '#FBEBD0',
+  litEdge: '#D9AD72',
+  coldCentre: '#34322D',
+  coldEdge: '#1C1B18',
+  glassCold: '#3A3833',
+  glassColdEdge: '#1A1916',
+  lipLit: '#F7D49E', // the rolled lip catching the bulb from inside
+  bounce: 'rgba(255, 204, 150, 0.16)', // the lit page's warm light on the dome's lower outside
+};
+
+// The page as a wall a little behind the lamp. The chain hangs from the back of the opening, between the bulb and
+// the wall, so the bulb throws its shadow onto the page: projected from the bulb, twice its distance (the wall is
+// twice as far from the bulb as the chain is), with a penumbra as wide as the bulb makes it.
+export const SHADOW = {
+  k: 2, // projection from the bulb through the chain onto the page
+  penumbra: 10, // pt, the soft width of the chain's shadow
+  chain: 0.45, // share of the direct light the ball chain takes away at the middle of its shadow
+  pull: 0.7, // the teardrop is wider
+  shadeUp: 30, // the shade's own shadow on the wall above it, cast by the light coming back up from the page
+  shadeRx: 110,
+  shadeRy: 60,
+  shadeDepth: 0.7, // share of that bounce light it takes away
+};
+
+// How the lit page is seen: an ambient share, the bounce off the room near the lamp, and the lamp's direct light.
+export const EXPOSE = {
+  ambient: 0.83, // far from the lamp
+  bounce: 0.06,
+  direct: 0.15, // in the pool
+  dim: 0.5, // the lit page dims to this with the filament before the front reaches it
+  adaptLift: 0.35, // the dark page's ambient lifts this much as the eye adapts to the light
+  adaptTime: 0.4,
+};
+
+// The lamp's light on the Night page while the filament glows: paper and type take this share of it.
+export const NIGHT_GLOW = { paper: 0.5, type: 0.12 };
+
+// Contrast of the type against the paper under it while the theme changes. Below `rest` (every role is above it at
+// rest, so the rest colours are untouched) mute leans toward the ink and is the ink at `floor`; the green leans the same
+// way by `accentShift` toward black (Day) or white (Night), keeping its hue. Worst frame: ink and mute 4:1, green 3.8:1.
+export const LEGIBLE = { floor: 3, rest: 4.2, accentShift: 0.5 };
+
+// The air under the shade: a faint haze in the cone and a few slow dust motes catching its light.
+export const AIR = {
+  cone: [56, 70], // degrees from the shade's axis: full haze inside the first, none past the second
+  reach: 140, // pt: the haze halves at this distance from the bulb
+  haze: 0.07, // strongest additive share, next to the bulb
+  motes: 12,
+  mote: 0.32, // a mote's peak brightness in full light
+  moteSize: [0.7, 1.3], // radius range, pt
+  drift: 6, // pt each mote wanders in a loop
+};
+
+// A nickel ball chain: one simulated particle per ball, so every ball is drawn where it really is.
+export const CHAIN = {
+  links: 24, // balls below the switch (one particle each), plus the switch's own end
+  pitch: 4.6, // ball centre to ball centre when the chain is straight
+  ball: 1.75, // radius: 1.1 pt of wire shows between balls
+  wire: 0.6,
+  pullWidth: 10, // the nickel teardrop pull
+  pullHeight: 22,
+  hit: 56, // touch target around the pull
+  // Each ball: a dark rim, a lit body offset toward the light, a specular point.
+  day: { rim: '#3F3D39', body: '#A8A196', spec: 'rgba(255, 244, 222, 0.95)', wire: '#5C5A55' },
+  night: { rim: '#1F1E1C', body: '#5E5B55', spec: 'rgba(232, 226, 216, 0.8)', wire: '#3A3935' },
+};
+
+// The pull switch's housing: a knurled nickel barrel hanging through the shade's opening, the chain leaving its foot.
+export const SWITCH_BODY = {
+  x: -30, // local, from the shade's axis: left of the bulb, at the back of the opening (between bulb and wall)
+  top: 60, // local, its top seen through the opening
+  height: 26, // its foot 6 pt below the rim's near edge
+  width: 9,
+  knurls: 4,
+  day: ['#4A4844', '#E2D6C2', '#8E8A82', '#3E3C38'],
+  night: ['#22211F', '#6E6A63', '#45423D', '#1C1B19'],
 };
 
 export const TYPE = {
-  margin: SPACE.xxl,
-  bottom: SPACE.xxl + SPACE.lg,
+  family: 'Newsreader',
+  margin: 24,
+  eyebrowTop: 124,
   eyebrowSize: 12,
-  eyebrowTracking: 1.8,
-  titleSize: 48,
-  titleFamily: 'Georgia',
-  titleLine: 54,
-  hintSize: 15,
-  hintLine: 20,
-  gap: SPACE.sm,
+  eyebrowLine: 16,
+  eyebrowTracking: 2.2,
+  titleTop: 144,
+  titleSize: 42,
+  titleLine: 48,
+  ruleTop: 192, // 12 pt under the title's baseline, as the eyebrow sits over its caps
+  ruleWidth: 28,
+  ruleHeight: 2,
+  bodyTop: 296,
+  bodySize: 18,
+  bodyLine: 29,
+  footBottom: 48, // labels' baseline box bottom from the screen's bottom
+  footSize: 13,
+  footLine: 16,
+  barGap: 12, // progress bar above the labels
+  barHeight: 2,
+};
+
+export const BOOK = {
+  title: 'The Salt Ledger',
+  chapter: 'CHAPTER SEVEN',
+  heading: 'Low Water',
+  body: [
+    'By the time the tide turned, Mara had counted the boats twice. Eleven out, ten back. She wrote the number in the ledger anyway, in pencil, the way her father had taught her: nothing in ink until morning.',
+    'The lamp above the desk swung a little whenever the door opened, and the light slid across the page and back. Outside, fog had taken the breakwater. The last ferry’s horn came through it late and flattened, like a voice from another room.',
+    'She left the window open. If the eleventh boat came in, she wanted to hear it before she saw it. Her father used to say the sea kept its own books, and that it was never late with a payment, only with the news.',
+  ],
+  page: 112,
+  pages: 304,
+  left: '9 min left in chapter',
 };
 
 export const COPY = {
-  eyebrow: 'APPEARANCE',
-  dark: 'Dark',
-  light: 'Light',
-  hint: 'Pull the cord to switch',
-  a11yLabel: 'Light cord',
-  a11yHint: 'Switches the app between dark and light theme',
-};
-
-// Replica step (owner's fidelity gate): show only what the source shows, framed like ref.py fit
-// (the 720 × 1280 source scaled ×2.048 to 2622 px tall, centre-cropped to 1206 px). Off after the lead accepts.
-export const REPLICA = false;
-export const FIT = { k: 2.048 / 3, cropX: -134 / 3 }; // source px → pt, and the crop's x offset in pt
-
-export const REPLICA_ART = {
-  // assets/wall.jpg was generated with its stiles at 148 / 1056 px; the source's are at 58 / 1148 px.
-  wallX: (58 - 148 * 1.2) / 3,
-  wallW: (1206 * 1.2) / 3,
-  // assets/bulb-*.png: 480 × 720 px, socket top at (240, 30) px, glass 408 px wide; the source's glass is
-  // 245 source px wide, i.e. 502 px on screen.
-  spriteScale: 1.26 / 3, // template-matched against the three refs (1.25–1.27 sprite px per screen px)
-  spriteW: 480,
-  spriteH: 720,
-  anchorX: 240,
-  anchorY: 30,
-  socketTopSrc: 370.6, // source px: socket top at 759 screen px in the refs
-  glassCenterSrc: 205, // below the socket top, source px
-  swingSrc: 82, // ± source px at the glass: ±169.5 screen px at the socket in the refs (measured on device)
-  centreSrc: 367.9, // swing centre at 619.5 screen px
-  halo: 170, // pt: a tight soft glow close to the bulb, as in the source
-  haloColor: 'rgba(40, 120, 240, 0.12)',
-  spill: 'rgba(20, 90, 255, 0.24)',
-  spillR: 0.8, // of the width
-  spillFall: ['rgba(30, 95, 235, 0.2)', 'rgba(30, 95, 235, 0.1)', 'rgba(30, 95, 235, 0)'], // slower falloff, as in the refs
-  spillStops: [0, 0.55, 1],
-  ambient: ['rgba(40, 90, 210, 0.05)', 'rgba(40, 90, 210, 0.025)'], // the lit room's faint blue reaching the far wall
-  ambientR: 1.6, // of the width
-  grabRadius: 110, // a touch this close to the glass centre swings the bulb
-  wire: 2000, // pt: the wire hangs from far above the frame, as in the source
-  wireColor: '#2E3136',
-  wireWidth: 6,
-  // The sprite's bright pixels already match the source (BGR 247,184,63 vs 243,179,62). Bloom: a bright-pass copy
-  // (only what is above half brightness survives), blurred and screened, so the filament and rim glow, not the glass.
-  // The glass interior must stay a clear dark blue: a contrast curve (×1.5 − 0.3) sinks the sprite's mid-tones.
-  interior: [1.12, 0, 0, 0, -0.05, 0, 1.12, 0, 0, -0.05, 0, 0, 1.12, 0, -0.05, 0, 0, 0, 1, 0],
-  // Tinted toward #1F7DFF so the bloom outside the glass is blue, not a white haze.
-  brightPass: [0.25, 0, 0, 0, -0.12, 0, 1, 0, 0, -0.5, 0, 0, 2, 0, -1, 0, 0, 0, 1, 0],
-  bloom: 10,
-  bloomOpacity: 0.55,
-  // The refs' dark wall is blue-black (BGR 19/12/8); the generated wall is neutral.
-  lightMap: 1, // QA: 0 while baking the light maps, 1 in use
-  wallTint: [0.48, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 1, 0], // the refs' unlit wall is ~10/10/10
-  // Door stiles lit by the bulb, measured in the fitted reference (px): lips at 50–75 and 1131–1162, brightest at
-  // y 1300, gone by 850 and 1800; the bottom rail's lit line at 2500–2522.
-  stileLeft: [28, 78], // the door's outer edge and its stile lip, both lit
-  stileRight: [1128, 1182],
-  stileGlow: [850, 1300, 1800],
-  stileColor: 'rgba(36, 104, 210, 0.85)',
-  railY: [2498, 2524],
-  railColor: 'rgba(18, 52, 120, 0.3)',
+  a11yLabel: 'Reading lamp',
+  a11yHint: 'Pull the chain to switch between the Day and Night page',
+  day: 'Day page',
+  night: 'Night page',
 };

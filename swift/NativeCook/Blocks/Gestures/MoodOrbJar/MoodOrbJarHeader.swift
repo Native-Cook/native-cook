@@ -9,33 +9,44 @@ struct MoodOrbJarHeader: View {
     let geometry: MoodOrbJarGeometry
 
     var body: some View {
-        HStack(spacing: 0) {
-            iconButton(Copy.back) {
-                MoodOrbJarChevron()
-            }
-            Spacer(minLength: 0)
+        ZStack(alignment: .topLeading) {
+            Text(Copy.title)
+                .font(.system(size: 17, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(Palette.ink)
+                .frame(width: geometry.width, height: Layout.header * geometry.scale)
+
             HStack(spacing: 0) {
-                iconButton(Copy.calendar) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(Palette.ink, lineWidth: 2)
-                        Text("14")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Palette.ink)
-                            .padding(.top, 1)
-                    }
-                    .frame(width: 22, height: 22)
+                iconButton(Copy.back) {
+                    MoodOrbJarChevron()
                 }
-                iconButton(Copy.more) {
-                    Text("•••")
-                        .font(.system(size: 13, weight: .bold))
-                        .tracking(1)
-                        .foregroundStyle(Palette.ink)
+                Spacer(minLength: 0)
+                HStack(spacing: 0) {
+                    iconButton(Copy.calendar) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 5)
+                                .strokeBorder(Palette.ink, lineWidth: 1.75)
+                            Text("14")
+                                .font(.system(size: 9, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.ink)
+                                .padding(.top, 1)
+                        }
+                        .frame(width: 20, height: 20)
+                    }
+                    iconButton(Copy.more) {
+                        Text("•••")
+                            .font(.system(size: 12, weight: .bold))
+                            .tracking(1)
+                            .foregroundStyle(Palette.ink)
+                    }
                 }
             }
+            .frame(width: geometry.width - 16, height: Layout.header * geometry.scale)
+            .offset(x: 8)
         }
-        .frame(width: geometry.width - 16, height: Layout.header * geometry.scale)
-        .offset(x: 8, y: geometry.safeTop)
+        .frame(width: geometry.width, height: Layout.header * geometry.scale, alignment: .topLeading)
+        .offset(y: geometry.safeTop)
     }
 
     private func iconButton<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {

@@ -14,7 +14,7 @@ import kotlin.math.roundToInt
  * blur from API 28; below that a few stacked rectangles stand in for it. Drawn in the canvas's
  * current units (dp here), with the colour's alpha as the shadow's strength.
  */
-internal class EnvelopeSoftRoundRect(argb: Int, private val sigma: Float) {
+internal class EnvelopeGiftRevealSoftRoundRect(argb: Int, private val sigma: Float) {
     private val baseAlpha = argb ushr 24
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = argb or 0xFF000000.toInt()

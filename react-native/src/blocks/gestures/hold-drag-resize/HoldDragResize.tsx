@@ -1,88 +1,92 @@
-/** A video editor whose preview you hold and drag to resize: compact, standard, full screen. */
-import { useEffect } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+/**
+ * Make room for deep work: Thursday's plan, at night, in Liquid Glass. Hold a block and drag its edge: the end clicks
+ * from quarter hour to quarter hour, the tasks after it are shoved later as one chain and stop hard against the next
+ * meeting; drag back and they spring home one after another. The whole screen is one Skia picture drawn from one
+ * model (scene.ts, model.ts) over a page made once at mount (backdrop.ts).
+ */
+import { Canvas, Picture, createPicture, useTypeface } from '@shopify/react-native-skia';
+import { useMemo } from 'react';
+import { PixelRatio, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useReducedMotion } from 'react-native-reanimated';
+import { useDerivedValue, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Chrome } from './Chrome';
-import { CoachMark, gotItCentre } from './CoachMark';
-import { previewFrame } from './layout';
-import { FRAMES, SIZES } from './motion';
-import { Preview } from './Preview';
-import { COLOR, LAYOUT } from './theme';
-import { Timeline } from './Timeline';
-import { useResize } from './use-resize';
-
-const NAMES = ['compact', 'standard', 'full screen'];
+import { makeBackdrop } from './backdrop';
+import { DAY_DATE, DAY_TITLE, KIND, PLAN, clock } from './day';
+import { drawScene, makeScene, type Faces, type SceneCtx } from './scene';
+import { COLOR, makeLayout, yOf, type Layout } from './theme';
+import { useDayResize } from './use-day-resize';
 
 export type HoldDragResizeProps = { autoPlay?: boolean };
 
 export function HoldDragResize({ autoPlay = false }: HoldDragResizeProps) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const reduceMotion = useReducedMotion();
-  const previewCentreY = FRAMES[0].top + SIZES[0] / 2;
-  const {
-    gesture, touchStart, touchEnd, stepSize, gotItPress, togglePlay, startCoachLoop,
-    coachOn, clip, second, playing, sizeIndex, near, values,
-  } = useResize({ autoPlay, reduceMotion, width, previewCentreY, gotIt: gotItCentre() });
-  const { shown, held, clock, coach: coachFade, coachP, ghostX, ghostY, ghostO, ghostPress, press, lag } = values;
+  const { width, height } = useWindowDimensions();
+  const reduced = useReducedMotion();
+  const regular = useTypeface(require('./assets/Inter-Regular.ttf'));
+  const medium = useTypeface(require('./assets/Inter-Medium.ttf'));
+  const semibold = useTypeface(require('./assets/Inter-SemiBold.ttf'));
+  const mono = useTypeface(require('./assets/JetBrainsMono-Medium.ttf'));
+  const monoBold = useTypeface(require('./assets/JetBrainsMono-Bold.ttf'));
+  if (!regular || !medium || !semibold || !mono || !monoBold) return <View style={styles.root} />;
+  const lay = makeLayout(width, height, insets.top, insets.bottom);
+  // The model's geometry and Reduce Motion are fixed per mount.
+  return (
+    <Screen key={`${width}x${height}-${insets.top}-${reduced}`} lay={lay} faces={{ regular, medium, semibold, mono, monoBold }}
+      reduced={reduced} autoPlay={autoPlay} />
+  );
+}
 
-  useEffect(() => { startCoachLoop(); }, [startCoachLoop]);
-
-  // The touch target follows the preview's frame.
-  const target = useAnimatedStyle(() => {
-    const p = previewFrame(shown.get(), width);
-    return { top: p.top, left: p.left, width: p.width, height: p.height };
+function Screen({ lay, faces, reduced, autoPlay }: { lay: Layout; faces: Faces; reduced: boolean; autoPlay: boolean }) {
+  // Reduce Motion: the plan at rest, no demo; a finger still resizes.
+  const { model, gesture, ui, adjust, touchStart, touchEnd } = useDayResize({ lay, autoPlay: autoPlay && !reduced, reduced });
+  const ctx: SceneCtx | null = useMemo(() => {
+    const back = makeBackdrop(lay, PixelRatio.get());
+    return back ? makeScene(lay, faces, back) : null;
+  }, [lay, faces]);
+  const picture = useDerivedValue(() => {
+    const m = model.get();
+    return createPicture((canvas) => {
+      if (ctx) drawScene(canvas, ctx, m);
+    });
   });
-  const ghost = useAnimatedStyle(() => ({
-    opacity: ghostO.get(),
-    transform: [
-      { translateX: ghostX.get() - LAYOUT.finger / 2 },
-      { translateY: ghostY.get() - LAYOUT.finger / 2 },
-      { scale: 1 - 0.18 * ghostPress.get() },
-    ],
-  }));
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.root} onTouchStart={touchStart} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
-        <Timeline shown={shown} lag={lag} clock={clock} width={width} topInset={insets.top} playing={playing} second={second} onTogglePlay={togglePlay} />
-        <Preview shown={shown} held={held} press={press} clock={clock} width={width} topInset={insets.top} clip={clip} near={near} reduceMotion={reduceMotion} />
+        <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Picture picture={picture} />
+        </Canvas>
         <GestureDetector gesture={gesture}>
-          <Animated.View
-            style={[styles.target, target]}
-            collapsable={false}
-            accessible
-            accessibilityRole="adjustable"
-            accessibilityLabel={`Video preview, ${NAMES[sizeIndex]}`}
-            accessibilityHint="Hold and drag up or down to resize. Swipe up or down with one finger to change size."
-            accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-            onAccessibilityAction={(e) => stepSize(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
-          />
+          <View style={StyleSheet.absoluteFill} collapsable={false}>
+            <View accessible accessibilityRole="header" accessibilityLabel={`${DAY_TITLE}, ${DAY_DATE}`}
+              style={[styles.a11y, { top: lay.top, left: 16, width: 200, height: 68 }]} />
+            {PLAN.map((item, i) => {
+              const s = ui.starts[i];
+              const e = ui.ends[i];
+              const top = yOf(lay, s);
+              const movable = item.kind !== KIND.meeting;
+              return (
+                <View
+                  key={item.id}
+                  accessible
+                  accessibilityRole={movable ? 'adjustable' : 'text'}
+                  accessibilityLabel={`${item.title}, ${clock(s)} to ${clock(e)}${item.note && item.kind === KIND.meeting ? `, ${item.note}` : ''}`}
+                  accessibilityHint={movable ? 'Hold and drag its edge to change how long it takes. Swipe up or down to move its end by a quarter hour.' : 'A meeting; it does not move.'}
+                  accessibilityActions={movable ? [{ name: 'increment' }, { name: 'decrement' }] : undefined}
+                  onAccessibilityAction={(ev) => adjust(i, ev.nativeEvent.actionName === 'increment' ? 1 : -1)}
+                  style={[styles.a11y, { top, left: lay.cardX, width: lay.cardW, height: yOf(lay, e) - top }]}
+                />
+              );
+            })}
+          </View>
         </GestureDetector>
-        {/* Above the touch target, so the controls that float over the video at full screen can be pressed. */}
-        <Chrome
-          shown={shown}
-          topInset={insets.top}
-          bottomInset={insets.bottom}
-          full={sizeIndex === SIZES.length - 1}
-          onCollapse={() => stepSize(-SIZES.length)}
-          onExitFull={() => stepSize(-1)}
-        />
-        <CoachMark coach={coachFade} coachP={coachP} on={coachOn} onGotIt={gotItPress} />
-        {autoPlay && <Animated.View style={[styles.ghost, ghost]} pointerEvents="none" />}
       </View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLOR.background },
-  target: { position: 'absolute' },
-  ghost: {
-    position: 'absolute', left: 0, top: 0, width: LAYOUT.finger, height: LAYOUT.finger, borderRadius: LAYOUT.finger / 2,
-    backgroundColor: COLOR.finger, borderWidth: 1, borderColor: COLOR.fingerEdge,
-  },
+  root: { flex: 1, backgroundColor: COLOR.page },
+  a11y: { position: 'absolute' },
 });

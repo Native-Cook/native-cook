@@ -1,6 +1,5 @@
 package com.ngocdevv.nativecook.blocks.gestures.pinchtosummarize
 
-import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RenderEffect
@@ -19,13 +18,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.center
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -100,7 +96,7 @@ private class PtsBlurNode(name: String) {
     }
 }
 
-/** Gradient field, deterministic motes, responsive glow, page shadow and stacked ghost card. */
+/** Baked gradient field, deterministic motes, responsive glow, page shadow and stacked card. */
 @Composable
 internal fun PtsField(
     stage: PtsStage,
@@ -188,27 +184,28 @@ internal fun PtsField(
         }
 
         withTransform({ scale(density, density, pivot = Offset.Zero) }) {
-            val ghostOpacity = ptsClamp01((progress - 0.6f) / 0.4f)
-            if (ghostOpacity > 0f) {
+            val stackOpacity = ptsClamp01((progress - PtsLayout.stackFrom) / PtsLayout.stackFade)
+            if (stackOpacity > 0f) {
+                val stackWidth = frame.width * PtsLayout.stackScale
                 drawRoundRect(
-                    color = PtsColor.ghost,
+                    color = PtsColor.stack,
                     topLeft = Offset(
-                        frame.x + PtsLayout.ghostInset,
-                        frame.y - PtsLayout.ghostPeek,
+                        frame.x + (frame.width - stackWidth) / 2f,
+                        frame.y - PtsLayout.stackPeek,
                     ),
                     size = Size(
-                        frame.width - PtsLayout.ghostInset * 2f,
+                        stackWidth,
                         frame.height,
                     ),
                     cornerRadius = CornerRadius(frame.radius),
-                    alpha = ghostOpacity,
+                    alpha = stackOpacity,
                 )
             }
         }
     }
 }
 
-/** Rim, scan, thinking shimmer, arrival bloom and scripted finger marks above the page. */
+/** Rim, arrival bloom and scripted finger marks above the page. */
 @Composable
 internal fun PtsLight(
     stage: PtsStage,
@@ -216,16 +213,6 @@ internal fun PtsLight(
     modifier: Modifier = Modifier,
 ) {
     val blurNodes = rememberPtsLightBlurNodes()
-    val thinkingPaint = remember {
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, 600, false)
-            } else {
-                android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            }
-        }
-    }
-
     Canvas(modifier = modifier.fillMaxSize()) {
         val density = density
         val progress = state.p.value
@@ -254,34 +241,6 @@ internal fun PtsLight(
             bottom = frame.y + frame.height - inset,
             cornerRadius = CornerRadius((frame.radius - inset).coerceAtLeast(0f)),
         )
-        withTransform({ scale(density, density, pivot = Offset.Zero) }) {
-            val scanOpacity = if (ptsQaReplica) 0f else think * (1f - lift) * PtsRim.scan
-            if (scanOpacity > 0f) {
-                val scanPeriod = PtsTiming.scanMs.toFloat()
-                val scanU = (clock % scanPeriod) / scanPeriod
-                val scanY = frame.y - PtsLayout.scanHeight +
-                    scanU * (frame.height + PtsLayout.scanHeight)
-                val clip = Path().apply { addRoundRect(rimRect) }
-                clipPath(clip) {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0f),
-                                Color(0xFFC8D7FF).copy(alpha = 0.38f),
-                                Color.White.copy(alpha = 0f),
-                            ),
-                            startY = scanY,
-                            endY = scanY + PtsLayout.scanHeight,
-                        ),
-                        topLeft = Offset(0f, scanY),
-                        size = Size(stage.width, PtsLayout.scanHeight),
-                        alpha = scanOpacity,
-                    )
-                }
-            }
-
-        }
-
         val rimOpacity = if (ptsQaReplica) 0f else ptsClamp01(state.rim.value)
         if (rimOpacity > 0f) {
             drawPtsRim(
@@ -291,31 +250,6 @@ internal fun PtsLight(
                 density = density,
                 blurNode = blurNodes?.rim,
             )
-        }
-
-        val labelOpacity = ptsClamp01(think * (1f - lift))
-        if (labelOpacity > 0f) {
-            thinkingPaint.textSize = PtsType.thinking.fontSize.value * density
-            val labelWidthPx = thinkingPaint.measureText(PtsCopy.thinking)
-            val labelX = (stage.width * density - labelWidthPx) / 2f
-            val labelY = (ptsCardTop(0f) + PtsLayout.thinkHeight + PtsLayout.thinkingGap) * density
-            val shimmerX = labelX - 80f * density +
-                ((clock % PtsTiming.shimmerMs.toFloat()) / PtsTiming.shimmerMs.toFloat()) *
-                (labelWidthPx + 160f * density)
-            thinkingPaint.alpha = (labelOpacity * 255f).toInt().coerceIn(0, 255)
-            thinkingPaint.shader = LinearGradient(
-                shimmerX,
-                0f,
-                shimmerX + 80f * density,
-                0f,
-                intArrayOf(0x8CFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 0x8CFFFFFF.toInt()),
-                null,
-                Shader.TileMode.CLAMP,
-            )
-            drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.drawText(PtsCopy.thinking, labelX, labelY, thinkingPaint)
-            }
-            thinkingPaint.shader = null
         }
 
         val bloomAt = state.bloomAt.value

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Easing
 internal object MoodOrbJarMotion {
     const val STEP = MoodOrbJarTokens.STEP
     const val MAX_STEPS = MoodOrbJarTokens.MAX_STEPS
-    const val MAX_FRAME_DELTA = MoodOrbJarTokens.MAX_FRAME_DELTA
     const val LOOP_MS = MoodOrbJarTokens.LOOP_MS
     const val RESUME_MS = MoodOrbJarTokens.RESUME_MS
     const val REPLICA_HOLD = MoodOrbJarTokens.REPLICA_HOLD
@@ -110,6 +109,7 @@ internal object MoodOrbJarHop {
     const val EVERY = MoodOrbJarTokens.Hop.every
     const val PHASE = MoodOrbJarTokens.Hop.phase
     const val SPEED = MoodOrbJarTokens.Hop.speed
+    const val LAST = MoodOrbJarTokens.Hop.last
 }
 
 internal object MoodOrbJarAim {

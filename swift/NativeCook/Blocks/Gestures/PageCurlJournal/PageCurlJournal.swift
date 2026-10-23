@@ -1,25 +1,29 @@
 import SwiftUI
 
-/// A white book whose pages turn with a realistic page curl: drag from the right to turn forward, from the left to
+/// An ivory book whose pages turn with a realistic page curl: drag from the right to turn forward, from the left to
 /// turn back, flick right to riffle every page back to the title. The curl is a per-pixel cylinder in a Metal
 /// shader over textures of the page views. `autoPlay` runs a scripted finger through the same input as a real one.
 struct PageCurlJournal: View {
-    /// One autoplay period, in seconds: `PageCurlJournalMotion.loopMs` (14 000 ms) written out for the catalog check.
-    static let loop: Double = 14
+    /// One autoplay period, in seconds: React Native's `LOOP_MS` (10 000 ms).
+    static let loop: Double = 10
 
     var autoPlay = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.displayScale) private var displayScale
     @State private var model = PageCurlJournalModel()
+
+    init(autoPlay: Bool = false) {
+        self.autoPlay = autoPlay
+        PageCurlJournalAssets.register()
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
             let scale = size.width / PageCurlJournalTheme.referenceWidth
             ZStack(alignment: .topLeading) {
-                PageCurlJournalPageView(page: model.page, size: size, pixelScale: displayScale, twinkle: model.twinkle)
+                PageCurlJournalPageView(page: model.page, size: size)
                 PageCurlJournalCanvas(model: model, autoPlay: autoPlay, reduced: reduceMotion, active: scenePhase == .active)
                     .frame(width: size.width, height: size.height)
                 // The binding's shadow and the edges of the pages still to turn sit over everything, like the book itself.
@@ -52,8 +56,8 @@ struct PageCurlJournal: View {
             }
         }
         .ignoresSafeArea()
-        .background(PageCurlJournalTheme.Ink.paper.ignoresSafeArea())
-        // The page is white: the status bar's content is dark.
+        .background(PageCurlJournalTheme.Paper.base.ignoresSafeArea())
+        // The paper is light: the status bar's content is dark.
         .preferredColorScheme(.light)
     }
 

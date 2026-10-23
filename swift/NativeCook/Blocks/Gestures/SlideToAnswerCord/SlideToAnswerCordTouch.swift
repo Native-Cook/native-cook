@@ -25,7 +25,7 @@ struct SlideToAnswerCordTouchView: UIViewRepresentable {
 
         private let selectionFeedback = UISelectionFeedbackGenerator()
         private let answerFeedback = UINotificationFeedbackGenerator()
-        private let declineFeedback = UIImpactFeedbackGenerator(style: .heavy)
+        private let declineFeedback = UIImpactFeedbackGenerator(style: .medium)
         private let displayTarget = DisplayTarget()
         private var displayLink: CADisplayLink?
         private var reducedTimer: Timer?
@@ -84,7 +84,7 @@ struct SlideToAnswerCordTouchView: UIViewRepresentable {
         /// Let buttons and the gallery receive touches outside the moving
         /// handset even though this representable fills the stage.
         override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-            guard let simulation, !simulation.frame.reducedMotion else { return false }
+            guard let simulation else { return false }
             return simulation.hitTestHandset(point)
         }
 
@@ -203,23 +203,9 @@ struct SlideToAnswerCordTouchView: UIViewRepresentable {
         }
 
         private func updateClockMode() {
-            let reducedMotion = simulation?.frame.reducedMotion == true
-            displayLink?.isPaused = reducedMotion
-            if reducedMotion, window != nil {
-                guard reducedTimer == nil else { return }
-                let timer = Timer(
-                    timeInterval: SlideToAnswerCordMotion.State.resetAfter / 2,
-                    target: displayTarget,
-                    selector: #selector(DisplayTarget.reducedTimerDidFire(_:)),
-                    userInfo: nil,
-                    repeats: true
-                )
-                RunLoop.main.add(timer, forMode: .common)
-                reducedTimer = timer
-            } else {
-                reducedTimer?.invalidate()
-                reducedTimer = nil
-            }
+            displayLink?.isPaused = false
+            reducedTimer?.invalidate()
+            reducedTimer = nil
         }
 
         private func play(_ events: [SlideToAnswerCordSimulation.HapticEvent]) {
@@ -251,7 +237,7 @@ struct SlideToAnswerCordTouchView: UIViewRepresentable {
                 x: frame.geometry.width / 2 - 75,
                 y: frame.geometry.restY - 10,
                 width: 150,
-                height: 170
+                height: 200
             )
             handsetElement.accessibilityValue = switch frame.phase {
             case .ringing:

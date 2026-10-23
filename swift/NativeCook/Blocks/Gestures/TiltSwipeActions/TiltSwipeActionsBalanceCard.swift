@@ -1,134 +1,72 @@
 import SwiftUI
 
-/// The source's white account card.
 struct TiltSwipeActionsBalanceCard: View {
-    let model: TiltSwipeActionsModel
-
-    private typealias Colour = TiltSwipeActionsColor
+    let width: CGFloat
 
     var body: some View {
-        HStack(spacing: TiltSwipeActionsTokens.BalanceCard.gap) {
-            ZStack {
-                RoundedRectangle(cornerRadius: TiltSwipeActionsLayout.cardBadgeRadius, style: .circular).fill(Colour.plum)
-                Circle().strokeBorder(Colour.pink, lineWidth: TiltSwipeActionsTokens.BalanceCard.ringWidth).frame(width: TiltSwipeActionsTokens.BalanceCard.ring, height: TiltSwipeActionsTokens.BalanceCard.ring)
-            }
-            .frame(width: TiltSwipeActionsLayout.cardBadge, height: TiltSwipeActionsLayout.cardBadge)
-            VStack(alignment: .leading, spacing: 0) {
-                TiltSwipeActionsLabel(text: "Bank account", style: TiltSwipeActionsType.cardLabel, color: Colour.cardLabel)
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    TiltSwipeActionsLabel(
-                        text: TiltSwipeActionsData.format(model.balance.value),
-                        style: TiltSwipeActionsType.balance,
-                        color: Colour.plumInk,
-                        tabular: true
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: TiltSwipeActionsLayout.cardRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color(red: 34 / 255, green: 35 / 255, blue: 42 / 255), location: 0),
+                            .init(color: TiltSwipeActionsColor.ink, location: 0.55),
+                            .init(color: Color(red: 18 / 255, green: 19 / 255, blue: 23 / 255), location: 1),
+                        ],
+                        startPoint: UnitPoint(x: 0.386, y: -0.406),
+                        endPoint: UnitPoint(x: 0.614, y: 1.406)
                     )
-                    TiltSwipeActionsLabel(text: " $", style: TiltSwipeActionsType.currency, color: Colour.cardCurrency)
-                }
-            }
-        }
-        .padding(.horizontal, TiltSwipeActionsTokens.BalanceCard.horizontalPadding)
-        .frame(
-            width: TiltSwipeActionsFlat.width - TiltSwipeActionsFlat.card.left - TiltSwipeActionsFlat.card.right,
-            height: TiltSwipeActionsFlat.card.height,
-            alignment: .leading
-        )
-        .background(
-            RoundedRectangle(cornerRadius: TiltSwipeActionsFlat.card.radius, style: .circular)
-                .fill(Colour.white)
-                .shadow(color: Colour.slabShadow.opacity(TiltSwipeActionsTokens.BalanceCard.shadowOpacity), radius: TiltSwipeActionsTokens.BalanceCard.shadowRadius, x: 0, y: TiltSwipeActionsTokens.BalanceCard.shadowY)
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Bank account balance")
-    }
-}
-
-/// The source's Overview tab: bank cards side by side, each with a plum badge over its top-left corner.
-struct TiltSwipeActionsCardsView: View {
-    let model: TiltSwipeActionsModel
-
-    private typealias Colour = TiltSwipeActionsColor
-    private let cards = TiltSwipeActionsFlat.cards
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach([-1, 0, 1], id: \.self) { index in
-                card
-                    .offset(x: cards.left + Double(index) * cards.pitch, y: cards.badgeTop)
-            }
-        }
-        .frame(width: TiltSwipeActionsFlat.planeWidth, height: TiltSwipeActionsFlat.planeHeight, alignment: .topLeading)
-    }
-
-    private var card: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 0) {
-                TiltSwipeActionsLabel(
-                    text: "Bank account",
-                    style: TiltSwipeActionsTextStyle(
-                        size: TiltSwipeActionsTokens.Cards.labelSize,
-                        lineHeight: TiltSwipeActionsType.cardLabel.lineHeight,
-                        fontName: TiltSwipeActionsTokens.Font.postScriptMedium
-                    ),
-                    color: Colour.cardLabel
                 )
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    TiltSwipeActionsLabel(
-                        text: TiltSwipeActionsData.format(model.balance.value),
-                        style: TiltSwipeActionsTextStyle(
-                            size: TiltSwipeActionsTokens.Cards.balanceSize,
-                            lineHeight: TiltSwipeActionsTokens.Cards.balanceLineHeight,
-                            fontName: TiltSwipeActionsTokens.Font.postScriptSemibold,
-                            kerning: TiltSwipeActionsType.balance.kerning
-                        ),
-                        color: Colour.cardInk
-                    )
-                    TiltSwipeActionsLabel(
-                        text: " $",
-                        style: TiltSwipeActionsTextStyle(
-                            size: TiltSwipeActionsTokens.Cards.currencySize,
-                            lineHeight: TiltSwipeActionsTokens.Cards.balanceLineHeight,
-                            fontName: TiltSwipeActionsTokens.Font.postScriptMedium
-                        ),
-                        color: Colour.cardCurrency
-                    )
+                .overlay {
+                    TiltSwipeActionsAssets.guilloche
+                        .resizable()
+                        .frame(width: 370, height: 128)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: TiltSwipeActionsLayout.cardRadius, style: .continuous))
                 }
-                .padding(.leading, TiltSwipeActionsTokens.Cards.amountInset)
+                .overlay {
+                    RoundedRectangle(cornerRadius: TiltSwipeActionsLayout.cardFrameRadius, style: .continuous)
+                        .stroke(TiltSwipeActionsColor.brass.opacity(0.38), lineWidth: 0.75)
+                        .padding(TiltSwipeActionsLayout.cardFrameInset)
+                }
+                .shadow(color: Color.white.opacity(0.32), radius: 0, y: 1)
+                .shadow(color: Color(red: 30 / 255, green: 24 / 255, blue: 12 / 255).opacity(0.26), radius: 18, y: 9)
+
+            Text("PRIVATE ACCOUNT")
+                .font(.custom(TiltSwipeActionsFont.sansMedium, fixedSize: 11))
+                .tracking(1.98)
+                .foregroundStyle(TiltSwipeActionsColor.brass)
+                .offset(x: 24, y: 22)
+            Text("···· \(TiltSwipeActionsData.cardNumber)")
+                .font(.custom(TiltSwipeActionsFont.sans, fixedSize: 12))
+                .tracking(0.96)
+                .foregroundStyle(TiltSwipeActionsColor.ivory.opacity(0.55))
+                .frame(width: width - 48, alignment: .trailing)
+                .offset(x: 24, y: 22)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("$")
+                    .font(.custom(TiltSwipeActionsFont.money22Regular, fixedSize: 22))
+                    .foregroundStyle(TiltSwipeActionsColor.brass)
+                    .padding(.trailing, 3)
+                Text("1,148")
+                    .font(.custom(TiltSwipeActionsFont.display, fixedSize: 48))
+                    .tracking(-0.5)
+                    .foregroundStyle(TiltSwipeActionsColor.ivory)
+                Text(".90")
+                    .font(.custom(TiltSwipeActionsFont.money22, fixedSize: 22))
+                    .foregroundStyle(TiltSwipeActionsColor.ivory)
+                    .padding(.leading, 2)
             }
-            .padding(.leading, TiltSwipeActionsTokens.Cards.leftInset)
-            .padding(.bottom, TiltSwipeActionsTokens.Cards.bottomInset)
-            .frame(width: cards.width, height: cards.height, alignment: .bottomLeading)
-            .background(
-                RoundedRectangle(cornerRadius: cards.radius, style: .circular)
-                    .fill(Colour.white)
-                    .shadow(color: Colour.slabShadow.opacity(TiltSwipeActionsTokens.Cards.shadowOpacity), radius: TiltSwipeActionsTokens.Cards.shadowRadius, x: 0, y: TiltSwipeActionsTokens.Cards.shadowY)
-            )
-            .offset(y: cards.top - cards.badgeTop)
-            ZStack {
-                RoundedRectangle(cornerRadius: TiltSwipeActionsTokens.Cards.badgeRadius, style: .circular).fill(Colour.plum)
-                ring
-            }
-            .frame(width: cards.badge, height: cards.badge)
-            .offset(x: cards.badgeLeft)
+            .fixedSize()
+            .offset(x: 22, y: 43)
+            Text("Available today")
+                .font(.custom(TiltSwipeActionsFont.sans, fixedSize: 12))
+                .foregroundStyle(TiltSwipeActionsColor.ivory.opacity(0.5))
+                .offset(x: 24, y: 100)
         }
-        .frame(width: cards.width, height: cards.top + cards.height - cards.badgeTop, alignment: .topLeading)
+        .frame(width: width, height: TiltSwipeActionsLayout.cardHeight, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Bank account balance")
-    }
-
-    /// A pink ring whose top quarter is the light pink: the border's top side has its own colour.
-    private var ring: some View {
-        ZStack {
-            arc(0.875, 1, Colour.pink)
-            arc(0, 0.625, Colour.pink)
-            arc(0.625, 0.875, Colour.pinkGlow)
-        }
-        .frame(width: TiltSwipeActionsTokens.Cards.ring, height: TiltSwipeActionsTokens.Cards.ring)
-    }
-
-    private func arc(_ from: CGFloat, _ to: CGFloat, _ color: Color) -> some View {
-        Circle()
-            .trim(from: from, to: to)
-            .stroke(color, style: StrokeStyle(lineWidth: TiltSwipeActionsTokens.Cards.ringWidth, lineCap: .butt))
-            .padding(TiltSwipeActionsTokens.Cards.ringWidth / 2)
+        .accessibilityLabel("Private account ending 4021, $1,148.90 available today")
     }
 }

@@ -5,48 +5,30 @@ import type { Ionicons } from '@expo/vector-icons';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 export const COLOR = {
-  bg: '#141313',
-  dust: 'rgba(255,255,255,0.05)',
-  ink: '#FFFFFF',
-  inkSoft: 'rgba(255,255,255,0.55)',
-  inkFaint: 'rgba(255,255,255,0.35)',
-  control: '#1E1E21',
-  controlSelected: '#FFFFFF',
-  controlInkSelected: '#0A0A0B',
-  disc: '#FFFFFF',
-  discDim: 'rgba(255,255,255,0.1)',
-  personalTop: '#363637',
-  personalBottom: '#252526',
-  card: '#141415',
-  hairline: 'rgba(255,255,255,0.14)',
-  good: '#5FBF5A',
-  discInk: '#0A0A0B',
-  quiet: '#E0565B',
-  quietCore: '#2A1012',
-  badge: '#3B6CF6',
-  spark: '#FFFFFF',
-  finger: 'rgba(255,255,255,0.32)',
-  fingerRing: 'rgba(255,255,255,0.7)',
+  bg: '#0E1013',
+  ink: '#F3F4F2',
+  inkSoft: 'rgba(243,244,242,0.6)',
+  inkFaint: 'rgba(243,244,242,0.36)',
+  hairline: 'rgba(255,255,255,0.1)',
+  selected: '#F3F4F2',
+  selectedInk: '#111316',
+  finger: 'rgba(255,255,255,0.14)',
+  fingerRing: 'rgba(255,255,255,0.42)',
 } as const;
 
-/** Neon hues: rim (bright), core (dark tint), halo (glow). */
+/**
+ * Calm, mineral colours instead of neon: each is what a bubble's glass is tinted with (linear rgb) and the liquid
+ * that fills it as the habit is held, from its surface to its bottom, and the ink drawn on the filled glass.
+ */
 export const HUE = {
-  purple: { light: '#C9A2EE', inner: '#7B2BD6', rim: '#8A52C4', core: '#1A0F2B', halo: 'rgba(138,82,196,0.45)', icon: '#A94FE0' },
-  green: { light: '#A6EDBF', inner: '#3FCB72', rim: '#5BE38E', core: '#0C1F14', halo: 'rgba(80,220,140,0.36)', icon: '#5CD487' },
-  yellow: { light: '#F6DE93', inner: '#E8B530', rim: '#F7C948', core: '#211A08', halo: 'rgba(245,195,70,0.36)', icon: '#EFC04A' },
-  orange: { light: '#F6BC8E', inner: '#EE7A2A', rim: '#F58A3C', core: '#22130A', halo: 'rgba(245,130,60,0.36)', icon: '#EE9049' },
-  red: { light: '#E0888E', inner: '#A92A33', rim: '#C83A44', core: '#220C0E', halo: 'rgba(232,82,90,0.34)', icon: '#E25860' },
-  glass: { light: '#A8A8B0', inner: '#6C6C74', rim: '#7C7C86', core: '#141416', halo: 'rgba(160,160,175,0.14)', icon: 'rgba(180,180,190,0.3)' },
+  purple: { tint: [0.66, 0.73, 0.86], top: '#B9C6DF', bottom: '#8193B5', ink: '#1C2333', icon: '#E4EAF5' },
+  green: { tint: [0.62, 0.78, 0.66], top: '#B7D3BD', bottom: '#7FA38A', ink: '#17261C', icon: '#E3F0E6' },
+  yellow: { tint: [0.88, 0.79, 0.6], top: '#E8D5AE', bottom: '#BFA372', ink: '#2B2213', icon: '#F6EEDD' },
+  orange: { tint: [0.86, 0.66, 0.54], top: '#E3BBA4', bottom: '#B98468', ink: '#2D1C13', icon: '#F6E6DC' },
+  red: { tint: [0.82, 0.62, 0.62], top: '#DDB2B0', bottom: '#AE7C7B', ink: '#2C1717', icon: '#F5E3E2' },
+  glass: { tint: [0.8, 0.82, 0.85], top: '#D3D7DD', bottom: '#9CA3AD', ink: '#1C1F24', icon: '#EEF0F3' },
 } as const;
 export type Hue = keyof typeof HUE;
-
-/** The bubbles' glass: interior tint, edge falloff, highlight (alphas). */
-export const QUIET_GLASS = { body: 0.22, wedge: 0.08 } as const;
-
-export const GLASS = {
-  interiorSmall: 0.46, interiorLarge: 0.15, interiorFrom: 45, interiorSlope: 0.009,
-  bigRadius: 60, bandLarge: 0.95, bandSmall: 0.72, rimLight: 0.8, lightX: 0.06, lightY: -0.08, lightR: 1.02, edge: 0.9, halo: 0.45, chargeLift: 0.3, highlight: 0.06, spriteEdge: 0.45, spriteEdgeGlass: 0.12,
-} as const;
 
 export type Habit = { id: string; name: string; icon: IconName; hue: Hue; r: number; x: number; y: number };
 
@@ -72,87 +54,67 @@ export const SOCIAL: Habit[] = [
   { id: 'note', name: 'Write a note', icon: 'mail-outline', hue: 'glass', r: 25, ...at(255, 384) },
 ];
 
-// The source's Personal view is a quiet, near-empty state: one dim glass bubble above the date.
+// The Personal set: its own cluster, built like the social one (two large purple anchors, greens and yellows in the
+// middle sizes, small orange and red accents, one clear glass bubble), packed with the same 3–4 pt gaps above the
+// larger Personal date. Positions come from a relaxation run of the same packing; every pair keeps >= 3 pt apart.
 export const PERSONAL: Habit[] = [
-  { id: 'journal', name: 'Journal', icon: 'create-outline', hue: 'glass', r: 22, ...at(247, 476) },
+  { id: 'read', name: 'Read 20 pages', icon: 'book-outline', hue: 'purple', r: 70, ...at(176, 250) },
+  { id: 'sleep', name: 'In bed by 23:00', icon: 'moon-outline', hue: 'purple', r: 60, ...at(289, 322) },
+  { id: 'meditate', name: 'Meditate', icon: 'leaf-outline', hue: 'green', r: 53, ...at(86, 340) },
+  { id: 'run', name: 'Morning run', icon: 'walk-outline', hue: 'green', r: 50, ...at(187, 373) },
+  { id: 'cook', name: 'Cook at home', icon: 'restaurant-outline', hue: 'green', r: 46, ...at(270, 431) },
+  { id: 'spanish', name: 'Spanish lesson', icon: 'language-outline', hue: 'yellow', r: 43, ...at(288, 215) },
+  { id: 'water', name: 'Two litres of water', icon: 'water-outline', hue: 'yellow', r: 40, ...at(114, 432) },
+  { id: 'guitar', name: 'Practise guitar', icon: 'musical-notes-outline', hue: 'yellow', r: 38, ...at(189, 465) },
+  { id: 'stretch', name: 'Stretch', icon: 'body-outline', hue: 'orange', r: 34, ...at(68, 250) },
+  { id: 'phone', name: 'No phone in bed', icon: 'phone-portrait-outline', hue: 'orange', r: 31, ...at(356, 254) },
+  { id: 'vitamins', name: 'Vitamins', icon: 'medkit-outline', hue: 'red', r: 28, ...at(247, 505) },
+  { id: 'plants', name: 'Water the plants', icon: 'flower-outline', hue: 'red', r: 26, ...at(47, 413) },
+  { id: 'journal', name: 'Journal', icon: 'create-outline', hue: 'glass', r: 24, ...at(132, 498) },
 ];
 
 /** The time-window dial in the middle of the social set (not a habit; it does not take touches). */
 export const QUIET = { r: 55, ...at(190, 447), title: 'QUIET HOURS', hours: '22:00–07:00' } as const;
 
-/** The detail view's category per habit (the source shows "Category / Personal Life"). */
-export const CATEGORY: Record<string, string> = {
-  home: 'Personal Life', heart: 'Personal Life', art: 'Creativity', wave: 'Neighbours', star: 'Gratitude', host: 'Friends',
-  magic: 'Friends', ride: 'Health', friend: 'Friends', ball: 'Health', gift: 'Friends', tea: 'Family Life', wallet: 'Money', note: 'Friends',
-  journal: 'Personal Life',
-};
+export const FONT = { regular: 'HBC-Inter-Regular', medium: 'HBC-Inter-Medium', semibold: 'HBC-Inter-SemiBold' } as const;
 
 export const TYPE = {
-  segment: { fontSize: 15, fontWeight: '700' as const },
-  date: { fontSize: 24, lineHeight: 30, fontWeight: '500' as const, color: COLOR.ink, textAlign: 'center' as const },
-  now: { fontSize: 14, lineHeight: 18, fontWeight: '500' as const, color: COLOR.inkSoft, textAlign: 'center' as const },
-  count: { fontSize: 17, fontWeight: '800' as const, color: COLOR.discInk, fontVariant: ['tabular-nums'] as ('tabular-nums')[] },
-  category: { fontSize: 12, fontWeight: '500' as const, color: COLOR.inkSoft, textAlign: 'center' as const },
-  categoryTitle: { fontSize: 20, fontWeight: '700' as const, color: COLOR.ink, textAlign: 'center' as const },
-  balance: { fontSize: 17, fontWeight: '500' as const, color: COLOR.inkSoft },
-  good: { fontSize: 14, fontWeight: '700' as const, color: COLOR.ink },
-  sectionTitle: { fontSize: 24, lineHeight: 30, fontWeight: '600' as const, color: COLOR.ink },
-  body: { fontSize: 17, lineHeight: 25, fontWeight: '400' as const, color: COLOR.inkSoft },
-  personalNow: { fontSize: 20, lineHeight: 26, fontWeight: '500' as const, color: COLOR.inkSoft, textAlign: 'center' as const },
-  personalDate: { fontSize: 36, lineHeight: 42, fontWeight: '500' as const, color: COLOR.ink, textAlign: 'center' as const },
+  segment: { fontFamily: FONT.semibold, fontSize: 14, lineHeight: 18 },
+  date: { fontFamily: FONT.semibold, fontSize: 24, lineHeight: 30, color: COLOR.ink, textAlign: 'center' as const, letterSpacing: -0.3 },
+  now: { fontFamily: FONT.regular, fontSize: 14, lineHeight: 18, color: COLOR.inkSoft, textAlign: 'center' as const },
+  count: { fontFamily: FONT.semibold, fontSize: 15, lineHeight: 20, color: COLOR.ink, fontVariant: ['tabular-nums'] as ('tabular-nums')[] },
+  countMute: { fontFamily: FONT.regular, fontSize: 15, lineHeight: 20, color: COLOR.inkSoft },
+  monogram: { fontFamily: FONT.semibold, fontSize: 14, lineHeight: 18, color: COLOR.ink },
+  /** Canvas text sizes (pt): the label a tap shows, the quiet dial's arcs. */
+  label: 14,
+  labelSub: 12,
   quiet: 9,
 } as const;
 
-/**
- * Spacing scale, derived from the source's measured gaps (pt): 2 (badge ring), 4 (date ↔ time), 6 (segment inset ×2),
- * 12 (pill padding), 16 (screen inset), 18 (header controls), 20 (card padding / rhythm), 27 (card top, measured).
- */
-export const SPACE = { hair: 2, xs: 3, s: 4, m: 6, l: 12, xl: 16, x2: 18, x3: 20, cardTop: 27 } as const;
+/** 4 pt grid. */
+export const SPACE = { xs: 4, s: 8, m: 12, l: 16, xl: 24 } as const;
 
 export const LAYOUT = {
-  gutter: 17,
-  headerTop: 1,
-  control: 40,
-  segmentWidth: 185,
-  iconButton: 40,
-  clusterTop: 0,
-  dateY: 640,
-  discY: 792,
-  disc: 74,
-  dot: 22,
-  dotOffset: 60,
-  corner: 52,
-  cornerInset: 16,
-  cornerY: 830,
+  gutter: 16,
+  control: 44,
+  segmentWidth: 196,
+  /** The date sits this far below the cluster's centre; the count pill and the corner buttons sit on the bottom row. */
+  dateDrop: 252,
+  pill: 44,
   // Space kept between bubbles when packing.
   gap: 3,
   iconScale: 0.3,
-  ring: 3,
-  ringGap: 7,
+  ring: 2,
+  ringGap: 6,
   fingerRadius: 22,
-  sparks: 12,
-  // Personal view (measured): date block at 0.66 H, the dot above the disc.
-  personalDateY: 0.654,
-  personalDot: { x: 0.53, y: 0.84 },
-  // Detail view (measured).
-  detailBalanceY: 0.513,
-  detailCardY: 0.6,
-  rowHeight: 60,
-  iconGlow: 10,
+  /** The name a tap shows: a glass label above the bubble. */
+  labelH: 52,
+  labelGap: 10,
 } as const;
 
 export const COPY = {
   tabs: ['Social', 'Personal'] as const,
-  date: '14 October',
-  now: 'Now - 08:12',
-  personalDate: '26 October',
-  category: 'Category',
-  balance: 'Balance',
-  good: 'Good',
-  description: 'Description',
-  body: [
-    'Small rituals with the people you love keep a week from slipping by. This habit counts the evenings you sit down together, phones away, and asks nothing else of you.',
-    'We look at when you usually manage it and nudge you on the days that fit, never on the busy ones.',
-  ],
-  avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&h=160&q=80',
+  date: 'Tuesday, 14 October',
+  now: 'Hold a habit to mark it done',
+  monogram: 'AM',
 } as const;

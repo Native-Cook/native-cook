@@ -19,6 +19,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NativeCook">
         <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="subject_segment" />
+        <!-- Event Pass Share exports only its dedicated cache directory. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.eventpassshare"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/eventpassshare_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"

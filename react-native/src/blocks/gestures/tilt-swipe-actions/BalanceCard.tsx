@@ -1,48 +1,56 @@
-/** The source's white account card. */
-import { StyleSheet, Text, View } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
+/**
+ * The account card: the one dark object on the page, ink with a brass hairline frame and woven cheque lines
+ * (assets/guilloche@3x.png, drawn once from the mock's 44 interleaved sine lines). The balance is set like a cheque:
+ * a raised brass dollar sign and ivory cents, the two ones hand-kerned.
+ */
+import { LinearGradient } from 'expo-linear-gradient';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { RollingAmount } from './RollingAmount';
+import { COLOR, DIDONE_DROP, DIDONE_ROOM, LAYOUT, SHADOW, TYPE } from './theme';
+import { BALANCE, CARD_NUMBER, money } from './transactions';
 
-import { COLOR, FLAT, LAYOUT, TYPE } from './theme';
+const GUILLOCHE = require('./assets/guilloche.png');
 
-export function BalanceCard({ balance, reduceMotion }: { balance: SharedValue<number>; reduceMotion: boolean }) {
+export function BalanceCard({ width }: { width: number }) {
+  const figure = money(BALANCE);
   return (
-    <View style={styles.card} accessible accessibilityLabel="Bank account balance">
-      <View style={styles.badge}>
-        <View style={styles.ring} />
+    <View style={[styles.card, { width }]} accessible accessibilityLabel={`Private account ending ${CARD_NUMBER}, ${figure.whole}${figure.cents} available today`}>
+      <View style={styles.clip}>
+        {/* 160°: the light falls from the top left, as on the mock's card. */}
+        <LinearGradient colors={COLOR.card} locations={COLOR.cardStops} start={{ x: 0.386, y: -0.406 }} end={{ x: 0.614, y: 1.406 }} style={StyleSheet.absoluteFill} />
+        <Image source={GUILLOCHE} style={styles.guilloche} />
+        <View style={styles.frame} />
       </View>
-      <View>
-        <Text style={styles.label}>Bank account</Text>
-        <View style={styles.amountRow}>
-          <RollingAmount value={balance} style={styles.balance} reduceMotion={reduceMotion} />
-          <Text style={styles.currency}> $</Text>
-        </View>
+      <Text style={styles.label}>PRIVATE ACCOUNT</Text>
+      <Text style={styles.number}>{`···· ${CARD_NUMBER}`}</Text>
+      <View style={styles.balance}>
+        <Text style={styles.sign}>$</Text>
+        <Text style={[styles.figure, styles.k1]}>1</Text>
+        <Text style={styles.figure}>,</Text>
+        <Text style={[styles.figure, styles.k2]}>1</Text>
+        <Text style={styles.figure}>48</Text>
+        <Text style={styles.cents}>{figure.cents}</Text>
       </View>
+      <Text style={styles.note}>Available today</Text>
     </View>
   );
 }
 
-const RING = 24;
-
 const styles = StyleSheet.create({
-  card: {
-    height: FLAT.card.height,
-    borderRadius: FLAT.card.radius,
-    backgroundColor: COLOR.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 16,
-    shadowColor: COLOR.slabShadow,
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
+  card: { height: LAYOUT.cardHeight, borderRadius: LAYOUT.cardRadius, boxShadow: SHADOW.card },
+  clip: { ...StyleSheet.absoluteFill, borderRadius: LAYOUT.cardRadius, overflow: 'hidden' },
+  guilloche: { position: 'absolute', left: 0, top: 0, width: 370, height: 128 },
+  frame: {
+    position: 'absolute', left: LAYOUT.cardFrameInset, top: LAYOUT.cardFrameInset, right: LAYOUT.cardFrameInset, bottom: LAYOUT.cardFrameInset,
+    borderRadius: LAYOUT.cardFrameRadius, borderWidth: 0.75, borderColor: COLOR.cardFrame,
   },
-  badge: { width: LAYOUT.cardBadge, height: LAYOUT.cardBadge, borderRadius: LAYOUT.cardBadgeRadius, backgroundColor: COLOR.plum, alignItems: 'center', justifyContent: 'center' },
-  ring: { width: RING, height: RING, borderRadius: RING / 2, borderWidth: 4, borderColor: COLOR.pink },
-  label: { ...TYPE.cardLabel, color: COLOR.cardLabel },
-  amountRow: { flexDirection: 'row', alignItems: 'baseline' },
-  balance: { ...TYPE.balance, color: COLOR.plumInk, fontVariant: ['tabular-nums'] },
-  currency: { ...TYPE.currency, color: COLOR.cardCurrency },
+  label: { ...TYPE.cardLabel, color: COLOR.brass, position: 'absolute', left: LAYOUT.cardPad, top: 22 },
+  number: { ...TYPE.cardNumber, color: COLOR.ivory55, position: 'absolute', right: LAYOUT.cardPad, top: 22 },
+  balance: { position: 'absolute', left: 22, top: 48 + DIDONE_DROP.money22, flexDirection: 'row', alignItems: 'flex-start' },
+  sign: { ...TYPE.balanceSign, color: COLOR.brass, marginTop: 4, marginRight: 3 },
+  figure: { ...TYPE.balance, color: COLOR.ivory, marginTop: DIDONE_DROP.display - DIDONE_DROP.money22 - DIDONE_ROOM.display },
+  k1: { marginRight: -2 },
+  k2: { marginLeft: -1, marginRight: -4 },
+  cents: { ...TYPE.balanceCents, color: COLOR.ivory, marginTop: 4, marginLeft: 2 },
+  note: { ...TYPE.cardNote, color: COLOR.ivory50, position: 'absolute', left: LAYOUT.cardPad, top: 100 },
 });

@@ -1,100 +1,99 @@
 package com.ngocdevv.nativecook.blocks.gestures.glassdisconboarding
 
-import android.graphics.Bitmap
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
-import android.graphics.RectF
-import androidx.compose.ui.graphics.toArgb
+import android.graphics.Path
+import android.graphics.PathMeasure
+import android.graphics.Typeface
 
-/** Draws the lens material and all physics-owned overlays in physical Canvas pixels. */
-internal class GlassDiscOnboardingRenderer {
-    private val lensShader = GlassDiscOnboardingShader()
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-
-    fun draw(
-        canvas: Canvas,
-        frame: GlassDiscOnboardingFrame,
-        texture: Bitmap?,
-        bubbleAtlas: Bitmap,
-        lightX: Float = 0f,
-        lightY: Float = 0f,
-    ) {
-        lensShader.draw(canvas, frame, texture, lightX, lightY)
-        drawPressureRings(canvas, frame)
-        drawBubbles(canvas, frame, bubbleAtlas)
-        drawFinger(canvas, frame)
+internal class GlassDiscOnboardingRenderer(
+    context: Context,
+    private val layout: GlassDiscOnboardingLayout,
+    private val pages: GlassDiscOnboardingPages,
+) {
+    private val lens = GlassDiscOnboardingShader()
+    private val routeMeasure = PathMeasure(pages.route, false)
+    private val routeSegment = Path()
+    private val routeCase = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = layout.dp(9f)
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
     }
-
-    private fun drawPressureRings(canvas: Canvas, frame: GlassDiscOnboardingFrame) {
-        paint.style = Paint.Style.STROKE
-        paint.color = GlassDiscOnboardingTheme.COLOR.pulse.toArgb()
-        for (ring in frame.pressureRings) {
-            paint.strokeWidth = ring.strokeWidth
-            paint.alpha = (ring.alpha * 255f).toInt().coerceIn(0, 255)
-            canvas.drawCircle(frame.discX, frame.discY + frame.nudge, ring.radius, paint)
-        }
-        paint.style = Paint.Style.FILL
-        paint.alpha = 255
+    private val routeLine = Paint(routeCase).apply {
+        color = GlassDiscOnboardingTheme.Color.Route
+        strokeWidth = layout.dp(5f)
     }
-
-    private fun drawBubbles(canvas: Canvas, frame: GlassDiscOnboardingFrame, bubbleAtlas: Bitmap) {
-        for (bubble in frame.bubbles) {
-            val displayedRadius = bubble.radius * bubble.scale
-            if (displayedRadius < MinimumBubbleRadius || bubble.opacity <= 0f) {
-                continue
-            }
-            val saveCount = canvas.save()
-            canvas.translate(bubble.x, bubble.y)
-            if (bubble.wobble > MinimumWobble) {
-                val degrees = Math.toDegrees(bubble.rotationRad.toDouble()).toFloat()
-                canvas.rotate(degrees)
-                canvas.scale(1f + bubble.wobble, 1f - bubble.wobble)
-                canvas.rotate(-degrees)
-            }
-            paint.alpha = (bubble.opacity * 255f).toInt().coerceIn(0, 255)
-            drawAtlasBubble(canvas, bubbleAtlas, bubble.atlasCell, displayedRadius)
-            canvas.restoreToCount(saveCount)
-        }
-        paint.alpha = 255
+    private val hintLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = GlassDiscOnboardingTheme.Color.Ink
+        style = Paint.Style.STROKE
+        strokeWidth = layout.dp(2f)
+        strokeCap = Paint.Cap.SQUARE
+        strokeJoin = Paint.Join.MITER
     }
-
-    private fun drawAtlasBubble(canvas: Canvas, atlas: Bitmap, atlasCell: Int, radius: Float) {
-        val cellWidth = atlas.width / GlassDiscOnboardingTheme.ATLAS.columns
-        val cellHeight = atlas.height / GlassDiscOnboardingTheme.ATLAS.rows
-        val column = atlasCell % GlassDiscOnboardingTheme.ATLAS.columns
-        val row = atlasCell / GlassDiscOnboardingTheme.ATLAS.columns % GlassDiscOnboardingTheme.ATLAS.rows
-        val source = Rect(
-            column * cellWidth,
-            row * cellHeight,
-            (column + 1) * cellWidth,
-            (row + 1) * cellHeight,
+    private val hintText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = GlassDiscOnboardingTheme.Color.Ink
+        textSize = layout.dp(GlassDiscOnboardingTheme.Type.Hint)
+        typeface = Typeface.createFromAsset(
+            context.assets,
+            "glassdisconboarding/glassdisconboarding_Inter-SemiBold.ttf",
         )
-        val destination = RectF(-radius, -radius, radius, radius)
-        canvas.drawBitmap(atlas, source, destination, paint)
+        isSubpixelText = true
+    }
+    private val ghostFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = GlassDiscOnboardingTheme.Color.Finger }
+    private val ghostStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = GlassDiscOnboardingTheme.Color.FingerEdge
+        style = Paint.Style.STROKE
+        strokeWidth = layout.density
     }
 
-    private fun drawFinger(canvas: Canvas, frame: GlassDiscOnboardingFrame) {
-        if (frame.finger.alpha <= 0.01f) {
-            return
+    fun draw(canvas: Canvas, frame: GlassDiscOnboardingFrame, showGhost: Boolean) {
+        canvas.drawBitmap(pages.intro, 0f, 0f, null)
+        lens.draw(canvas, pages.map, layout, frame)
+        drawRoute(canvas, frame.route)
+        drawHint(canvas, frame.hint)
+        if (showGhost) drawGhost(canvas, frame)
+    }
+
+    private fun drawRoute(canvas: Canvas, progress: Float) {
+        if (progress <= 0.001f) return
+        routeSegment.rewind()
+        routeMeasure.getSegment(0f, routeMeasure.length * progress.coerceIn(0f, 1f), routeSegment, true)
+        canvas.drawPath(routeSegment, routeCase)
+        canvas.drawPath(routeSegment, routeLine)
+    }
+
+    private fun drawHint(canvas: Canvas, alpha: Float) {
+        if (alpha <= 0.001f) return
+        val opacity = (alpha * 255f).toInt().coerceIn(0, 255)
+        val bottomOffset = layout.height -
+            (layout.domeY - layout.dp(GlassDiscOnboardingTheme.Layout.DomeRadius)) + layout.dp(16f)
+        val contentBottom = layout.height - bottomOffset + layout.dp(8f * (1f - alpha))
+        val centerX = layout.width / 2f
+        val caretY = contentBottom - layout.dp(27f)
+        val half = layout.dp(5f)
+        val caret = Path().apply {
+            moveTo(centerX - half, caretY + half)
+            lineTo(centerX, caretY)
+            lineTo(centerX + half, caretY + half)
         }
-        val pointScale = frame.density
-        val radius = GlassDiscOnboardingTheme.LAYOUT.fingerRadius * pointScale
-        paint.style = Paint.Style.FILL
-        paint.color = GlassDiscOnboardingTheme.COLOR.finger.toArgb()
-        paint.alpha = (frame.finger.alpha * GlassDiscOnboardingTokens.VIEW.fingerFillAlpha * 255f).toInt().coerceIn(0, 255)
-        canvas.drawCircle(frame.finger.x, frame.finger.y, radius, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = GlassDiscOnboardingTokens.VIEW.fingerStrokeWidth * pointScale
-        paint.color = GlassDiscOnboardingTheme.COLOR.fingerRing.toArgb()
-        paint.alpha = (frame.finger.alpha * GlassDiscOnboardingTokens.VIEW.fingerRingAlpha * 255f).toInt().coerceIn(0, 255)
-        canvas.drawCircle(frame.finger.x, frame.finger.y, radius, paint)
-        paint.style = Paint.Style.FILL
-        paint.alpha = 255
+        hintLine.alpha = (opacity * 0.7f).toInt()
+        canvas.drawPath(caret, hintLine)
+        hintText.alpha = opacity
+        val label = "Swipe up to explore"
+        canvas.drawText(label, centerX - hintText.measureText(label) / 2f, contentBottom - layout.dp(3f), hintText)
     }
 
-    companion object {
-        private const val MinimumBubbleRadius = GlassDiscOnboardingTokens.VIEW.minimumBubbleRadius
-        private const val MinimumWobble = GlassDiscOnboardingTokens.VIEW.minimumWobble
+    private fun drawGhost(canvas: Canvas, frame: GlassDiscOnboardingFrame) {
+        if (frame.ghostOpacity <= 0.001f) return
+        val baseRadius = layout.dp(GlassDiscOnboardingTheme.Layout.Finger) / 2f
+        val radius = baseRadius * (1f - 0.12f * frame.ghostPressed)
+        val alpha = (frame.ghostOpacity * 255f).toInt().coerceIn(0, 255)
+        ghostFill.alpha = alpha
+        ghostStroke.alpha = alpha
+        canvas.drawCircle(frame.ghostX, frame.ghostY, radius, ghostFill)
+        canvas.drawCircle(frame.ghostX, frame.ghostY, radius - layout.density / 2f, ghostStroke)
     }
 }

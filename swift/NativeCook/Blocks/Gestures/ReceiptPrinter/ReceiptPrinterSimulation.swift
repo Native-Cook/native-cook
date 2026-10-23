@@ -24,11 +24,11 @@ struct ReceiptPrinterViewState: Equatable {
     var indicatorIn = 0.0
     var morph = 0.0
     var morphFrom = 0
-    var morphBack = false
     var develop = 0.0
     var cut = 0.0
     var held = 0.0
     var armed = false
+    var paperOpacity = 1.0
     var clock = 0.0
     var reducedMotion = false
 }
@@ -46,6 +46,7 @@ private enum ReceiptPrinterScalar: Hashable {
     case cut
     case held
     case scroll
+    case paperOpacity
 }
 
 private enum ReceiptPrinterCurve {
@@ -63,6 +64,7 @@ private enum ReceiptPrinterCompletion {
     case retractTug
     case retractPaper
     case gridReturn
+    case reducedPaperGone
 }
 
 private struct ReceiptPrinterAnimation {
@@ -78,8 +80,6 @@ private struct ReceiptPrinterAnimation {
 @MainActor
 @Observable
 final class ReceiptPrinterModel {
-    /// Product override for this port. The RN source token remains 3500 ms in ReceiptPrinterMotion.AUTOPLAY.
-    private static let interactionResumeDelay = 2.0
     private static let sourceTop = 62.0
     private static let animationEpsilon = 0.000_5
     private static let decayStopVelocity = 1.0
@@ -134,29 +134,16 @@ final class ReceiptPrinterModel {
         state.reducedMotion = reducedMotion
 
         if reducedMotion {
-            animations.removeAll()
-            decaying = false
             scriptPaused = true
             realTouchDown = false
             quietTime = 0
-            state.stage = .reading
-            state.gridIn = 0
-            state.slotIn = 1
-            state.menuIn = 0
-            state.lift = 0
-            state.feed = 1
-            state.fed = receiptHeight
-            state.scroll = min(max(0, state.scroll), maxScroll)
-            state.morph = 0
-            state.morphBack = false
-            state.develop = 0
-            state.cut = 0
-            state.held = 0
-            state.armed = false
-            updateBarImmediately()
-            updateIndicator(animated: false)
         } else if reducedChanged, autoPlay {
-            resetToGrid(restartScript: true)
+            if state.stage == .grid {
+                scriptTime = 0
+                scriptSegment = -1
+                scriptPaused = false
+                quietTime = 0
+            }
         } else if !autoPlay {
             scriptPaused = true
         } else if state.stage == .grid {
@@ -272,7 +259,6 @@ final class ReceiptPrinterModel {
         scriptedAction = scripted
         if tile >= 0 { state.pressed = tile }
         state.morphFrom = max(0, state.pressed)
-        state.morphBack = false
         state.stage = .printing
         feedback(.open, scripted: scripted)
 
@@ -289,6 +275,7 @@ final class ReceiptPrinterModel {
         state.develop = 0
         state.cut = 0
         state.armed = false
+        state.paperOpacity = 1
 
         let slow = ReceiptPrinterMotion.QA_SLOWMO
         if !state.reducedMotion {
@@ -407,8 +394,32 @@ final class ReceiptPrinterModel {
         animate(.indicatorIn, to: 0, duration: 0.15, curve: .easeOut)
 
         if state.reducedMotion {
-            completeRetraction()
+            animate(
+                .gridIn,
+                to: 1,
+                duration: seconds(ReceiptPrinterMotion.RETRACT.reducedMs),
+                curve: .easeOut,
+                completion: .gridReturn
+            )
+            animate(
+                .paperOpacity,
+                to: 0,
+                duration: seconds(ReceiptPrinterMotion.RETRACT.reducedMs),
+                curve: .easeOut,
+                completion: .reducedPaperGone
+            )
         } else {
+            animate(
+                .gridIn,
+                to: 1,
+                duration: seconds(ReceiptPrinterMotion.RETRACT.gridInMs * ReceiptPrinterMotion.QA_SLOWMO),
+                curve: .easeOut,
+                delay: seconds(
+                    (ReceiptPrinterMotion.UPGRADE.tugMs + ReceiptPrinterMotion.RETRACT.gridLeadMs)
+                        * ReceiptPrinterMotion.QA_SLOWMO
+                ),
+                completion: .gridReturn
+            )
             animate(
                 .scroll,
                 to: state.scroll - ReceiptPrinterMotion.UPGRADE.tug,
@@ -554,8 +565,14 @@ final class ReceiptPrinterModel {
                 return
             }
             quietTime += delta
-            guard quietTime >= Self.interactionResumeDelay else { return }
-            restoreRestForAutoplay()
+            guard quietTime >= seconds(ReceiptPrinterMotion.AUTOPLAY.resumeDelayMs), state.stage == .grid else {
+                return
+            }
+            scriptTime = 0
+            scriptSegment = -1
+            scriptPaused = false
+            realTouchDown = false
+            quietTime = 0
             return
         }
 
@@ -609,24 +626,6 @@ final class ReceiptPrinterModel {
         scriptSegment = segment
     }
 
-    private func restoreRestForAutoplay() {
-        switch state.stage {
-        case .grid:
-            scriptTime = 0
-            scriptSegment = -1
-            scriptPaused = false
-            quietTime = 0
-        case .menu:
-            closeMenu(scripted: true)
-        case .printing:
-            break
-        case .reading:
-            retract(scripted: true)
-        case .retracting:
-            break
-        }
-    }
-
     private func complete(_ completion: ReceiptPrinterCompletion) {
         switch completion {
         case .feed:
@@ -644,7 +643,6 @@ final class ReceiptPrinterModel {
                 )
                 feedback(.open, scripted: scriptedAction)
             }
-            if scriptPaused, quietTime >= Self.interactionResumeDelay { restoreRestForAutoplay() }
         case .cutDown:
             animate(
                 .cut,
@@ -659,7 +657,7 @@ final class ReceiptPrinterModel {
         case .retractTug:
             animate(
                 .scroll,
-                to: paperTop + ReceiptPrinterTokens.RECEIPT.length,
+                to: receiptHeight,
                 duration: seconds(ReceiptPrinterMotion.RETRACT.ms),
                 curve: .easeInOut,
                 completion: .retractPaper
@@ -668,7 +666,12 @@ final class ReceiptPrinterModel {
             completeRetraction()
         case .gridReturn:
             state.stage = .grid
-            if scriptPaused, quietTime >= Self.interactionResumeDelay { restoreRestForAutoplay() }
+        case .reducedPaperGone:
+            state.fed = 0
+            state.feed = 0
+            state.scroll = 0
+            state.paperOpacity = 1
+            state.slotIn = 0
         }
     }
 
@@ -679,6 +682,7 @@ final class ReceiptPrinterModel {
         state.cut = 0
         state.held = 0
         state.armed = false
+        state.paperOpacity = 1
         if state.reducedMotion {
             cancel(.slotIn)
             state.slotIn = 0
@@ -695,23 +699,6 @@ final class ReceiptPrinterModel {
             )
         }
         state.morph = 0
-        if !state.reducedMotion {
-            state.morphBack = true
-            state.morph = 1
-            animate(
-                .morph,
-                to: 0,
-                duration: seconds(ReceiptPrinterMotion.POLISH.returnMs * ReceiptPrinterMotion.QA_SLOWMO),
-                curve: .easeOut
-            )
-        }
-        animate(
-            .gridIn,
-            to: 1,
-            duration: seconds(ReceiptPrinterMotion.SCREEN.gridInMs),
-            curve: .easeOut,
-            completion: .gridReturn
-        )
     }
 
     private func resetToGrid(restartScript: Bool) {
@@ -799,6 +786,7 @@ final class ReceiptPrinterModel {
         case .cut: state.cut
         case .held: state.held
         case .scroll: state.scroll
+        case .paperOpacity: state.paperOpacity
         }
     }
 
@@ -816,6 +804,7 @@ final class ReceiptPrinterModel {
         case .cut: state.cut = value
         case .held: state.held = value
         case .scroll: state.scroll = value
+        case .paperOpacity: state.paperOpacity = value
         }
     }
 

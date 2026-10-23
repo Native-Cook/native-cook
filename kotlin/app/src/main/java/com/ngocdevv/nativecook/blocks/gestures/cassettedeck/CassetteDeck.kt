@@ -5,17 +5,18 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -25,121 +26,151 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.ngocdevv.nativecook.shared.rememberReducedMotion
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
-/**
- * A cassette deck: five keys that bottom out and latch, reels driven by the tape, cassettes you slide, and a reel
- * you can turn by hand. A Compose port of the React Native block; the whole screen is drawn in one canvas from a
- * fixed-step simulation, so no frame recomposes anything.
- */
+/** A full-screen mechanical cassette deck faithfully ported from the React Native reference. */
 @Composable
 fun CassetteDeck(
     autoPlay: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val view = LocalView.current
     val activity = LocalActivity.current
-    val density = LocalDensity.current.density
-    val scope = rememberCoroutineScope()
-    val reduced by rememberUpdatedState(rememberReducedMotion())
+    val reducedMotion = rememberReducedMotion()
+    val safeDrawing = WindowInsets.safeDrawing
+    val topInset = safeDrawing.getTop(density) / density.density.toDouble()
+    val bottomInset = safeDrawing.getBottom(density) / density.density.toDouble()
     val assets = remember(context) { CassetteDeckAssets(context) }
-    val controller = remember(autoPlay, view) {
-        CassetteDeckController(autoPlay) { haptic -> view.performCassetteDeckHaptic(haptic) }
+    val session = remember(autoPlay, reducedMotion) {
+        CassetteDeckSession(reducedMotion = reducedMotion, autoPlay = autoPlay && !reducedMotion)
     }
-    var frameTick by remember { mutableLongStateOf(0L) }
+    val wake = remember(session) { Channel<Unit>(Channel.CONFLATED) }
+    var frameInvalidation by remember { mutableLongStateOf(0L) }
+    var accessibilityVersion by remember { mutableIntStateOf(session.model.version) }
 
-    // The block is dark: light status bar icons, as the RN demo's `StatusBar style="light"`.
     DisposableEffect(activity, view) {
-        val controls = activity?.window?.let { WindowCompat.getInsetsController(it, view) }
-        val previous = controls?.isAppearanceLightStatusBars
-        controls?.isAppearanceLightStatusBars = false
-        onDispose { if (previous != null) controls.isAppearanceLightStatusBars = previous }
+        val controller = activity?.window?.let { WindowCompat.getInsetsController(it, view) }
+        if (controller == null) {
+            onDispose { }
+        } else {
+            val previousStatus = controller.isAppearanceLightStatusBars
+            val previousNavigation = controller.isAppearanceLightNavigationBars
+            controller.isAppearanceLightStatusBars = true
+            controller.isAppearanceLightNavigationBars = true
+            onDispose {
+                controller.isAppearanceLightStatusBars = previousStatus
+                controller.isAppearanceLightNavigationBars = previousNavigation
+            }
+        }
     }
 
-    // RN `useFrameCallback`: the first frame counts as 16 ms.
-    LaunchedEffect(controller) {
+    LaunchedEffect(session, wake) {
         var previousNanos = 0L
         while (isActive) {
+            if (!session.needsFrames()) {
+                wake.receive()
+                previousNanos = 0L
+            }
             val nowNanos = withFrameNanos { it }
-            val dtSeconds = if (previousNanos == 0L) 0.016 else (nowNanos - previousNanos) / 1_000_000_000.0
+            val dt = if (previousNanos == 0L) 0.016 else (nowNanos - previousNanos) / 1_000_000_000.0
             previousNanos = nowNanos
-            controller.frame(dtSeconds, reduced)
-            if (controller.isBusy) frameTick++
+            if (session.advance(dt)) frameInvalidation = nowNanos
+            session.model.events.forEach(view::performCassetteDeckHaptic)
+            session.model.events.clear()
+            if (accessibilityVersion != session.model.version) accessibilityVersion = session.model.version
         }
     }
 
     BoxWithConstraints(
-        modifier
+        modifier = modifier
             .fillMaxSize()
-            .background(Color(CassetteDeckTheme.bg))
-            .cassetteDeckTouch(controller),
+            .background(Color(CassetteDeckTheme.plate)),
     ) {
-        val geometry = remember(maxWidth, maxHeight) { CassetteDeckGeometry(maxWidth.value.toDouble(), maxHeight.value.toDouble()) }
-        val renderer = remember(geometry, assets, density) { CassetteDeckRenderer(geometry, assets, density) }
-
-        // The tick is read only while drawing, so a frame redraws this canvas and recomposes nothing.
-        Canvas(Modifier.fillMaxSize()) {
-            frameTick
-            drawIntoCanvas { canvas ->
-                val native = canvas.nativeCanvas
-                val saved = native.save()
-                native.scale(density, density)
-                renderer.draw(native, controller.sim)
-                native.restoreToCount(saved)
-            }
+        val width = maxWidth.value.toDouble()
+        val height = maxHeight.value.toDouble()
+        val layout = remember(width, height, topInset, bottomInset) {
+            CassetteDeckLayout(width, height, topInset, bottomInset)
+        }
+        val renderer = remember(layout, assets, density.density) {
+            CassetteDeckRenderer(layout, assets, density.density)
+        }
+        DisposableEffect(renderer) {
+            onDispose { renderer.recycle() }
         }
 
-        // Accessibility only (RN :197-203, :504-509): the touches are routed by `cassetteDeckTouch`.
         Box(
             Modifier
-                .offset(0.dp, geometry.swipeTop.dp)
-                .size(geometry.width.dp, geometry.swipeHeight.dp)
-                .semantics {
-                    contentDescription = "Cassette. Swipe left or right to change the cassette"
-                    customActions = listOf(
-                        CustomAccessibilityAction("Next cassette") {
-                            controller.nudge(1)
-                            true
-                        },
-                        CustomAccessibilityAction("Previous cassette") {
-                            controller.nudge(-1)
-                            true
-                        },
-                    )
-                },
-        )
-        CassetteDeckTheme.keyLabels.forEachIndexed { index, label ->
+                .fillMaxSize()
+                .cassetteDeckTouch(session, layout, wake),
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                frameInvalidation
+                drawIntoCanvas { composeCanvas ->
+                    val nativeCanvas = composeCanvas.nativeCanvas
+                    val saved = nativeCanvas.save()
+                    nativeCanvas.scale(density.density, density.density)
+                    renderer.draw(nativeCanvas, session.model)
+                    nativeCanvas.restoreToCount(saved)
+                }
+            }
+
+            @Suppress("UNUSED_VARIABLE")
+            val accessibilityState = accessibilityVersion
+            val well = CassetteDeckTheme.well
             Box(
                 Modifier
-                    .offset(geometry.keyLeft(index).dp, geometry.keyTop.dp)
-                    .size(geometry.keyWidth.dp, geometry.keyHeight.dp)
+                    .offset(
+                        (layout.originX + well.x * layout.scale).dp,
+                        (layout.originY + well.y * layout.scale).dp,
+                    )
+                    .size((well.width * layout.scale).dp, (well.height * layout.scale).dp)
                     .semantics {
-                        role = Role.Button
-                        contentDescription = label
-                        // RN `onAccessibilityTap`: press, then let go 160 ms later.
-                        onClick(label) {
-                            scope.launch {
-                                controller.press(index, true)
-                                delay(160)
-                                controller.press(index, false)
-                            }
-                            true
-                        }
+                        role = Role.Image
+                        contentDescription = "${CassetteDeckTheme.title}, side ${CassetteDeckTheme.side}. ${session.model.mode.accessibilityLabel}."
                     },
             )
+            CassetteDeckTheme.keyNames.forEachIndexed { index, label ->
+                Box(
+                    Modifier
+                        .offset(
+                            (layout.originX + CassetteDeckTheme.keyX(index) * layout.scale).dp,
+                            (layout.originY + CassetteDeckTheme.KEYS_Y * layout.scale).dp,
+                        )
+                        .size(
+                            (CassetteDeckTheme.KEY_WIDTH * layout.scale).dp,
+                            (CassetteDeckTheme.KEYS_HEIGHT * layout.scale).dp,
+                        )
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = label
+                            onClick(label) {
+                                session.accessibilityPress(index)
+                                wake.trySend(Unit)
+                                true
+                            }
+                        },
+                )
+            }
         }
     }
 }
+
+private val CassetteDeckMode.accessibilityLabel: String
+    get() = when (this) {
+        CassetteDeckMode.Stop -> "Stopped"
+        CassetteDeckMode.Play -> "Playing"
+        CassetteDeckMode.FastForward -> "Fast forwarding"
+        CassetteDeckMode.Rewind -> "Rewinding"
+        CassetteDeckMode.Pause -> "Paused"
+    }

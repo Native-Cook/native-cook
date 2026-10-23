@@ -2,7 +2,6 @@ package com.ngocdevv.nativecook.blocks.gestures.moodorbjar
 
 import android.graphics.Color.parseColor
 import androidx.compose.ui.graphics.Color
-import com.ngocdevv.nativecook.R
 
 internal object MoodOrbJarTheme {
     const val STAGE_WIDTH = MoodOrbJarTokens.STAGE_WIDTH
@@ -26,12 +25,22 @@ internal object MoodOrbJarColors {
     val bg = moodOrbJarColor(MoodOrbJarTokens.Colors.bg)
     val bgBottom = moodOrbJarColor(MoodOrbJarTokens.Colors.bgBottom)
     val card = moodOrbJarColor(MoodOrbJarTokens.Colors.card)
+    val cardEdge = moodOrbJarColor(MoodOrbJarTokens.Colors.cardEdge)
     val label = moodOrbJarColor(MoodOrbJarTokens.Colors.label)
     val secondary = moodOrbJarColor(MoodOrbJarTokens.Colors.secondary)
     val cardShadow = moodOrbJarColor(MoodOrbJarTokens.Colors.cardShadow)
     val ink = moodOrbJarColor(MoodOrbJarTokens.Colors.ink)
     val mute = moodOrbJarColor(MoodOrbJarTokens.Colors.mute)
     val faint = moodOrbJarColor(MoodOrbJarTokens.Colors.faint)
+    val glassBody = moodOrbJarColor(MoodOrbJarTokens.Colors.glassBody)
+    val glassBack = moodOrbJarColor(MoodOrbJarTokens.Colors.glassBack)
+    val glassEdge = moodOrbJarColor(MoodOrbJarTokens.Colors.glassEdge)
+    val glassEdgeSoft = moodOrbJarColor(MoodOrbJarTokens.Colors.glassEdgeSoft)
+    val glassLight = moodOrbJarColor(MoodOrbJarTokens.Colors.glassLight)
+    val floorShadow = moodOrbJarColor(MoodOrbJarTokens.Colors.floorShadow)
+    val caustic = moodOrbJarColor(MoodOrbJarTokens.Colors.caustic)
+    val lid = MoodOrbJarTokens.Colors.lid.map(::moodOrbJarColor)
+    val lidRidge = moodOrbJarColor(MoodOrbJarTokens.Colors.lidRidge)
     val danger = moodOrbJarColor(MoodOrbJarTokens.Colors.danger)
     val dangerInk = moodOrbJarColor(MoodOrbJarTokens.Colors.dangerInk)
     val dotsBg = moodOrbJarColor(MoodOrbJarTokens.Colors.dotsBg)
@@ -46,25 +55,15 @@ internal data class MoodOrbJarMood(
     val light: Color,
     val deep: Color,
     val tags: String,
-    val art: Int,
 )
 
-private val moodOrbJarArt = intArrayOf(
-    R.drawable.moodorbjar_orb_awful_r,
-    R.drawable.moodorbjar_orb_bad_r,
-    R.drawable.moodorbjar_orb_neutral_r,
-    R.drawable.moodorbjar_orb_good_r,
-    R.drawable.moodorbjar_orb_great_r,
-)
-
-internal val MoodOrbJarMoods = MoodOrbJarTokens.MOODS.mapIndexed { index, mood ->
+internal val MoodOrbJarMoods = MoodOrbJarTokens.MOODS.map { mood ->
     MoodOrbJarMood(
         name = mood.name,
         base = moodOrbJarColor(mood.base),
         light = moodOrbJarColor(mood.light),
         deep = moodOrbJarColor(mood.deep),
         tags = mood.tags,
-        art = moodOrbJarArt[index],
     )
 }
 
@@ -116,6 +115,7 @@ internal val MoodOrbJarPileMoods = MoodOrbJarTokens.PILE_MOODS
 
 internal object MoodOrbJarCopy {
     const val MONTH = MoodOrbJarTokens.Copy.month
+    const val TITLE = "Mood jar"
     const val BACK = MoodOrbJarTokens.Copy.back
     const val CALENDAR = MoodOrbJarTokens.Copy.calendar
     const val MORE = MoodOrbJarTokens.Copy.more

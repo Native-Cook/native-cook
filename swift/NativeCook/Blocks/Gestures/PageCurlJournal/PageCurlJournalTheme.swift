@@ -1,152 +1,149 @@
+import CoreText
 import SwiftUI
+import UIKit
 
-/// Page Curl Journal: every colour, size and position. Positions are points on the 402 × 874 reference screen,
-/// measured from the source recording and scaled with the screen width (theme.ts).
+/// Page Curl Journal's print system, measured on the React Native 402 x 874 reference screen.
 enum PageCurlJournalTheme {
     static let referenceWidth: CGFloat = 402
     static let referenceHeight: CGFloat = 874
 
-    /// The edges of the pages still to turn, seen at the right edge of the book.
-    static let stackInk = Color(hex: 0xD9D9DD)
+    static let stackInk = color(0xD8CDB8)
 
-    enum Ink {
-        static let paper = Color(hex: 0xFFFFFF)
-        static let text = Color(hex: 0x000000)
-        static let eyebrow = Color(hex: 0x6E6E73)
-        static let mute = Color(hex: 0x636367)
-        static let footnote = Color(hex: 0x727276)
-        static let author = Color(hex: 0x8E8E92)
-        static let caption = Color(hex: 0x7A7A7E)
-        static let iconLine = Color(hex: 0xE3E3E6)
+    enum Paper {
+        static let base = PageCurlJournalTheme.color(0xF6F0E3)
+        static let ink = PageCurlJournalTheme.color(0x2B241C)
+        static let mute = PageCurlJournalTheme.color(0x7C6E5B)
+        static let rule = PageCurlJournalTheme.color(0xCDBFA8)
+        static let accent = PageCurlJournalTheme.color(0x8A3B2E)
+        static let foil = PageCurlJournalTheme.color(0x6B4E1F)
     }
 
-    /// One entry per text line or block: top of the line box, font size, weight, line height.
-    struct Line {
-        let top: CGFloat
-        let size: CGFloat
-        let weight: Font.Weight
-        let line: CGFloat
+    enum Book {
+        static let margin: CGFloat = 48
+        static let head: CGFloat = 92
+        static let folio: CGFloat = 806
+        static let gutter: CGFloat = 30
     }
 
     enum Typography {
-        static let eyebrow = Line(top: 104.3, size: 13.6, weight: .medium, line: 18)
-        static let brand = Line(top: 124.6, size: 30.0, weight: .heavy, line: 37)
-        static let title = Line(top: 129.1, size: 25.7, weight: .bold, line: 31)
-        static let intro = Line(top: 586.2, size: 14.1, weight: .regular, line: 20)
-        static let hint = Line(top: 816.2, size: 14.2, weight: .medium, line: 18)
-        static let folio = Line(top: 816.2, size: 14, weight: .regular, line: 18)
-        static let rowTitle = Line(top: 0, size: 14.7, weight: .semibold, line: 18)
-        static let rowBody = Line(top: 0, size: 13.6, weight: .regular, line: 17)
-        static let footnote = Line(top: 712.7, size: 11.2, weight: .regular, line: 13.7)
-        static let body = Line(top: 273, size: 14.1, weight: .regular, line: 19.7)
-        static let cover = Line(top: 214.2, size: 32.3, weight: .bold, line: 37.3)
-        static let caption = Line(top: 416.4, size: 9.9, weight: .semibold, line: 12)
-        static let author = Line(top: 444.9, size: 26.1, weight: .bold, line: 31)
+        static let hintTop: CGFloat = 806
     }
 
-    /// Spacing scale from the measured source gaps; added elements use these tokens.
     enum Space {
-        static let xs: CGFloat = 4
-        static let sm: CGFloat = 8
         static let md: CGFloat = 12
-        static let lg: CGFloat = 16
-        static let xl: CGFloat = 24
-        static let xxl: CGFloat = 32
-        static let body: CGFloat = 48
-    }
-
-    enum Layout {
-        static let markLeft: CGFloat = 145
-        static let markTop: CGFloat = 314.7
-        static let markSize: CGFloat = 112.6
-        static let markRadius: CGFloat = 25.5
-        static let bodyLeft: CGFloat = 47.8
-        static let rowIconX: CGFloat = 62
-        static let rowTextLeft: CGFloat = 101.5
-        static let rowTitleTop: [CGFloat] = [313.1, 402.8]
-        static let rowIcon: CGFloat = 30.5
-        static let rowIconY: [CGFloat] = [341.7, 431]
-        static let rowGap: CGFloat = 3.4
-        static let shieldTop: CGFloat = 689
-        static let shieldSize: CGFloat = 15.5
-        static let hintArrowSize: CGFloat = 13.5
-        static let hintArrowGap: CGFloat = 8
-        static let sparkleCX: CGFloat = 201.5
-        static let sparkleCY: CGFloat = 154
-        static let sparkleSize: CGFloat = 47
-    }
-
-    /// The invented brand. The source's wordmark dots its i's with sparkles; ours does the same.
-    enum Brand {
-        static let name = "Ritualbook"
-        static let mark = "Ri"
     }
 
     enum Copy {
-        static let meet = "Meet"
-        static let intro = ["Your personal ‘Great Book of Habits’, written", "and completed by you, one day at a time."]
-        static let hint = "Turn the page"
-        static let preface = "Preface"
+        static let presents = "Ritualbook presents"
+        static let title = "The Great Book\nof Habits"
+        static let subtitle = "a journal written one day at a time"
+        static let sealTop = "VOL. I"
+        static let sealMid = "MMXXVI"
+        static let sealBottom = "RITUALBOOK"
+        static let imprint = "RITUALBOOK  ·  FIRST EDITION"
+        static let hint = "turn the page"
+        static let headPreface = "THE GREAT BOOK OF HABITS"
+        static let headForeword = "HOW IT WORKS"
+        static let preface = "PREFACE"
         static let prefaceTitle = "Your Data Is Yours"
-        static let rows: [(title: String, body: [String])] = [
-            ("Track Habits", ["Feel proud of every small step you take", "toward your goals."]),
-            ("Review Records", ["Learn from your setbacks and your wins", "as the weeks go by."]),
+        static let rows: [(title: String, body: String)] = [
+            (
+                "TRACK HABITS",
+                "Mark the small things you do each day and watch them add up. A tick is enough; a line of notes is better. Nothing is graded, and nothing is lost when you miss."
+            ),
+            (
+                "REVIEW RECORDS",
+                "Every Sunday the book turns back to the week behind you: what held, what slipped, and the one habit worth carrying into the next."
+            ),
         ]
-        static let footnote = ["Everything you write stays private on this iPhone.", "No servers, no tracking, no account, no ads."]
-        static let foreword = "Foreword"
+        static let footnote = "* Everything you write stays on this iPhone. No servers, no tracking, no account, no ads."
+        static let foreword = "FOREWORD"
         static let forewordTitle = "How It Works"
         static let body = [
-            "Every day, your book automatically adds",
-            "one fresh page. It’s up to you to make the",
-            "most of it.",
-            "",
-            "Missed a day? Don’t worry about it. You can",
-            "always turn back a page and fill in",
-            "any blanks as you go.",
-            "",
-            "Every time you check in on your daily habits,",
-            "you move a step closer to finishing all the",
-            "chapters of your own unfolding story.",
-            "",
-            "Now, before your book finds its rightful",
-            "place on your home screen, all that’s left is",
-            "to make the commitment to the journey",
-            "ahead...",
+            " your book adds one fresh page. It is yours to fill, a line or a whole page, and it waits patiently for you if you are late.",
+            "Missed a day? Turn back a page and fill in the blank; nobody is keeping score but you.",
+            "Each check-in moves you a step closer to the last chapter of a story that only you can write.",
         ]
-        static let cover = ["The Great Book", "of Habits"]
-        static let caption = "TO BE WRITTEN BY"
+        static let bodyLead = "EVERY MORNING"
+        static let signoff = "with care, the makers of Ritualbook"
+        static let belongs = "THIS BOOK BELONGS TO"
         static let author = "Untitled Author"
-        static let pages = ["Title page", "Preface", "Foreword", "Cover"]
+        static let begun = "begun on the 23rd of October"
+        static let pages = ["Title page", "Preface", "Foreword", "Ownership page"]
     }
 
-    /// Icon colours, read from the source frames.
-    enum Icon {
-        static let check = [Color(hex: 0x6FB6F5), Color(hex: 0x8C8DF0), Color(hex: 0xB08BEF)]
-        static let bars = [Color(hex: 0x79A6F2), Color(hex: 0x9B8CEE)]
-        static let barsBase = Color(hex: 0xB9A5F2)
-        static let sparkle = [Color(hex: 0xFFC83D), Color(hex: 0x3FA0FF), Color(hex: 0x8A63F0), Color(hex: 0xFF7A8A), Color(hex: 0xFFC83D)]
-        static let markInk = Color(hex: 0x141414)
-        static let curlDark = Color(hex: 0x8F8F93)
-        static let curlMid = Color(hex: 0xC9C9CC)
-        static let curlLight = Color(hex: 0xF2F2F4)
-    }
-
-    /// Page-curl shading, fitted against the source's mid-turn frame (theme.ts CURL).
     enum Curl {
-        static let radius = 22.77 // roll radius where the fold meets the grabbed corner, pt
-        static let radiusSlope = 0.01 // the roll widens along the fold (a cone, as on iOS)
+        static let radius = 22.77
+        static let radiusSlope = 0.01
         static let radiusMin = 1.0
-        static let shadow = 0.413 // cast shadow on the page beneath, darkest at the roll
+        static let shadow = 0.413
         static let shadowWidth = 1.6
-        static let edgeShadow = 0.334 // contact shadow under the lying flap's edge
+        static let edgeShadow = 0.334
         static let edgeShadowWidth = 3.62
-        static let frontLight = 0.793 // ambient on the rising front of the roll
-        static let backLight = 0.414 // ambient on the back of the roll, the fold's dark line
+        static let frontLight = 0.793
+        static let backLight = 0.414
         static let backGamma = 0.455
-        static let backPaper = 0.962 // the back side of the sheet
-        static let showThrough = 0.218 // how much of the printed front reads through the back
-        static let grain = 0.018 // paper grain on the back, a seeded hash per device pixel
-        static let edgeInk = 0.08 // the sheet's cut edge reads as thickness
-        static let sheen = 0.06 // soft specular band on the roll where it faces the key light
+        static let backPaper = 0.962
+        static let showThrough = 0.218
+        static let grain = 0.018
+        static let edgeInk = 0.08
+        static let sheen = 0.06
+    }
+
+    private static func color(_ rgb: UInt32) -> Color {
+        Color(
+            .sRGB,
+            red: Double((rgb >> 16) & 255) / 255,
+            green: Double((rgb >> 8) & 255) / 255,
+            blue: Double(rgb & 255) / 255
+        )
+    }
+}
+
+enum PageCurlJournalAssets {
+    private static let romanResource = "PageCurlJournal-Newsreader"
+    private static let italicResource = "PageCurlJournal-NewsreaderItalic"
+
+    static let paper: UIImage = {
+        guard let url = Bundle.main.url(forResource: "PageCurlJournal-paper", withExtension: "jpg"),
+              let image = UIImage(contentsOfFile: url.path) else {
+            preconditionFailure("PageCurlJournal-paper.jpg is missing from the app bundle")
+        }
+        return image
+    }()
+
+    private static let romanName = postScriptName(for: romanResource)
+    private static let italicName = postScriptName(for: italicResource)
+
+    private static let registered: Void = {
+        for resource in [romanResource, italicResource] {
+            guard let url = Bundle.main.url(forResource: resource, withExtension: "ttf") else {
+                preconditionFailure("\(resource).ttf is missing from the app bundle")
+            }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+        precondition(Bundle.main.url(forResource: "PageCurlJournal-Newsreader-OFL", withExtension: "txt") != nil)
+        _ = paper
+    }()
+
+    static func register() { _ = registered }
+
+    static func font(size: CGFloat, italic: Bool = false) -> UIFont {
+        register()
+        let name = italic ? italicName : romanName
+        guard let font = UIFont(name: name, size: size) else {
+            preconditionFailure("Could not create bundled font \(name)")
+        }
+        return font
+    }
+
+    private static func postScriptName(for resource: String) -> String {
+        guard let url = Bundle.main.url(forResource: resource, withExtension: "ttf"),
+              let provider = CGDataProvider(url: url as CFURL),
+              let font = CGFont(provider),
+              let name = font.postScriptName else {
+            preconditionFailure("Could not read \(resource).ttf")
+        }
+        return name as String
     }
 }

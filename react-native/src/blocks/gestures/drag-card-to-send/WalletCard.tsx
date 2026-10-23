@@ -1,127 +1,148 @@
-/** The card face: brand, rolling balance, number, three actions. Pure view; the parent moves it. */
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+/**
+ * The card: midnight anodised aluminium drawn in Skia (scenes.tsx), with its printed face on top (logotype,
+ * contactless mark, the balance odometer, the last four digits). The parent moves it; the material reads the move for its light.
+ */
+import { Canvas } from '@shopify/react-native-skia';
+import { PixelRatio, StyleSheet, Text, View, type TextStyle } from 'react-native';
+import Animated, {
+  LayoutAnimationConfig, ReduceMotion, useDerivedValue, useReducedMotion, withDelay, withTiming, type EntryExitAnimationFunction,
+  type SharedValue,
+} from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
-import { SEND } from './motion';
-import { COLORS, LAYOUT, TYPE } from './theme';
+import { PULL, ROLL, SEND, easeOut } from './motion';
+import { CardMaterial, cardShadow, cardUniforms } from './scenes';
+import { CARD_LAST4, COLORS, GLYPH, LAYOUT, TYPE, formatMoney } from './theme';
 
-export function formatMoney(cents: number) {
-  const sign = cents < 0 ? '−' : '';
-  const v = Math.abs(cents) / 100;
-  return `${sign}$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-const DIGIT_H = 38;
-
-function Digit({ value, index }: { value: number; index: number }) {
-  const pos = useSharedValue(value);
-  useEffect(() => {
-    // Columns further right start a little later, like a mechanical counter settling.
-    pos.set(withDelay(index * 40, withTiming(value, { duration: SEND.rollMs, easing: Easing.out(Easing.cubic) })));
-  }, [index, pos, value]);
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -pos.get() * DIGIT_H }] }));
+/**
+ * One digit of the balance. When it changes, the old figure rises out and fades, then the new one rises in after it,
+ * like a counter ticking over: no figure rolls through the ones between, and none is cut by a clip. One direction
+ * for both a payment and its undo, so a figure leaving can never disagree with the one arriving. Under Reduce Motion
+ * the figures crossfade in place on the same timings.
+ */
+function Digit({ value, index, style, line, rollMs, reduced }: {
+  value: number; index: number; style: TextStyle; line: number; rollMs: number; reduced: boolean;
+}) {
+  const delay = index * ROLL.stagger;
+  const travel = reduced ? 0 : ROLL.travel * line;
+  const never = ReduceMotion.Never;
+  // The old figure is gone (fast, eased out) before the new one is half in, so the two never read as one glyph.
+  const exit: EntryExitAnimationFunction = () => {
+    'worklet';
+    const t = { duration: rollMs * 0.4, easing: easeOut, reduceMotion: never };
+    return {
+      initialValues: { opacity: 1, transform: [{ translateY: 0 }] },
+      animations: { opacity: withDelay(delay, withTiming(0, t), never), transform: [{ translateY: withDelay(delay, withTiming(-travel, t), never) }] },
+    };
+  };
+  const enter: EntryExitAnimationFunction = () => {
+    'worklet';
+    const t = { duration: rollMs * 0.7, easing: easeOut, reduceMotion: never };
+    const d = delay + rollMs * 0.25;
+    return {
+      initialValues: { opacity: 0, transform: [{ translateY: travel }] },
+      animations: { opacity: withDelay(d, withTiming(1, t), never), transform: [{ translateY: withDelay(d, withTiming(0, t), never) }] },
+    };
+  };
   return (
-    <View style={styles.digitWindow}>
-      <Animated.View style={style}>
-        {Array.from({ length: 10 }, (_, d) => <Text key={d} style={styles.balance}>{d}</Text>)}
-      </Animated.View>
+    <View style={{ height: line }}>
+      {/* Sizes the column to one tabular digit, exactly as the static number sets it. */}
+      <Text style={[style, styles.sizer]}>0</Text>
+      <Animated.Text key={value} style={[style, styles.glyph]} entering={enter} exiting={exit}>
+        {value}
+      </Animated.Text>
     </View>
   );
 }
 
-export function Odometer({ cents }: { cents: number }) {
-  const text = formatMoney(cents);
+/** A number whose changed digits tick over: each digit is its own column, the other characters are set in place. */
+export function Odometer({ text, style, rollMs = SEND.rollMs }: { text: string; style: TextStyle; rollMs?: number }) {
+  const reduced = useReducedMotion();
+  const line = style.lineHeight ?? 36;
   let digit = 0;
+  // Keyed by place from the right, so a column keeps its identity if the number gains or loses a digit.
   return (
-    <View style={styles.odometer} accessible accessibilityLabel={`Balance ${text}`}>
-      {text.split('').map((ch, i) => (/\d/.test(ch)
-        ? <Digit key={`d${i}`} value={Number(ch)} index={digit++} />
-        : <Text key={`c${i}`} style={styles.balance}>{ch === '$' ? '$ ' : ch}</Text>))}
+    // The figures on screen when the card appears are simply there; only later changes move.
+    <LayoutAnimationConfig skipEntering>
+      <View style={styles.odometer}>
+        {text.split('').map((ch, i) => (/\d/.test(ch)
+          ? <Digit key={`d${text.length - i}`} value={Number(ch)} index={digit++} style={style} line={line} rollMs={rollMs} reduced={reduced} />
+          : <Text key={`c${text.length - i}`} style={[style, { height: line }]}>{ch}</Text>))}
+      </View>
+    </LayoutAnimationConfig>
+  );
+}
+
+type Props = {
+  width: number;
+  height: number;
+  cents: number;
+  /** The card's pull offset (pt) and press (0..1), for its light and shadow. */
+  shift: SharedValue<number>;
+  press: SharedValue<number>;
+};
+
+/**
+ * The card's own logotype: "cove" drawn as a monoline in a 13 pt x-height, geometric like the etched contours,
+ * so the brand is a mark and not a word set in the system font.
+ */
+const LOGO = [
+  'M11.24 2.76 A6 6 0 1 0 11.24 11.24',
+  'M28 7 A6 6 0 1 0 16 7 A6 6 0 1 0 28 7',
+  'M32.6 1.2 L38.4 12.8 L44.2 1.2',
+  'M48 7 L60 7 A6 6 0 1 0 57.9 11.6',
+].join(' ');
+
+export function WalletCard({ width, height, cents, shift, press }: Props) {
+  const pad = LAYOUT.shadowPad;
+  const aa = 1 / PixelRatio.get();
+  const uniforms = useDerivedValue(() => cardUniforms(width, height, shift.get(), press.get(), aa));
+  const lift = useDerivedValue(() => Math.min(1, Math.max(0, shift.get() / PULL.tether)));
+  const contactY = useDerivedValue(() => cardShadow(lift.get()).contactY);
+  const contactBlur = useDerivedValue(() => cardShadow(lift.get()).contactBlur);
+  const contactOpacity = useDerivedValue(() => cardShadow(lift.get()).contactOpacity);
+  const ambientY = useDerivedValue(() => cardShadow(lift.get()).ambientY);
+  const ambientBlur = useDerivedValue(() => cardShadow(lift.get()).ambientBlur);
+  const ambientOpacity = useDerivedValue(() => cardShadow(lift.get()).ambientOpacity);
+  // The bottom line: the balance's baseline sits 26 pt above the card's edge, the last four digits share it.
+  const amountTop = height - 26 - 29;
+  return (
+    <View style={{ width, height }}>
+      <Canvas style={[styles.canvas, { left: -pad, top: -pad, width: width + pad * 2, height: height + pad * 2 }]}
+        pointerEvents="none">
+        <CardMaterial width={width} height={height} pad={pad} pixelRatio={PixelRatio.get()} uniforms={uniforms}
+          contactY={contactY} contactBlur={contactBlur} contactOpacity={contactOpacity}
+          ambientY={ambientY} ambientBlur={ambientBlur} ambientOpacity={ambientOpacity} />
+      </Canvas>
+      <View style={styles.logo}>
+        <Svg width={66} height={17} viewBox="-1.5 -1.5 66 17">
+          <Path d={LOGO} stroke={COLORS.onCard} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </Svg>
+      </View>
+      <View style={styles.contactless}>
+        <Svg width={24} height={24} viewBox="0 0 24 24">
+          <Path d={GLYPH.contactless} stroke={COLORS.onCard} strokeOpacity={0.72} strokeWidth={1.8} strokeLinecap="round" fill="none" />
+        </Svg>
+      </View>
+      <Text style={[styles.label, TYPE.cardLabel, { top: amountTop - 18 }]}>Balance</Text>
+      <View style={[styles.balance, { top: amountTop }]}>
+        <Odometer text={formatMoney(cents)} style={styles.balanceText} />
+      </View>
+      <Text style={[styles.pan, TYPE.pan, { top: amountTop + 29 - 15 }]}>{`•••• ${CARD_LAST4}`}</Text>
     </View>
   );
 }
 
-export function ArrowIcon({ kind, color, size = 18 }: { kind: 'out' | 'in' | 'add' | 'open' | 'rowOut' | 'rowIn'; color: string; size?: number }) {
-  // The transaction rows' glyphs stand on a base line, as in the source.
-  const d = kind === 'rowOut' ? 'M14 12 L5 3 M5 9.5 V3 H11.5 M4 16.5 H16'
-    : kind === 'rowIn' ? 'M14 3 L5 12 M5 5.5 V12 H11.5 M4 16.5 H16'
-    : kind === 'out' ? 'M15 15 L5 5 M5 12 V5 H12'
-    : kind === 'in' ? 'M14 4 L5 13 M5 6 V13 H12'
-      : kind === 'open' ? 'M5 15 L15 5 M8 5 H15 V12' : 'M10 3 V17 M3 10 H17';
-  return (
-    <Svg width={size} height={size} viewBox="0 0 20 20">
-      <Path d={d} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </Svg>
-  );
-}
-
-const ACTIONS = [
-  { kind: 'out', label: 'Send to' },
-  { kind: 'in', label: 'Receive' },
-  { kind: 'add', label: 'Add' },
-] as const;
-
-export function WalletCard({ width, cents, children }: { width: number; cents: number; children?: React.ReactNode }) {
-  return (
-    <View style={[styles.card, { width }]}>
-      <LinearGradient colors={[COLORS.cardHigh, COLORS.card, COLORS.card]} locations={[0, 0.45, 1]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <View style={styles.row}>
-        <Text style={styles.brand}>AERO</Text>
-        <Odometer cents={cents} />
-      </View>
-      <View style={[styles.row, styles.rowChip]}>
-        <View style={styles.chip} />
-        <Text style={styles.faint}>VALID THRU</Text>
-      </View>
-      <View style={[styles.row, styles.rowNumber]}>
-        <Text style={styles.number}>••••  ••••  ••••  1234</Text>
-        <Text style={styles.number}>12/35</Text>
-      </View>
-      <Text style={styles.holder}>JULES MORROW</Text>
-      <View style={styles.actions}>
-        {ACTIONS.map((a) => (
-          <View key={a.kind} style={styles.action}>
-            <View style={styles.actionButton}><ArrowIcon kind={a.kind} color={COLORS.cardInk} /></View>
-            <Text style={styles.actionLabel}>{a.label}</Text>
-          </View>
-        ))}
-      </View>
-      {children}
-    </View>
-  );
-}
-
+const P = LAYOUT.cardPad;
 const styles = StyleSheet.create({
-  card: {
-    height: LAYOUT.cardHeight, borderRadius: LAYOUT.cardRadius, overflow: 'hidden',
-    padding: LAYOUT.cardPad, backgroundColor: COLORS.card, borderCurve: 'continuous',
-  },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowChip: { marginTop: 20 },
-  rowNumber: { marginTop: 8 },
-  brand: { color: COLORS.cardInk, fontSize: TYPE.brand, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
-  odometer: { flexDirection: 'row', height: DIGIT_H, overflow: 'hidden', transform: [{ translateY: 3 }] },
-  digitWindow: { height: DIGIT_H, overflow: 'hidden' },
-  balance: {
-    color: COLORS.cardInk, fontSize: TYPE.balance, lineHeight: DIGIT_H, height: DIGIT_H, fontWeight: '700',
-    fontVariant: ['tabular-nums'], letterSpacing: -0.5,
-  },
-  chip: { width: 30, height: 22, borderRadius: 5, backgroundColor: COLORS.chip },
-  faint: { color: COLORS.cardFaint, fontSize: 9, fontWeight: '600', letterSpacing: 0.8 },
-  number: { color: COLORS.cardInk, fontSize: TYPE.cardSmall + 1, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  holder: { marginTop: 8, color: COLORS.cardFaint, fontSize: 10, fontWeight: '600', letterSpacing: 1 },
-  actions: {
-    position: 'absolute', left: 0, right: 0, bottom: 24.5, flexDirection: 'row', justifyContent: 'space-between',
-    paddingHorizontal: LAYOUT.cardPad - 8,
-  },
-  action: { width: 64, alignItems: 'center' },
-  actionButton: {
-    width: LAYOUT.actionSize, height: LAYOUT.actionSize, borderRadius: LAYOUT.actionSize / 2,
-    backgroundColor: COLORS.cardButton, alignItems: 'center', justifyContent: 'center',
-  },
-  actionLabel: { marginTop: 8, color: COLORS.cardInk, fontSize: TYPE.cardLabel, fontWeight: '600' },
+  canvas: { position: 'absolute' },
+  logo: { position: 'absolute', left: P - 1, top: P },
+  contactless: { position: 'absolute', right: P - 4, top: P - 4, width: 24, height: 24 },
+  label: { position: 'absolute', left: P, color: COLORS.onCardMute },
+  balance: { position: 'absolute', left: P },
+  balanceText: { ...TYPE.balance, color: COLORS.onCard, fontVariant: ['tabular-nums'] },
+  pan: { position: 'absolute', right: P, color: COLORS.onCardMute, fontVariant: ['tabular-nums'] },
+  odometer: { flexDirection: 'row' },
+  sizer: { color: 'transparent' },
+  glyph: { position: 'absolute', left: 0, right: 0, top: 0, textAlign: 'center' },
 });

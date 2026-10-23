@@ -395,7 +395,7 @@ internal class PageCurlEngine(
                 return
             }
             // A tap: the right margin or the hint turns forward, the left margin back; elsewhere a lifted corner drops.
-            val hintTop = (TYPE.hint.top - 12f) * s
+            val hintTop = (TYPE.HINT_TOP - 12f) * s
             val onHint = c == 0 && y > hintTop && y < hintTop + 44f * s
             if (x > width * 0.66f || onHint) {
                 turnBy(1)
@@ -596,7 +596,7 @@ internal class PageCurlEngine(
             return
         }
         if (!playing) {
-            if (mode != IDLE || now - lastTouch < TOUCH_RESUME_MS) return
+            if (mode != IDLE || now - lastTouch < IDLE_RESUME_MS) return
             // Resume from rest: from the title page at the top of the loop, otherwise at the riffle back from the cover.
             val page = cur
             playing = true
@@ -609,7 +609,7 @@ internal class PageCurlEngine(
             return
         }
         if (!reduced && (clock / LOOP_MS).toInt() > (previousClock / LOOP_MS).toInt()) {
-            // The late idle nudge can still be settling after 14 s. End it at the loop seam.
+            // Reassert the resting title page at the recording seam.
             resetLoopRest()
         }
         val t = (clock % LOOP_MS).toFloat()

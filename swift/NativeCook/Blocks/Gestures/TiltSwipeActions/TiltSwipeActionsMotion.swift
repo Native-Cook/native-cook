@@ -1,48 +1,75 @@
 import SwiftUI
 
-/// Typed adapters for every value in `motion.ts`; the single source of truth is `TiltSwipeActionsTokens`.
+struct TiltSwipeActionsSnapshot {
+    var pull: CGFloat = 0
+    var splitCount = 0
+    var splitCommitted = false
+    var rowOffsets: [String: CGFloat] = [:]
+    var toast: CGFloat = 0
+    var dim: CGFloat = 0
+    var ghostPoint = CGPoint.zero
+    var ghostOpacity: CGFloat = 0
+    var ghostPress: CGFloat = 0
+}
+
 enum TiltSwipeActionsMotion {
-    enum Swipe {
-        private typealias Token = TiltSwipeActionsTokens.Swipe
-        static let activeOffsetX = Token.activeOffsetX; static let failOffsetY = Token.failOffsetY
-        static let fullAt = Token.fullAt; static let fullRubber = Token.fullRubber; static let rightRubber = Token.rightRubber
-        static let openAt = Token.openAt; static let openFlick = Token.openFlick
-        static let deleteFlick = Token.deleteFlick; static let deleteFlickAt = Token.deleteFlickAt
-    }
+    static func snapshot(at rawTime: TimeInterval) -> TiltSwipeActionsSnapshot {
+        let t = rawTime.truncatingRemainder(dividingBy: TiltSwipeActionsTokens.loop)
+        var state = TiltSwipeActionsSnapshot()
 
-    enum Tilt {
-        private typealias Token = TiltSwipeActionsTokens.Tilt
-        static let perVelocity = Token.perVelocity; static let max = Token.max
-        static let perspective = Token.perspective; static let lift = Token.lift
-    }
-
-    enum Spring {
-        private typealias Token = TiltSwipeActionsTokens.Spring
-        static let follow = value(Token.follow); static let snap = value(Token.snap); static let lift = value(Token.lift)
-        static let tileStretch = value(Token.tileStretch); static let collapse = value(Token.collapse); static let restore = value(Token.restore)
-        static let pill = value(Token.pill); static let lens = value(Token.lens); static let menu = value(Token.menu)
-        private static func value(_ token: (damping: Double, stiffness: Double, mass: Double)) -> TiltSwipeActionsSpring {
-            TiltSwipeActionsSpring(damping: token.damping, stiffness: token.stiffness, mass: token.mass)
+        if t >= 0.7, t <= 2.9 {
+            let keys: [(Double, CGFloat)] = [(0.7, 0), (1.25, 100), (1.6, 100), (2.1, 170), (2.9, 170)]
+            state.pull = keyed(t, keys)
+            state.splitCount = detent(for: state.pull)
+            state.dim = TiltSwipeActionsCurve.interpolate(state.pull, from: 24, to: 52) * 0.72
+            state.ghostPoint = CGPoint(x: 16 + 193 + state.pull, y: 24)
+            state.ghostOpacity = fade(t, in: 0.7...0.85, out: 2.75...2.9)
         }
+        if t > 2.9, t < 5.75 {
+            state.splitCommitted = true
+            state.splitCount = 3
+            state.toast = fade(t, in: 3.06...3.34, out: 5.60...5.74)
+        }
+        if t >= 3.7, t < 7.22 {
+            if t < 4.25 {
+                state.rowOffsets["metro"] = -150 * TiltSwipeActionsCurve.smooth(CGFloat((t - 3.7) / 0.55))
+                state.ghostPoint = CGPoint(x: 16 + 300 + (state.rowOffsets["metro"] ?? 0), y: 0)
+                state.ghostOpacity = fade(t, in: 3.7...3.85, out: 4.10...4.25)
+            } else if t < 7.1 {
+                state.rowOffsets["metro"] = -144
+            } else {
+                let p = TiltSwipeActionsCurve.smooth(CGFloat((t - 7.1) / 0.12))
+                state.rowOffsets["metro"] = -144 * (1 - p)
+                state.ghostPoint = CGPoint(x: 16 + 120, y: 0)
+                state.ghostOpacity = fade(t, in: 7.1...7.16, out: 7.16...7.22)
+                state.ghostPress = sin(p * .pi)
+            }
+        }
+        if t >= 5.6, t <= 5.75 {
+            state.ghostOpacity = fade(t, in: 5.6...5.66, out: 5.69...5.75)
+            state.ghostPress = sin(CGFloat((t - 5.6) / 0.15) * .pi)
+        }
+        return state
     }
 
-    enum Timing {
-        private typealias Token = TiltSwipeActionsTokens.Timing
-        static let flyOut = Double(Token.flyOut) / 1_000; static let tileFade = Double(Token.tileFade) / 1_000
-        static let colour = Double(Token.colour) / 1_000; static let undoVisible = Double(Token.undoVisible) / 1_000
-        static let reduced = Double(Token.reduced) / 1_000; static let reducedGap = Double(Token.reducedGap) / 1_000
-        static let pressScale = Token.pressScale; static let pressIn = Double(Token.pressIn) / 1_000; static let pressOut = Double(Token.pressOut) / 1_000
-        static let menuStagger = Token.menuStagger; static let tab = Double(Token.tab) / 1_000; static let roll = Double(Token.roll) / 1_000
-        static let breath = Token.breath; static let sheen = Token.sheen; static let tabSlide = Token.tabSlide
-        static let restoreDelay = Double(Token.restoreDelay) / 1_000
+    static func detent(for pull: CGFloat) -> Int {
+        guard pull >= TiltSwipeActionsTokens.Split.detentStart else { return 1 }
+        return min(5, 2 + Int((pull - TiltSwipeActionsTokens.Split.detentStart) / TiltSwipeActionsTokens.Split.detentStep))
     }
 
-    static let loop = Double(TiltSwipeActionsTokens.LOOP_MS) / 1_000
-    static let resume = Double(TiltSwipeActionsTokens.RESUME_MS) / 1_000
+    private static func keyed(_ time: TimeInterval, _ keys: [(Double, CGFloat)]) -> CGFloat {
+        for index in 0..<(keys.count - 1) where time <= keys[index + 1].0 {
+            let a = keys[index]
+            let b = keys[index + 1]
+            let p = TiltSwipeActionsCurve.smooth(CGFloat((time - a.0) / (b.0 - a.0)))
+            return a.1 + (b.1 - a.1) * p
+        }
+        return keys.last?.1 ?? 0
+    }
 
-    enum Demo {
-        private typealias Token = TiltSwipeActionsTokens.Demo
-        static let fingerFade = Token.fingerFade; static let open = Token.open; static let remove = Token.remove
-        static let undo = Token.undo; static let lean = Token.lean; static let tidy = Token.tidy
+    private static func fade(_ time: TimeInterval, in enter: ClosedRange<Double>, out exit: ClosedRange<Double>) -> CGFloat {
+        if enter.contains(time) { return TiltSwipeActionsCurve.interpolate(CGFloat(time), from: CGFloat(enter.lowerBound), to: CGFloat(enter.upperBound)) }
+        if exit.contains(time) { return 1 - TiltSwipeActionsCurve.interpolate(CGFloat(time), from: CGFloat(exit.lowerBound), to: CGFloat(exit.upperBound)) }
+        return time > enter.upperBound && time < exit.lowerBound ? 1 : 0
     }
 }

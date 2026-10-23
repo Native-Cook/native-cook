@@ -5,17 +5,32 @@ import SwiftUI
 @MainActor
 @Observable
 final class GiftSlotDropModel {
-    enum Phase: Int, Equatable { case choosing, pulling, swiping, inserting, activating, offer, closing }
+    enum Phase: Int, Equatable { case choosing, pulling, swiping, inserting, reading, offer, closing }
     enum Haptic { case select, armed, insert, success, light }
     enum DragMode { case undecided, pull, swipe }
 
-    struct ReleasedPose: Equatable { var x = 0.0, y = 0.0, scale = 1.0 }
-    struct CardPose: Equatable { var x = 0.0, y = 0.0, scale = 1.0, turn = 0.0, opacity = 1.0, lean = 0.0, roll = 0.0 }
-    struct OfferPose: Equatable { var y = 0.0, scale = 1.0, opacity = 0.0, roll = 0.0 }
-    struct ConfettiPiece: Equatable { var x = 0.0, y = 0.0, vx = 0.0, vy = 0.0, angle = 0.0, spin = 0.0, life = 0.0; var color = 0 }
+    struct ReleasedPose: Equatable { var x = 0.0; var y = 0.0 }
+    struct CardPose: Equatable {
+        var x = 0.0
+        var y = 0.0
+        var scale = 1.0
+        var turn = 0.0
+        var lean = 0.0
+        var opacity = 1.0
+    }
+    struct OfferPose: Equatable {
+        var y = 0.0
+        var scale = 1.0
+        var angle = 0.0
+        var opacity = 0.0
+        var rising = false
+    }
+    struct Ghost: Equatable { var x = 0.0; var y = 0.0; var opacity = 0.0 }
 
     private struct Touch {
-        var active = false, scripted = false, onCard = false
+        var active = false
+        var scripted = false
+        var onCard = false
         var mode = DragMode.undecided
         var origin = CGPoint.zero
         var offsetOrigin = 0.0
@@ -27,18 +42,24 @@ final class GiftSlotDropModel {
         var target: Double?
         var parameters = GiftSlotDropTokens.Springs.snap
 
-        mutating func set(_ newValue: Double) { value = newValue; velocity = 0; target = nil }
+        mutating func set(_ newValue: Double) {
+            value = newValue
+            velocity = 0
+            target = nil
+        }
+
         mutating func spring(to target: Double, velocity: Double? = nil, parameters: GiftSlotDropTokens.Spring) {
             self.target = target
             self.parameters = parameters
             if let velocity { self.velocity = velocity }
         }
+
         mutating func advance(_ dt: Double) {
             guard let target else { return }
             let steps = max(1, Int(ceil(dt / (1.0 / 120.0))))
             let h = dt / Double(steps)
             for _ in 0..<steps {
-                let acceleration = (-parameters.stiffness * (value - target) - parameters.damping * velocity) / parameters.mass
+                let acceleration = -parameters.stiffness * (value - target) - parameters.damping * velocity
                 velocity += acceleration * h
                 value += velocity * h
             }
@@ -47,7 +68,7 @@ final class GiftSlotDropModel {
     }
 
     let autoPlay: Bool
-    var reducedMotion = false
+    private(set) var reducedMotion = false
     private(set) var phase = Phase.choosing
     private(set) var selected = GiftSlotDropTokens.startIndex
     private(set) var armed = false
@@ -55,25 +76,27 @@ final class GiftSlotDropModel {
     private(set) var releasedAt = -1.0
     private(set) var releasedFrom = ReleasedPose()
     private(set) var closeAt = -1.0
-    private(set) var confetti: [ConfettiPiece] = []
+    private(set) var titleAt = -1_000_000.0
+    private(set) var titleWas = 0
+    private(set) var ghost = Ghost()
 
+    private var layout = GiftSlotDropTokens.ScreenLayout(width: 393, height: 852, top: 59, bottom: 34)
     private var offsetSpring = SpringValue(value: Double(GiftSlotDropTokens.startIndex))
     private var pullXSpring = SpringValue(value: 0)
     private var pullYSpring = SpringValue(value: 0)
     private var liftSpring = SpringValue(value: 1)
     private var touch = Touch()
-    private var width: CGFloat = 393
     private var lastTimestamp: CFTimeInterval?
-    private var phaseStartedAt = 0.0
-    private var scriptInterruptedByUser = false
+    private var scriptOn: Bool
     private var scriptTime = 0.0
     private var quietTime = 0.0
     private var scriptTouching = false
-    private var firedConfetti = false
+    private var successFired = false
     private var haptics: [Haptic] = []
 
     init(autoPlay: Bool) {
         self.autoPlay = autoPlay
+        scriptOn = autoPlay
     }
 
     var offset: Double { offsetSpring.value }
@@ -81,38 +104,47 @@ final class GiftSlotDropModel {
     var pullY: Double { pullYSpring.value }
     var gift: GiftSlotDropTokens.Gift { GiftSlotDropTokens.gifts[selected] }
     var isChoosing: Bool { phase == .choosing || phase == .pulling || phase == .swiping }
-    var isActivating: Bool { phase == .inserting || phase == .activating }
     var showsOffer: Bool { phase == .offer || phase == .closing }
+    var screenLayout: GiftSlotDropTokens.ScreenLayout { layout }
     var needsFrames: Bool {
-        autoPlay || touch.active || phase != .choosing || offsetSpring.target != nil || pullXSpring.target != nil
-            || pullYSpring.target != nil || liftSpring.target != nil || confetti.contains { $0.life > 0 }
+        (autoPlay && !reducedMotion) || touch.active || phase != .choosing || offsetSpring.target != nil
+            || pullXSpring.target != nil || pullYSpring.target != nil || liftSpring.target != nil
     }
 
-    func configure(width: CGFloat, reducedMotion: Bool) {
-        self.width = width
+    func configure(_ next: GiftSlotDropTokens.ScreenLayout, reducedMotion: Bool) {
+        layout = next
         self.reducedMotion = reducedMotion
+        if reducedMotion {
+            scriptOn = false
+            ghost.opacity = 0
+        } else if autoPlay, phase == .choosing, !scriptTouching {
+            scriptOn = true
+        }
     }
 
     func advance(to timestamp: CFTimeInterval) {
-        guard let lastTimestamp else { self.lastTimestamp = timestamp; return }
+        guard let lastTimestamp else {
+            self.lastTimestamp = timestamp
+            return
+        }
         let elapsed = max(0, timestamp - lastTimestamp)
         self.lastTimestamp = timestamp
         guard elapsed > 0 else { return }
-        let dt = min(0.1, elapsed)
-        let milliseconds = elapsed * 1_000
+        let dt = min(0.064, elapsed)
+        let milliseconds = dt * 1_000
         clock += milliseconds
         offsetSpring.advance(dt)
         pullXSpring.advance(dt)
         pullYSpring.advance(dt)
         liftSpring.advance(dt)
-        updateTimeline(dt: dt)
+        updateTimeline()
         updateScript(milliseconds: milliseconds)
     }
 
     func touchBegan(at point: CGPoint, scripted: Bool = false) {
         guard phase == .choosing else { return }
-        let onCard = abs(point.x - width / 2) < GiftSlotDropTokens.Layout.cardW / 2 + 12
-            && abs(point.y - GiftSlotDropTokens.Layout.cardY) < GiftSlotDropTokens.Layout.cardH / 2 + 12
+        let onCard = abs(point.x - layout.cx) < GiftSlotDropTokens.Layout.cardW / 2 + 12
+            && abs(point.y - layout.cardY) < GiftSlotDropTokens.Layout.cardH / 2 + 12
         touch = Touch(active: true, scripted: scripted, onCard: onCard, mode: .undecided, origin: point, offsetOrigin: offset)
         offsetSpring.set(offset)
         if onCard { liftSpring.spring(to: GiftSlotDropTokens.Drag.lift, parameters: GiftSlotDropTokens.Springs.lift) }
@@ -128,14 +160,17 @@ final class GiftSlotDropModel {
             if touch.mode == .swipe { liftSpring.spring(to: 1, parameters: GiftSlotDropTokens.Springs.lift) }
         }
         if touch.mode == .swipe {
-            var next = touch.offsetOrigin - Double(dx / GiftSlotDropTokens.Layout.spacing)
+            var next = touch.offsetOrigin - Double(dx / layout.spacing)
             if next < 0 { next *= 0.3 }
             let last = Double(GiftSlotDropTokens.gifts.count - 1)
             if next > last { next = last + (next - last) * 0.3 }
             offsetSpring.set(next)
         } else if touch.mode == .pull {
-            pullXSpring.set(Double(dx * 0.3))
-            pullYSpring.set(Double(dy < 0 ? dy * GiftSlotDropTokens.Drag.upResist : dy))
+            pullXSpring.set(Double(dx * GiftSlotDropTokens.Drag.sideResist))
+            let resisted = dy < 0
+                ? dy * GiftSlotDropTokens.Drag.upResist
+                : min(dy, GiftSlotDropTokens.Drag.full + (dy - GiftSlotDropTokens.Drag.full) * 0.2)
+            pullYSpring.set(Double(resisted))
             setArmed(dy >= GiftSlotDropTokens.Drag.commit)
         }
     }
@@ -146,8 +181,9 @@ final class GiftSlotDropModel {
         touch.active = false
         liftSpring.spring(to: 1, parameters: GiftSlotDropTokens.Springs.lift)
         if mode == .swipe {
-            let fling = abs(velocity.dx) > GiftSlotDropTokens.Drag.swipeVelocity ? (velocity.dx < 0 ? 0.5 : -0.5) : 0
-            snap(to: Int((offset + Double(fling)).rounded()), velocity: Double(-velocity.dx / GiftSlotDropTokens.Layout.spacing))
+            let direction = velocity.dx == 0 ? 0.0 : (velocity.dx > 0 ? 1.0 : -1.0)
+            let fling = abs(velocity.dx) > GiftSlotDropTokens.Drag.swipeVelocity ? -direction * 0.5 : 0
+            snap(to: Int((offset + fling).rounded()), velocity: Double(-velocity.dx / layout.spacing))
             setPhase(.choosing)
         } else if mode == .pull, armed, !cancelled {
             setArmed(false)
@@ -163,22 +199,24 @@ final class GiftSlotDropModel {
     }
 
     func takeOver() {
-        if !scriptInterruptedByUser, touch.scripted, touch.active {
+        if scriptOn, touch.scripted, touch.active {
             setArmed(false)
             touchEnded(velocity: .zero, cancelled: true)
         }
-        scriptInterruptedByUser = true
+        ghost.opacity = 0
+        scriptOn = false
         quietTime = 0
         scriptTouching = true
     }
 
-    func letGo() { scriptTouching = false; quietTime = 0 }
+    func letGo() {
+        scriptTouching = false
+        quietTime = 0
+    }
 
     func activate() {
         guard phase == .choosing else { return }
         touch.scripted = false
-        pullXSpring.set(0)
-        pullYSpring.set(0)
         release()
     }
 
@@ -187,257 +225,367 @@ final class GiftSlotDropModel {
         snap(to: selected + direction, velocity: 0)
     }
 
-    func close() {
-        close(at: clock)
-    }
-
-    private func close(at timestamp: Double) {
-        guard phase == .offer else { return }
-        closeAt = timestamp
-        setPhase(.closing)
-        emit(.light)
-    }
-
     func userClose() {
         takeOver()
         close()
         letGo()
     }
 
-    func drainHaptics() -> [Haptic] { defer { haptics.removeAll(keepingCapacity: true) }; return haptics }
+    func close() {
+        guard phase == .offer else { return }
+        closeAt = clock
+        setPhase(.closing)
+        emit(.light)
+    }
+
+    func drainHaptics() -> [Haptic] {
+        defer { haptics.removeAll(keepingCapacity: true) }
+        return haptics
+    }
 
     func cardPose(index: Int) -> CardPose {
-        let layout = GiftSlotDropTokens.Layout.self
         let rel = Double(index) - offset
-        let selectedCard = index == selected
+        let distance = min(1, abs(rel))
         var pose = CardPose(
-            x: Double(width) / 2 + rel * Double(layout.spacing), y: Double(layout.cardY),
-            scale: 1 - (1 - Double(layout.sideScale)) * min(1, abs(rel)),
-            turn: max(-1, min(1, -rel)) * Double(layout.turnDeg)
+            x: Double(layout.cx) + rel * Double(layout.spacing),
+            y: Double(layout.cardY),
+            scale: 1 - (1 - GiftSlotDropTokens.Layout.sideScale) * distance,
+            turn: Double(-max(-1, min(1, rel)) * GiftSlotDropTokens.Layout.sideTurn)
         )
-        if selectedCard, phase == .choosing, releasedAt < 0, !reducedMotion {
-            pose.y += Double(GiftSlotDropTokens.Ambient.floatPt) * sin(2 * .pi * clock / GiftSlotDropTokens.Ambient.floatMs)
+        let selectedCard = index == selected
+
+        if selectedCard, phase == .pulling {
+            let progress = clamp(pullY / Double(GiftSlotDropTokens.Drag.full))
+            pose.x += pullX
+            pose.y += pullY
+            pose.scale *= (1 - (1 - GiftSlotDropTokens.Drag.minScale) * progress) * liftSpring.value
+            pose.turn = 0
+            pose.lean = reducedMotion ? 0 : progress * Double(GiftSlotDropTokens.Drag.leanDeg)
+        } else if selectedCard, phase == .choosing {
+            pose.scale *= liftSpring.value
         }
-        if selectedCard, [.choosing, .pulling, .swiping].contains(phase), releasedAt < 0 {
-            pose.x += pullX; pose.y += pullY
-            pose.scale *= pullScale(pullY) * liftSpring.value
-            pose.lean = clamp(pullY / Double(GiftSlotDropTokens.Drag.full)) * Double(GiftSlotDropTokens.Drag.leanDeg)
-            pose.roll = reducedMotion ? 0 : max(-Double(GiftSlotDropTokens.Ambient.rollMax), min(Double(GiftSlotDropTokens.Ambient.rollMax), pullX * GiftSlotDropTokens.Ambient.rollPerPt))
-        }
-        if releasedAt >= 0 {
-            let elapsed = clock - releasedAt
+
+        if phase == .inserting {
+            let since = clock - releasedAt
             if selectedCard {
-                if reducedMotion {
-                    pose.x = Double(width) / 2 + releasedFrom.x; pose.y = Double(layout.cardY) + releasedFrom.y; pose.scale = releasedFrom.scale
-                    pose.opacity = 1 - clamp(elapsed / GiftSlotDropTokens.reducedMs)
-                } else {
-                    let progress = 1 - pow(1 - clamp(elapsed / GiftSlotDropTokens.Insert.centreMs), 3)
-                    pose.lean = Double(GiftSlotDropTokens.Drag.leanDeg)
-                    let tall = Double(layout.cardH) * GiftSlotDropTokens.Drag.minScale * cos(Double(GiftSlotDropTokens.Drag.leanDeg) * .pi / 180)
-                    let above = Double(layout.slotY) - tall / 2
-                    pose.x = Double(width) / 2 + releasedFrom.x * (1 - progress)
-                    pose.y = Double(layout.cardY) + releasedFrom.y + (above - Double(layout.cardY) - releasedFrom.y) * progress
-                    pose.scale = releasedFrom.scale + (GiftSlotDropTokens.Drag.minScale - releasedFrom.scale) * progress
-                    let sink = clamp((elapsed - GiftSlotDropTokens.Insert.centreMs) / GiftSlotDropTokens.Insert.sinkMs)
-                    let eased = cubicInOut(sink)
-                    pose.y += tall * 1.1 * eased
-                    if elapsed > GiftSlotDropTokens.Insert.centreMs + GiftSlotDropTokens.Insert.sinkMs { pose.opacity = 0 }
-                }
-            } else { pose.opacity = 1 - clamp(elapsed / 250) }
-            if closeAt >= 0 {
-                let delay = reducedMotion ? 0 : GiftSlotDropTokens.Close.ms
-                let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.returnMs
-                let returnProgress = clamp((clock - closeAt - delay) / duration)
-                pose.x = Double(width) / 2 + rel * Double(layout.spacing); pose.y = Double(layout.cardY)
-                pose.scale = (0.94 + 0.06 * returnProgress); pose.opacity = returnProgress; pose.lean = 0; pose.roll = 0
+                let progress = reducedMotion ? 1 : easeInOut(clamp(since / GiftSlotDropTokens.Sequence.sink))
+                let target = Double(layout.slotY - layout.cardY + GiftSlotDropTokens.Layout.cardH * 0.7)
+                let startProgress = clamp(releasedFrom.y / Double(GiftSlotDropTokens.Drag.full))
+                pose.x = Double(layout.cx) + releasedFrom.x * (1 - progress)
+                pose.y = Double(layout.cardY) + releasedFrom.y + (target - releasedFrom.y) * progress
+                pose.scale = 1 - (1 - GiftSlotDropTokens.Drag.minScale) * startProgress
+                pose.lean = reducedMotion ? 0 : startProgress * Double(GiftSlotDropTokens.Drag.leanDeg)
+                pose.turn = 0
+                pose.opacity = reducedMotion ? 1 - clamp(since / GiftSlotDropTokens.reducedMs) : 1
+            } else {
+                pose.opacity = 1 - clamp(since / 300)
             }
+        } else if phase == .reading || phase == .offer {
+            pose.opacity = 0
+        } else if phase == .closing {
+            let delay = reducedMotion ? 0 : GiftSlotDropTokens.Close.out
+            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.back
+            let progress = easeOut(clamp((clock - closeAt - delay) / duration))
+            pose.opacity = progress
+            pose.y += reducedMotion ? 0 : 12 * (1 - progress)
+            pose.scale *= 0.94 + 0.06 * progress
         }
         return pose
     }
 
     func offerPose() -> OfferPose {
-        guard releasedAt >= 0 else { return OfferPose() }
-        let elapsed = clock - releasedAt - milestones.printStart
-        guard elapsed >= 0 else { return OfferPose() }
-        var pose = OfferPose(opacity: 1)
-        if reducedMotion {
-            pose.y = Double(GiftSlotDropTokens.Layout.offerY); pose.scale = 1
-            pose.opacity = clamp(elapsed / GiftSlotDropTokens.reducedMs); pose.roll = 1
-        } else {
-            var fed = 0.0
-            for index in 0..<GiftSlotDropTokens.Print.feeds {
-                let start = Double(index) * (GiftSlotDropTokens.Print.feedMs + GiftSlotDropTokens.Print.feedGap)
-                fed += GiftSlotDropTokens.Print.feedShare * backOut((elapsed - start) / GiftSlotDropTokens.Print.feedMs)
-            }
-            let end = Double(GiftSlotDropTokens.Print.feeds) * (GiftSlotDropTokens.Print.feedMs + GiftSlotDropTokens.Print.feedGap)
-            let startScale = GiftSlotDropTokens.Print.startScale
-            let fedY = Double(GiftSlotDropTokens.Layout.slotY) - fed * Double(GiftSlotDropTokens.Layout.offerH) * startScale + Double(GiftSlotDropTokens.Layout.offerH) * startScale / 2
-            let rise = spring((elapsed - end) / 1_000, stiffness: 170, damping: 20)
-            pose.y = fedY + (Double(GiftSlotDropTokens.Layout.offerY) - fedY) * rise
-            pose.scale = startScale + (1 - startScale) * rise
-            let roll = clamp((elapsed - end + 100) / GiftSlotDropTokens.Print.rollMs)
-            pose.roll = 1 - pow(1 - roll, 3)
-        }
-        if closeAt >= 0 {
-            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.ms
+        guard releasedAt >= 0, phase == .offer || phase == .closing else { return OfferPose() }
+        let since = clock - releasedAt
+        let marks = milestones
+        let riseTime = since - marks.read
+        let riseProgress = reducedMotion ? 1 : clamp(riseTime / GiftSlotDropTokens.Sequence.rise)
+        let rise = reducedMotion ? 1 : settle(riseTime, GiftSlotDropTokens.Sequence.rise)
+        let startY = Double(layout.slotY + GiftSlotDropTokens.Layout.giftH * 0.55)
+        var pose = OfferPose(
+            y: startY + (Double(layout.giftY) - startY) * rise,
+            scale: Double(GiftSlotDropTokens.Layout.giftW / GiftSlotDropTokens.Layout.cardW) * (0.9 + 0.1 * easeOut(riseProgress)),
+            angle: .pi * easeInOut(clamp((since - marks.risen - GiftSlotDropTokens.Sequence.pause) / GiftSlotDropTokens.Sequence.flip)),
+            opacity: reducedMotion ? clamp(riseTime / GiftSlotDropTokens.reducedMs) : 1,
+            rising: riseProgress < 1
+        )
+        if phase == .closing {
+            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.out
             let progress = clamp((clock - closeAt) / duration)
             pose.opacity *= 1 - progress
-            if !reducedMotion { pose.scale *= 1 - 0.06 * progress * progress; pose.y -= 24 * progress * progress }
+            if !reducedMotion {
+                pose.scale *= 1 - 0.04 * progress
+                pose.y += 10 * progress
+            }
         }
         return pose
     }
 
-    var slotGlow: Double {
-        if releasedAt < 0 {
-            return 0.5 + 0.5 * clamp(pullY / Double(GiftSlotDropTokens.Drag.commit))
-                + (reducedMotion ? 0 : 0.08 * sin(2 * .pi * clock / GiftSlotDropTokens.Ambient.slotBreathMs))
+    var titleIndex: Int { title(for: phase, armed: armed) }
+
+    func titleProgress() -> (old: Double, current: Double, oldY: CGFloat, currentY: CGFloat) {
+        if reducedMotion { return (0, 1, 0, 0) }
+        let elapsed = clock - titleAt
+        let out = clamp(elapsed / GiftSlotDropTokens.Title.out)
+        let incoming = easeOut(clamp((elapsed - GiftSlotDropTokens.Title.out) / GiftSlotDropTokens.Title.inMs))
+        if titleWas == titleIndex || elapsed >= GiftSlotDropTokens.Title.out + GiftSlotDropTokens.Title.inMs {
+            return (0, 1, 0, 0)
         }
-        let elapsed = clock - releasedAt
-        if elapsed < milestones.sunk { return 1 }
-        if elapsed < milestones.sunk + GiftSlotDropTokens.Insert.flashMs { return 1 + 0.6 * (1 - (elapsed - milestones.sunk) / GiftSlotDropTokens.Insert.flashMs) }
-        if elapsed < milestones.printStart { return 0.85 + 0.25 * sin(((elapsed - milestones.sunk) / GiftSlotDropTokens.Activate.dotMs) * .pi) }
-        if closeAt >= 0 { return 0.5 * clamp((clock - closeAt) / GiftSlotDropTokens.Close.returnMs) }
-        return 1 - 0.9 * clamp((elapsed - milestones.printed) / 600)
+        return (
+            1 - out,
+            out < 1 ? 0 : incoming,
+            -GiftSlotDropTokens.Title.rise * CGFloat(out),
+            GiftSlotDropTokens.Title.rise * CGFloat(1 - incoming)
+        )
     }
 
-    var placeholderOpacity: Double { releasedAt >= 0 ? (phase == .inserting || phase == .activating ? 1 : 0) : clamp(pullY / 40) }
-    var selectionFrameOpacity: Double { releasedAt >= 0 ? 0 : clamp(1 - abs(Double(selected) - offset) * 2) * (1 - clamp(pullY / 60)) }
-    var warmOpacity: Double { GiftSlotDropTokens.Colors.stageWarm * clamp(pullY / Double(GiftSlotDropTokens.Drag.full)) }
-    var offerPercent: Int { Int((50 * offerPose().roll).rounded()) }
+    var carouselOpacity: Double {
+        if phase == .inserting { return 1 - clamp((clock - releasedAt) / 300) }
+        if phase == .reading || phase == .offer { return 0 }
+        if phase == .closing {
+            let delay = reducedMotion ? 0 : GiftSlotDropTokens.Close.out
+            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.back
+            return easeOut(clamp((clock - closeAt - delay) / duration))
+        }
+        return 1
+    }
+
+    var offerOpacity: Double {
+        if phase == .offer { return 1 }
+        if phase == .closing {
+            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.out
+            return 1 - clamp((clock - closeAt) / duration)
+        }
+        return 0
+    }
+
+    var shelfPose: (opacity: Double, y: CGFloat) {
+        let since = releasedAt >= 0 ? clock - releasedAt : -1
+        let fade: Double
+        if phase == .offer {
+            fade = clamp((since - milestones.risen) / 260)
+        } else if phase == .closing {
+            let delay = reducedMotion ? 0 : GiftSlotDropTokens.Close.out
+            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.back
+            fade = 1 - clamp((clock - closeAt - delay) / duration)
+        } else {
+            fade = 0
+        }
+        return (1 - fade, reducedMotion ? 0 : 16 * CGFloat(fade))
+    }
+
+    var slotGlow: Double {
+        let since = releasedAt >= 0 ? clock - releasedAt : -1
+        if phase == .pulling {
+            return 0.6 * clamp(pullY / Double(GiftSlotDropTokens.Drag.commit)) + (armed ? 0.25 : 0)
+        }
+        if phase == .inserting { return 0.85 }
+        if phase == .reading {
+            if reducedMotion { return 0.8 }
+            return 0.8 + 0.2 * sin(((since - milestones.sunk) / GiftSlotDropTokens.Sequence.read) * .pi * 2 - .pi / 2)
+        }
+        if phase == .offer { return 1 - clamp((since - milestones.read) / 600) * 0.6 }
+        return reducedMotion ? 0.2 : 0.2 + 0.06 * sin(clock / 2_400 * .pi * 2)
+    }
 
     func detailProgress(_ index: Int) -> Double {
-        guard phase == .offer else { return 0 }
-        let delay = reducedMotion ? GiftSlotDropTokens.reducedMs : Double(GiftSlotDropTokens.Print.feeds) * (GiftSlotDropTokens.Print.feedMs + GiftSlotDropTokens.Print.feedGap) + GiftSlotDropTokens.Print.detailsDelay
-        return clamp((clock - phaseStartedAt - delay - Double(index) * GiftSlotDropTokens.Print.stagger) / 320)
+        guard phase == .offer || phase == .closing else { return 0 }
+        let since = clock - releasedAt
+        let start = milestones.turned + Double(index) * GiftSlotDropTokens.Sequence.stagger
+        let incoming = reducedMotion
+            ? clamp((since - start) / GiftSlotDropTokens.reducedMs)
+            : easeOut(clamp((since - start) / GiftSlotDropTokens.Sequence.detailsIn))
+        return incoming * offerOpacity
     }
 
-    private var milestones: (sunk: Double, printStart: Double, printed: Double, risen: Double) {
+    private var milestones: (sunk: Double, read: Double, risen: Double, turned: Double) {
         if reducedMotion {
-            let printStart = GiftSlotDropTokens.reducedMs + GiftSlotDropTokens.Activate.ms
-            let printed = printStart + GiftSlotDropTokens.reducedMs
-            return (GiftSlotDropTokens.reducedMs, printStart, printed, printed)
+            let read = GiftSlotDropTokens.reducedMs + GiftSlotDropTokens.Sequence.read
+            return (GiftSlotDropTokens.reducedMs, read, read, read + GiftSlotDropTokens.reducedMs)
         }
-        let sunk = GiftSlotDropTokens.Insert.centreMs + GiftSlotDropTokens.Insert.sinkMs
-        let printStart = sunk + GiftSlotDropTokens.Activate.ms
-        let printed = printStart + Double(GiftSlotDropTokens.Print.feeds) * (GiftSlotDropTokens.Print.feedMs + GiftSlotDropTokens.Print.feedGap)
-        return (sunk, printStart, printed, printed + 700)
+        let sunk = GiftSlotDropTokens.Sequence.sink
+        let read = sunk + GiftSlotDropTokens.Sequence.read
+        let risen = read + GiftSlotDropTokens.Sequence.rise
+        return (sunk, read, risen, risen + GiftSlotDropTokens.Sequence.pause + GiftSlotDropTokens.Sequence.flip)
     }
 
-    private func updateTimeline(dt: Double) {
+    private func updateTimeline() {
         if releasedAt >= 0 {
-            let elapsed = clock - releasedAt
-            if phase == .inserting, elapsed >= milestones.sunk { setPhase(.activating) }
-            if phase == .activating, elapsed >= milestones.printStart { setPhase(.offer) }
-            if !firedConfetti, elapsed >= milestones.printed { firedConfetti = true; spawnConfetti(); emit(.success) }
+            let since = clock - releasedAt
+            if phase == .inserting, since >= milestones.sunk { setPhase(.reading) }
+            if phase == .reading, since >= milestones.read { setPhase(.offer) }
+            if !successFired, since >= milestones.turned {
+                successFired = true
+                emit(.success)
+            }
         }
         if closeAt >= 0 {
-            let duration = reducedMotion ? GiftSlotDropTokens.reducedMs : GiftSlotDropTokens.Close.ms + GiftSlotDropTokens.Close.returnMs
+            let duration = reducedMotion
+                ? GiftSlotDropTokens.reducedMs
+                : GiftSlotDropTokens.Close.out + GiftSlotDropTokens.Close.back
             if clock - closeAt >= duration { resetAfterClose() }
-        }
-        guard !reducedMotion, !confetti.isEmpty else { return }
-        for index in confetti.indices where confetti[index].life > 0 {
-            confetti[index].vy += GiftSlotDropTokens.Print.gravity * dt
-            confetti[index].vx *= 0.985
-            confetti[index].x += confetti[index].vx * dt
-            confetti[index].y += confetti[index].vy * dt
-            confetti[index].angle += confetti[index].spin * dt
-            confetti[index].life -= dt
         }
     }
 
     private func updateScript(milliseconds: Double) {
-        guard autoPlay else { return }
-        if scriptInterruptedByUser {
+        guard autoPlay, !reducedMotion else { return }
+        if !scriptOn {
             let resting = phase == .offer || (phase == .choosing && abs(offset - offset.rounded()) < 0.01)
             quietTime = !scriptTouching && resting ? quietTime + milliseconds : 0
-            if quietTime >= GiftSlotDropTokens.resumeAfterMs, phase == .offer, !scriptTouching { close(); quietTime = 0; return }
-            if quietTime >= GiftSlotDropTokens.resumeAfterMs, selected != GiftSlotDropTokens.startIndex { snap(to: GiftSlotDropTokens.startIndex, velocity: 0); quietTime = 0; return }
+            if quietTime >= GiftSlotDropTokens.resumeAfterMs, phase == .offer {
+                close()
+                quietTime = 0
+                return
+            }
+            if quietTime >= GiftSlotDropTokens.resumeAfterMs, selected != GiftSlotDropTokens.startIndex {
+                snap(to: GiftSlotDropTokens.startIndex, velocity: 0)
+                quietTime = 0
+                return
+            }
             if quietTime >= GiftSlotDropTokens.resumeAfterMs, phase == .choosing {
-                scriptInterruptedByUser = false
+                scriptOn = true
                 scriptTime = 0
             }
             return
         }
+
         let previous = scriptTime
-        let next = GiftSlotDropTokens.qaHoldAt.map { previous >= $0 ? previous : previous + milliseconds } ?? previous + milliseconds
+        let next = previous + milliseconds
         for swipe in GiftSlotDropTokens.Script.swipes { scriptedSwipe(previous: previous, now: next, swipe: swipe) }
         if previous < GiftSlotDropTokens.Script.pullDown, next >= GiftSlotDropTokens.Script.pullDown {
-            touchBegan(at: CGPoint(x: width / 2 + 12, y: GiftSlotDropTokens.Layout.cardY + 30), scripted: true)
+            touchBegan(at: CGPoint(x: layout.cx + 12, y: layout.cardY + 40), scripted: true)
+            ghost = Ghost(x: Double(layout.cx + 12), y: Double(layout.cardY + 40), opacity: 1)
         }
         if next > GiftSlotDropTokens.Script.pullDown, previous < GiftSlotDropTokens.Script.pullUp {
-            let value = ease((next - GiftSlotDropTokens.Script.pullDown - 120) / (GiftSlotDropTokens.Script.pullUp - GiftSlotDropTokens.Script.pullDown - 220))
-            touchMoved(to: CGPoint(x: width / 2 + 12 - CGFloat(23 * value), y: GiftSlotDropTokens.Layout.cardY + 30 + GiftSlotDropTokens.Script.pullBy * CGFloat(value)))
+            let progress = ease((next - GiftSlotDropTokens.Script.pullDown - 120) / (GiftSlotDropTokens.Script.pullUp - GiftSlotDropTokens.Script.pullDown - 220))
+            let point = CGPoint(
+                x: layout.cx + 12 - 14 * CGFloat(progress),
+                y: layout.cardY + 40 + GiftSlotDropTokens.Script.pullBy * CGFloat(progress)
+            )
+            ghost = Ghost(x: Double(point.x), y: Double(point.y), opacity: 1)
+            touchMoved(to: point)
         }
-        if previous < GiftSlotDropTokens.Script.pullUp, next >= GiftSlotDropTokens.Script.pullUp { touchEnded(velocity: .zero) }
-        if previous < GiftSlotDropTokens.Script.done, next >= GiftSlotDropTokens.Script.done {
-            close(at: clock - (next - GiftSlotDropTokens.Script.done))
+        if previous < GiftSlotDropTokens.Script.pullUp, next >= GiftSlotDropTokens.Script.pullUp {
+            touchEnded(velocity: .zero)
+            ghost.opacity = 0
         }
+        if previous < GiftSlotDropTokens.Script.done, next >= GiftSlotDropTokens.Script.done { close() }
         let loopMilliseconds = GiftSlotDropTokens.loop * 1_000
         scriptTime = next >= loopMilliseconds ? next.truncatingRemainder(dividingBy: loopMilliseconds) : next
     }
 
     private func scriptedSwipe(previous: Double, now: Double, swipe: (at: Double, ms: Double, dx: Double)) {
         let end = swipe.at + swipe.ms
-        let startX = Double(width) / 2 - swipe.dx / 2
-        let endX = Double(width) / 2 + swipe.dx / 2
-        if previous < swipe.at, now >= swipe.at { touchBegan(at: CGPoint(x: CGFloat(startX), y: GiftSlotDropTokens.Layout.cardY), scripted: true) }
+        let startX = Double(layout.cx) - swipe.dx / 2
+        let endX = Double(layout.cx) + swipe.dx / 2
+        if previous < swipe.at, now >= swipe.at {
+            touchBegan(at: CGPoint(x: CGFloat(startX), y: layout.cardY), scripted: true)
+            ghost = Ghost(x: startX, y: Double(layout.cardY), opacity: 1)
+        }
         if now > swipe.at, previous < end {
             let progress = ease((now - swipe.at) / swipe.ms)
-            touchMoved(to: CGPoint(x: CGFloat(startX + (endX - startX) * progress), y: GiftSlotDropTokens.Layout.cardY + CGFloat(4 * sin(.pi * min(1, (now - swipe.at) / swipe.ms)))))
+            let point = CGPoint(
+                x: CGFloat(startX + (endX - startX) * progress),
+                y: layout.cardY + CGFloat(4 * sin(.pi * min(1, (now - swipe.at) / swipe.ms)))
+            )
+            ghost = Ghost(x: Double(point.x), y: Double(point.y), opacity: 1)
+            touchMoved(to: point)
         }
         if previous < end, now >= end {
             let velocity = CGFloat((endX - startX) / swipe.ms * 1_000 * 0.6)
             touchEnded(velocity: CGVector(dx: velocity, dy: 0))
+            ghost.opacity = 0
         }
     }
 
     private func snap(to index: Int, velocity: Double) {
         let target = max(0, min(GiftSlotDropTokens.gifts.count - 1, index))
         offsetSpring.spring(to: Double(target), velocity: velocity, parameters: GiftSlotDropTokens.Springs.snap)
-        if target != selected { selected = target; emit(.select) }
-    }
-
-    private func release() {
-        releasedFrom = ReleasedPose(x: pullX, y: pullY, scale: pullScale(pullY) * liftSpring.value)
-        releasedAt = clock; firedConfetti = false; confetti.removeAll(keepingCapacity: true)
-        setPhase(.inserting); emit(.insert)
-    }
-
-    private func setPhase(_ next: Phase) { guard phase != next else { return }; phase = next; phaseStartedAt = clock }
-    private func setArmed(_ next: Bool) { guard armed != next else { return }; armed = next; if next { emit(.armed) } }
-    private func emit(_ haptic: Haptic) { if !touch.scripted { haptics.append(haptic) } }
-
-    private func resetAfterClose() {
-        closeAt = -1; releasedAt = -1; pullXSpring.set(0); pullYSpring.set(0); confetti.removeAll(keepingCapacity: true); setPhase(.choosing)
-    }
-
-    private func spawnConfetti() {
-        guard !reducedMotion else { return }
-        confetti = (0..<GiftSlotDropTokens.Print.confetti).map { number in
-            let angle = -.pi / 2 + (hash(number, 1) - 0.5) * GiftSlotDropTokens.Random.confettiSaltRange
-            let speed = GiftSlotDropTokens.Random.speedMin + hash(number, 2) * GiftSlotDropTokens.Random.speedRange
-            return ConfettiPiece(
-                x: Double(width) / 2 + (hash(number, 3) - 0.5) * Double(GiftSlotDropTokens.Layout.slotW) * 0.8,
-                y: Double(GiftSlotDropTokens.Layout.slotY) - 4,
-                vx: cos(angle) * speed, vy: sin(angle) * speed, angle: hash(number, 4) * .pi,
-                spin: (hash(number, 5) - 0.5) * GiftSlotDropTokens.Random.spinRange,
-                life: GiftSlotDropTokens.Print.confettiLife * (0.7 + 0.3 * hash(number, 6)), color: Int(hash(number, 7) * 3)
-            )
+        if target != selected {
+            selected = target
+            emit(.select)
         }
     }
 
-    private func hash(_ number: Int, _ salt: Int) -> Double {
-        let value = sin(Double(number) * GiftSlotDropTokens.Random.multiplier + Double(salt) * GiftSlotDropTokens.Random.saltMultiplier) * GiftSlotDropTokens.Random.scale
-        return value - floor(value)
+    private func release() {
+        releasedFrom = ReleasedPose(x: pullX, y: pullY)
+        releasedAt = clock
+        successFired = false
+        setPhase(.inserting)
+        emit(.insert)
     }
-    private func pullScale(_ y: Double) -> Double { 1 - (1 - GiftSlotDropTokens.Drag.minScale) * clamp(y / Double(GiftSlotDropTokens.Drag.full)) }
+
+    private func setPhase(_ next: Phase) {
+        guard phase != next else { return }
+        let before = title(for: phase, armed: armed)
+        let after = title(for: next, armed: armed)
+        if before != after {
+            titleWas = before
+            titleAt = clock
+        }
+        phase = next
+    }
+
+    private func setArmed(_ next: Bool) {
+        guard armed != next else { return }
+        let before = title(for: phase, armed: armed)
+        let after = title(for: phase, armed: next)
+        if before != after {
+            titleWas = before
+            titleAt = clock
+        }
+        armed = next
+        if next { emit(.armed) }
+    }
+
+    private func title(for phase: Phase, armed: Bool) -> Int {
+        if phase == .inserting || phase == .reading { return 2 }
+        if phase == .offer { return 3 }
+        return armed ? 1 : 0
+    }
+
+    private func emit(_ haptic: Haptic) {
+        if !touch.scripted { haptics.append(haptic) }
+    }
+
+    private func resetAfterClose() {
+        closeAt = -1
+        releasedAt = -1
+        pullXSpring.set(0)
+        pullYSpring.set(0)
+        setPhase(.choosing)
+    }
+
     private func clamp(_ value: Double) -> Double { min(1, max(0, value)) }
-    private func ease(_ value: Double) -> Double { let c = clamp(value); return c < 0.5 ? 4 * c * c * c : 1 - pow(-2 * c + 2, 3) / 2 }
-    private func cubicInOut(_ value: Double) -> Double { value < 0.5 ? 4 * value * value * value : 1 - pow(-2 * value + 2, 3) / 2 }
-    private func backOut(_ value: Double) -> Double { let c = clamp(value), k = GiftSlotDropTokens.Print.feedEaseBack; return 1 + (k + 1) * pow(c - 1, 3) + k * pow(c - 1, 2) }
-    private func spring(_ time: Double, stiffness: Double, damping: Double) -> Double {
-        guard time > 0 else { return 0 }
-        let frequency = sqrt(stiffness), ratio = min(0.999, damping / (2 * frequency)), damped = frequency * sqrt(1 - ratio * ratio)
-        return 1 - exp(-ratio * frequency * time) * (cos(damped * time) + ratio * frequency / damped * sin(damped * time))
+    private func ease(_ value: Double) -> Double {
+        let c = clamp(value)
+        return c < 0.5 ? 4 * c * c * c : 1 - pow(-2 * c + 2, 3) / 2
+    }
+    private func easeOut(_ value: Double) -> Double { cubicBezier(0.23, 1, 0.32, 1, value) }
+    private func easeInOut(_ value: Double) -> Double { cubicBezier(0.77, 0, 0.175, 1, value) }
+
+    private func cubicBezier(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double, _ value: Double) -> Double {
+        let target = clamp(value)
+        let cx = 3 * x1
+        let bx = 3 * (x2 - x1) - cx
+        let ax = 1 - cx - bx
+        let cy = 3 * y1
+        let by = 3 * (y2 - y1) - cy
+        let ay = 1 - cy - by
+        var t = target
+        for _ in 0..<8 {
+            let x = ((ax * t + bx) * t + cx) * t - target
+            let derivative = (3 * ax * t + 2 * bx) * t + cx
+            if abs(x) < 0.00001 || abs(derivative) < 0.000001 { break }
+            t -= x / derivative
+        }
+        t = clamp(t)
+        return ((ay * t + by) * t + cy) * t
+    }
+
+    private func settle(_ milliseconds: Double, _ duration: Double) -> Double {
+        guard milliseconds > 0 else { return 0 }
+        let t = milliseconds / duration
+        if t >= 1.6 { return 1 }
+        return 1 - exp(-5.2 * t) * cos(4.4 * t)
     }
 }

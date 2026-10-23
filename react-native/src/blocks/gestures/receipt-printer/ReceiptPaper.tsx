@@ -37,6 +37,33 @@ function edgePath() {
 }
 const EDGE = edgePath();
 
+/**
+ * The run's pace every 100 m (s/km): a first kilometre settling in from 5'41", five steady kilometres around 5'26" with
+ * the river path's two short rises, then a gentle finishing kick, quickening over the last 1.4 km to about 5'05".
+ * The splits (5 km at 5'28", 1.21 km at 5'11"), the best kilometre (5'09") and the average (5'25") are this curve's.
+ */
+const PACE = { avg: 325, fast: 280, slow: 360, km: 6.21 };
+const SAMPLES = Array.from({ length: 63 }, (_, i) => {
+  const km = (i / 62) * PACE.km;
+  const settle = 15 * Math.exp(-km / 0.35);
+  const rise = 7 * Math.exp(-((km - 1.9) ** 2) / 0.05) + 6 * Math.exp(-((km - 3.6) ** 2) / 0.04);
+  const u = Math.min(1, Math.max(0, (km - 4.6) / 1.4));
+  const kick = -20 * u * u * (3 - 2 * u);
+  const breath = 2.2 * Math.sin(i * 1.3) + 1.4 * Math.sin(i * 0.55 + 0.7);
+  return 326 + settle + rise + kick + breath;
+});
+
+function paceY(pace: number) {
+  const c = RECEIPT.chart;
+  const t = (pace - PACE.fast) / (PACE.slow - PACE.fast);
+  return Y(c.top) + 6 + t * (Y(c.base) - Y(c.top) - 12);
+}
+
+const PACE_LINE = SAMPLES.map((p, i) => {
+  const x = X(RECEIPT.left) + ((X(RECEIPT.right) - X(RECEIPT.left)) * i) / (SAMPLES.length - 1);
+  return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${paceY(p).toFixed(1)}`;
+}).join(' ');
+
 function Chart() {
   const c = RECEIPT.chart;
   const left = X(RECEIPT.left);
@@ -49,6 +76,8 @@ function Chart() {
     {rows.map((y) => <Line key={`r${y}`} x1={left} x2={right} y1={y} y2={y} stroke={COLOR.gridFaint} strokeWidth={0.6} strokeDasharray="1.5 2.5" />)}
     {cols.map((x) => <Line key={`c${x}`} x1={x} x2={x} y1={Y(c.top)} y2={Y(c.bottom)} stroke={COLOR.grid} strokeWidth={0.8} />)}
     <Line x1={left} x2={right} y1={Y(c.base)} y2={Y(c.base)} stroke={COLOR.axis} strokeWidth={c.baseW} />
+    <Line x1={left} x2={right} y1={paceY(PACE.avg)} y2={paceY(PACE.avg)} stroke={COLOR.inkSoft} strokeWidth={0.8} strokeDasharray="4 3" />
+    <Path d={PACE_LINE} fill="none" stroke={COLOR.ink} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
   </>;
 }
 

@@ -1,773 +1,580 @@
 package com.ngocdevv.nativecook.blocks.gestures.holddragresize
 
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
-import androidx.core.graphics.PathParser
-import kotlin.math.ceil
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.round
 
-class HoldDragResizeRenderer(
+internal class HoldDragResizeRenderer(
     private val assets: HoldDragResizeAssets,
+    private val backdrop: HoldDragResizeBackdrop,
 ) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val handPath = requireNotNull(PathParser.createPathFromPathData(HAND_PATH))
-    private val colors = mapOf(
-        Tokens.Color.background to Color.parseColor(Tokens.Color.background),
-        Tokens.Color.chrome to Color.parseColor(Tokens.Color.chrome),
-        Tokens.Color.chromeHi to Color.parseColor(Tokens.Color.chromeHi),
-        Tokens.Color.ink to Color.parseColor(Tokens.Color.ink),
-        Tokens.Color.mute to Color.parseColor(Tokens.Color.mute),
-        Tokens.Color.divider to Color.parseColor(Tokens.Color.divider),
-        Tokens.Color.toolDim to Color.parseColor(Tokens.Color.toolDim),
-        Tokens.Color.faint to Color.parseColor(Tokens.Color.faint),
-        Tokens.Color.blue to Color.parseColor(Tokens.Color.blue),
-        Tokens.Color.scrim to Color.parseColor(Tokens.Color.scrim),
-        Tokens.Color.touch to Color.parseColor(Tokens.Color.touch),
-        Tokens.Color.captionShadow to Color.parseColor(Tokens.Color.captionShadow),
-        Tokens.Color.finger to Color.parseColor(Tokens.Color.finger),
-        Tokens.Color.fingerEdge to Color.parseColor(Tokens.Color.fingerEdge),
-        Tokens.Color.sticker to Color.parseColor(Tokens.Color.sticker),
-        Tokens.Color.stickerRing to Color.parseColor(Tokens.Color.stickerRing),
-        Tokens.Color.overlayButton to Color.parseColor(Tokens.Color.overlayButton),
-        Tokens.Color.badge to Color.parseColor(Tokens.Color.badge),
-        Tokens.Color.badgeDot to Color.parseColor(Tokens.Color.badgeDot),
-        Tokens.Color.badgeBorder to Color.parseColor(Tokens.Color.badgeBorder),
+    private enum class Face { Regular, Medium, Semibold, Mono, MonoBold }
+
+    private data class TextStyle(val face: Face, val size: Float)
+
+    private data class BlockBox(
+        val x: Double,
+        val y: Double,
+        val width: Double,
+        val height: Double,
+        val scale: Double,
+        val centreX: Double,
+        val centreY: Double,
     )
 
-    fun draw(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        screenWidth: Double,
-        screenHeight: Double,
-        safeTop: Double,
-        safeBottom: Double,
-        pixelScale: Float,
-    ) {
-        canvas.drawColor(color(Tokens.Color.background))
-        drawTimeline(canvas, simulation, screenWidth, screenHeight, safeBottom)
-        drawPreview(canvas, simulation, screenWidth, pixelScale)
-        drawChrome(canvas, simulation, screenWidth, screenHeight, safeTop, safeBottom)
-        drawCoach(canvas, simulation, screenWidth, screenHeight)
-        drawGhost(canvas, simulation)
-    }
+    private val styles = mapOf(
+        "title" to TextStyle(Face.Semibold, HoldDragResizeTokens.Type.Title),
+        "date" to TextStyle(Face.Regular, HoldDragResizeTokens.Type.Date),
+        "chip" to TextStyle(Face.Medium, HoldDragResizeTokens.Type.ChipLabel),
+        "total" to TextStyle(Face.Semibold, HoldDragResizeTokens.Type.Total),
+        "totalUnit" to TextStyle(Face.Medium, HoldDragResizeTokens.Type.TotalUnit),
+        "weekday" to TextStyle(Face.Medium, HoldDragResizeTokens.Type.Weekday),
+        "weekdate" to TextStyle(Face.Semibold, HoldDragResizeTokens.Type.WeekDate),
+        "hour" to TextStyle(Face.Mono, HoldDragResizeTokens.Type.Hour),
+        "pill" to TextStyle(Face.MonoBold, HoldDragResizeTokens.Type.Pill),
+        "delta" to TextStyle(Face.Semibold, HoldDragResizeTokens.Type.Delta),
+        "event" to TextStyle(Face.Medium, HoldDragResizeTokens.Type.Event),
+        "eventSub" to TextStyle(Face.Mono, HoldDragResizeTokens.Type.EventSub),
+        "eventNote" to TextStyle(Face.Regular, HoldDragResizeTokens.Type.EventNote),
+        "eventNow" to TextStyle(Face.MonoBold, HoldDragResizeTokens.Type.EventSub),
+        "bar" to TextStyle(Face.Medium, HoldDragResizeTokens.Type.Bar),
+        "barMute" to TextStyle(Face.Regular, HoldDragResizeTokens.Type.Bar),
+    )
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
+    private val glass = HoldDragResizeGlass(backdrop)
+    private val shadow = HoldDragResizeShadow()
+    private val digitWidth: Float = (0..9).maxOf { measure("total", it.toString()) }
 
-    private fun drawTimeline(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        screenWidth: Double,
-        screenHeight: Double,
-        safeBottom: Double,
-    ) {
-        val shown = simulation.shown
-        val opacity = 1.0 - min(HoldDragResizeGeometry.fullness(shown) * 1.6, 1.0)
-        if (opacity <= 0.0) {
-            return
-        }
-        val groupTop = Tokens.frameTops[0] + Tokens.sizes[0] + HoldDragResizeGeometry.belowShift(simulation.lag)
-        val squeezed = HoldDragResizeGeometry.squeeze(shown)
-        val controlsTop = groupTop + Tokens.Layout.controlsGap - Tokens.Layout.control / 2.0 + Tokens.Squeeze.controls * squeezed
-        paint.alpha = alpha(opacity)
-        val playX = Tokens.Layout.gutter + Tokens.Layout.control / 2.0
-        val playY = controlsTop + Tokens.Layout.control / 2.0
-        withControlTransform(canvas, simulation, Tokens.Control.timelinePlay, playX, playY) {
-            val controlOpacity = opacity * simulation.controlOpacity(Tokens.Control.timelinePlay)
-            drawCircleButton(canvas, playX, playY, Tokens.Layout.control, Tokens.Color.chromeHi, controlOpacity)
-            drawPause(canvas, playX, playY, simulation.playing, controlOpacity)
-        }
-        val currentSecond = floor(simulation.clock).toInt()
-        drawCentredText(
-            canvas,
-            "0:${currentSecond.toString().padStart(2, '0')}  /  0:12",
-            screenWidth / 2.0,
-            controlsTop + 21.0,
-            Tokens.Type.timeSize,
-            Tokens.Type.timeWeight,
-            Tokens.Color.mute,
-            opacity,
+    fun draw(canvas: Canvas, model: HoldDragResizeModel) {
+        glass.beginFrame()
+        shadow.beginFrame()
+        canvas.drawBitmap(
+            backdrop.sharp,
+            null,
+            RectF(0f, 0f, model.layout.width.toFloat(), model.layout.height.toFloat()),
+            bitmapPaint(),
         )
-        val redoX = screenWidth - Tokens.Layout.gutter - Tokens.Layout.control / 2.0
-        val undoX = redoX - Tokens.Layout.control - Tokens.Layout.pairGap
-        drawCircleButton(canvas, undoX, controlsTop + Tokens.Layout.control / 2.0, Tokens.Layout.control, Tokens.Color.chromeHi)
-        drawCircleButton(canvas, redoX, controlsTop + Tokens.Layout.control / 2.0, Tokens.Layout.control, Tokens.Color.chromeHi)
-        drawUndo(canvas, undoX, controlsTop + Tokens.Layout.control / 2.0, false, opacity)
-        drawUndo(canvas, redoX, controlsTop + Tokens.Layout.control / 2.0, true, opacity * 0.55)
+        drawHeader(canvas, model)
+        drawWeek(canvas, model.layout)
+        val edgeY = edgeY(model)
+        drawLabels(canvas, model, edgeY)
 
-        val dividerTop = groupTop + Tokens.Layout.controlsGap - Tokens.Layout.control / 2.0 + Tokens.Layout.control + Tokens.Layout.dividerGap - Tokens.Layout.control / 2.0 + Tokens.Squeeze.ruler * squeezed
-        paint.color = color(Tokens.Color.divider)
-        paint.alpha = alpha(opacity)
-        canvas.drawRect(0f, dividerTop.toFloat(), screenWidth.toFloat(), (dividerTop + 1.0).toFloat(), paint)
-
-        val laneTop = dividerTop + 1.0 + Tokens.Layout.rulerGap - Tokens.Layout.dividerGap - Tokens.Layout.ruler / 2.0 + (Tokens.Squeeze.below - Tokens.Squeeze.ruler) * squeezed
-        canvas.save()
-        canvas.clipRect(0f, laneTop.toFloat(), screenWidth.toFloat(), screenHeight.toFloat())
-        drawRulerAndStrip(canvas, simulation, screenWidth, laneTop, opacity, squeezed)
-        drawTracks(canvas, screenWidth, laneTop, opacity)
-        canvas.restore()
-
-        val hintY = screenHeight - safeBottom - Tokens.Layout.hintBottom
-        paint.color = color(Tokens.Color.background)
-        paint.alpha = alpha(opacity)
-        canvas.drawRect(0f, (hintY - 14.0).toFloat(), screenWidth.toFloat(), (hintY + 8.0).toFloat(), paint)
-        drawCentredText(canvas, Tokens.Copy.hint, screenWidth / 2.0, hintY, Tokens.Type.hintSize, Tokens.Type.hintWeight, Tokens.Color.mute, opacity)
-    }
-
-    private fun drawRulerAndStrip(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        screenWidth: Double,
-        laneTop: Double,
-        opacity: Double,
-        squeezed: Double,
-    ) {
-        val centre = screenWidth / 2.0
-        val firstX = centre - Tokens.Timeline.period * Tokens.Timeline.repeat - simulation.clock * Tokens.Timing.stripSpeed
-        val marks = ceil(Tokens.Timeline.period * Tokens.Timeline.repeat * 2.0 / Tokens.Layout.rulerPitch).toInt()
-        val rulerY = laneTop + (Tokens.Squeeze.ruler - Tokens.Squeeze.below) * squeezed
-        repeat(marks) { index ->
-            val x = firstX + Tokens.Timeline.rulerOffset + index * Tokens.Layout.rulerPitch
-            if (index % 2 == 0) {
-                paint.color = color(Tokens.Color.mute)
-                paint.alpha = alpha(opacity)
-                canvas.drawCircle(x.toFloat(), (rulerY + Tokens.Layout.ruler / 2.0).toFloat(), 1.5f, paint)
-            } else {
-                val label = if (index % 4 == 1) "10s" else "30s"
-                drawCentredText(canvas, label, x, rulerY + 9.0, Tokens.Type.rulerSize, Tokens.Type.rulerWeight, Tokens.Color.mute, opacity)
-            }
+        val live = model.settledLayout()
+        val held = if (model.shown >= 0 && model.lift > 0.001) model.shown else -1
+        drawShadows(canvas, model, only = -1, skip = held)
+        drawCapsules(canvas, model)
+        HoldDragResizePlan.indices.forEach { index ->
+            if (index != held) drawBlock(canvas, model, index, lifted = false, live)
         }
-        val stripTop = laneTop + Tokens.Layout.ruler + Tokens.Layout.stripGap
-        val thumbCount = assets.clips.size * Tokens.Timeline.thumbsPerClip * Tokens.Timeline.repeat * 2
-        repeat(thumbCount) { index ->
-            val x = firstX + index * Tokens.Layout.thumb
-            if (x + Tokens.Layout.thumb >= 0.0 && x <= screenWidth) {
-                val image = assets.clips[(index / Tokens.Timeline.thumbsPerClip) % assets.clips.size]
-                drawBitmapCrop(canvas, image, RectF(x.toFloat(), stripTop.toFloat(), (x + Tokens.Layout.thumb + 0.5).toFloat(), (stripTop + Tokens.Layout.strip).toFloat()), opacity)
-            }
+        if (held >= 0) {
+            drawShadows(canvas, model, only = held, skip = -1)
+            drawBlock(canvas, model, held, lifted = true, live)
+            val time = if (model.edge == 1) live.first[held] + live.second[held] else live.first[held]
+            val box = boxOf(model, held, lifted = true)
+            val edge = if (model.edge == 1) box.centreY + box.height * box.scale / 2 else box.centreY - box.height * box.scale / 2
+            timePill(
+                canvas,
+                edge.coerceIn(model.layout.gridTop, model.layout.yOf(HoldDragResizeTokens.Day.End.toDouble())),
+                holdDragResizeClock(time),
+                HoldDragResizeTokens.Color.Focus,
+                HoldDragResizeTokens.Color.OnAccent,
+                pillShow(model),
+            )
+        }
+        drawBar(canvas, model)
+        if (model.ghostOpacity > 0.01) {
+            val radius = HoldDragResizeTokens.Layout.Finger / 2 * (1 - 0.12 * model.ghostPress)
+            canvas.drawCircle(model.ghostX.toFloat(), model.ghostY.toFloat(), radius.toFloat(), fill(HoldDragResizeTokens.Color.Finger, model.ghostOpacity))
+            canvas.drawCircle(model.ghostX.toFloat(), model.ghostY.toFloat(), (radius - 0.5).toFloat(), stroke(HoldDragResizeTokens.Color.FingerEdge, 1f, model.ghostOpacity))
         }
     }
 
-    private fun drawTracks(
-        canvas: Canvas,
-        screenWidth: Double,
-        laneTop: Double,
-        opacity: Double,
-    ) {
-        val stripTop = laneTop + Tokens.Layout.ruler + Tokens.Layout.stripGap
-        val firstTrackTop = stripTop + Tokens.Layout.strip + Tokens.Layout.trackFirstGap
-        val secondTrackTop = firstTrackTop + Tokens.Layout.track + Tokens.Layout.trackGap
-        paint.color = color(Tokens.Color.chrome)
-        paint.alpha = alpha(opacity)
-        canvas.drawRect(0f, firstTrackTop.toFloat(), screenWidth.toFloat(), (firstTrackTop + Tokens.Layout.track).toFloat(), paint)
-        canvas.drawRect(0f, secondTrackTop.toFloat(), screenWidth.toFloat(), (secondTrackTop + Tokens.Layout.track).toFloat(), paint)
-        drawText(canvas, "♪", Tokens.Layout.trackIndent, firstTrackTop + 22.0, Tokens.Type.trackSize, 500, Tokens.Color.mute, opacity)
-        drawText(canvas, Tokens.Copy.audioTrack, Tokens.Layout.trackIndent + 20.0, firstTrackTop + 22.0, Tokens.Type.trackSize, Tokens.Type.trackWeight, Tokens.Color.mute, opacity)
-        drawText(canvas, "Aa", Tokens.Layout.trackIndent, secondTrackTop + 22.0, Tokens.Type.trackSize, 700, Tokens.Color.mute, opacity)
-        drawText(canvas, Tokens.Copy.textTrack, Tokens.Layout.trackIndent + 25.0, secondTrackTop + 22.0, Tokens.Type.trackSize, Tokens.Type.trackWeight, Tokens.Color.mute, opacity)
-
-        val trimTop = stripTop + (Tokens.Layout.strip - Tokens.Layout.trimHandleHeight) / 2.0
-        paint.color = color(Tokens.Color.ink)
-        paint.alpha = alpha(opacity)
-        canvas.drawRoundRect(
-            RectF(
-                (Tokens.Layout.trimHandleX - Tokens.Layout.trimHandleWidth / 2.0).toFloat(),
-                trimTop.toFloat(),
-                (Tokens.Layout.trimHandleX + Tokens.Layout.trimHandleWidth / 2.0).toFloat(),
-                (trimTop + Tokens.Layout.trimHandleHeight).toFloat(),
-            ),
-            3f,
-            3f,
-            paint,
-        )
-        val stickerY = stripTop + Tokens.Layout.strip / 2.0
-        paint.color = color(Tokens.Color.stickerRing)
-        canvas.drawCircle(Tokens.Layout.stickerX.toFloat(), stickerY.toFloat(), (Tokens.Layout.stickerSize / 2.0).toFloat(), paint)
-        paint.color = color(Tokens.Color.sticker)
-        canvas.drawCircle(Tokens.Layout.stickerX.toFloat(), stickerY.toFloat(), (Tokens.Layout.stickerSize / 2.0 - 2.0).toFloat(), paint)
-        drawCentredText(canvas, "☺", Tokens.Layout.stickerX, stickerY + 5.0, 14.0, 600, Tokens.Color.stickerInk, opacity)
-        paint.color = color(Tokens.Color.playhead)
-        canvas.drawRoundRect(
-            RectF(
-                (screenWidth / 2.0 - 1.0).toFloat(),
-                laneTop.toFloat(),
-                (screenWidth / 2.0 + 1.0).toFloat(),
-                (secondTrackTop + Tokens.Layout.track + 6.0).toFloat(),
-            ),
-            1f,
-            1f,
-            paint,
-        )
+    private fun drawHeader(canvas: Canvas, model: HoldDragResizeModel) {
+        val layout = model.layout
+        text(canvas, HoldDragResizeDayTitle, HoldDragResizeTokens.Layout.Edge, layout.top + HoldDragResizeTokens.Layout.Line1, "title", HoldDragResizeTokens.Color.Ink)
+        text(canvas, "$HoldDragResizeDayDate · ${HoldDragResizePlan.size} plans", HoldDragResizeTokens.Layout.Edge, layout.top + HoldDragResizeTokens.Layout.Line2, "date", HoldDragResizeTokens.Color.Mute)
+        val x = layout.right - HoldDragResizeTokens.Layout.ChipW
+        val y = layout.top + HoldDragResizeTokens.Layout.ChipY
+        glass.draw(canvas, x, y, HoldDragResizeTokens.Layout.ChipW, HoldDragResizeTokens.Layout.ChipH, HoldDragResizeTokens.Layout.ChipH / 2, HoldDragResizeTokens.Tint.Chrome)
+        val pad = 18.0
+        canvas.drawCircle((x + pad + 3).toFloat(), (y + 17).toFloat(), 3f, fill(HoldDragResizeTokens.Color.Focus))
+        text(canvas, "Focus today", x + pad + 11, y + 21, "chip", HoldDragResizeTokens.Color.Mute)
+        drawRoll(canvas, model.focus, x + HoldDragResizeTokens.Layout.ChipW - pad, y + 39, HoldDragResizeTokens.Color.FocusInk, model.reducedMotion)
     }
 
-    private fun drawPreview(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        screenWidth: Double,
-        pixelScale: Float,
-    ) {
-        val frame = HoldDragResizeGeometry.preview(simulation.shown, screenWidth)
-        val scale = 1.0 - (1.0 - Tokens.Upgrade.press) * simulation.press * (1.0 - simulation.held) - (1.0 - Tokens.Resize.lift) * simulation.held
-        val centreX = frame.left + frame.width / 2.0
-        val centreY = frame.top + frame.height / 2.0
-        canvas.save()
-        canvas.scale(scale.toFloat(), scale.toFloat(), centreX.toFloat(), centreY.toFloat())
-        if (simulation.held > 0.001) {
-            paint.color = color(Tokens.Color.background)
-            paint.alpha = alpha(Tokens.Upgrade.liftShadowOpacity * simulation.held)
-            paint.setShadowLayer((Tokens.Upgrade.liftShadowRadius * pixelScale).toFloat(), 0f, (Tokens.Upgrade.liftShadowY * simulation.held * pixelScale).toFloat(), color(Tokens.Color.background))
-            canvas.drawRoundRect(frame.rect(), frame.radius.toFloat(), frame.radius.toFloat(), paint)
-            paint.clearShadowLayer()
-        }
-        canvas.save()
-        canvas.clipPath(roundRectPath(frame.rect(), frame.radius.toFloat()))
-        paint.color = color(Tokens.Color.chrome)
-        paint.alpha = 255
-        canvas.drawRect(frame.rect(), paint)
-        intArrayOf(1, 2, 3, 0).forEach { index ->
-            val layerOpacity = clipOpacity(index, simulation.clock)
-            if (layerOpacity > 0.0) {
-                val clipSeconds = Tokens.Timing.clip / 1000.0
-                val fadeSeconds = Tokens.Timing.crossfade / 1000.0
-                val start = index * clipSeconds - fadeSeconds
-                val loopSeconds = Tokens.LOOP_MS / 1000.0
-                val local = ((simulation.clock - start) % loopSeconds + loopSeconds) % loopSeconds
-                val push = if (simulation.reducedMotion) 0.0 else Tokens.Timing.kenBurns * min(local / (clipSeconds + fadeSeconds), 1.0)
-                val destination = scaledRect(frame.rect(), 1.0 + push)
-                drawBitmapCrop(canvas, assets.clips[index], destination, layerOpacity)
-            }
-        }
-        drawCaption(canvas, simulation, frame)
-        if (simulation.held > 0.001) {
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 1f
-            paint.color = color(Tokens.Color.rim)
-            paint.alpha = alpha(Tokens.Upgrade.rim * simulation.held)
-            canvas.drawRoundRect(frame.rect(), frame.radius.toFloat(), frame.radius.toFloat(), paint)
-            paint.style = Paint.Style.FILL
-        }
-        drawBadge(canvas, simulation, frame)
-        canvas.restore()
-        canvas.restore()
-    }
-
-    private fun drawCaption(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        frame: HoldDragResizeFrame,
-    ) {
-        val index = floor(simulation.clock / (Tokens.Timing.clip / 1000.0)).toInt() % Tokens.Copy.captions.size
-        val caption = Tokens.Copy.captions[index]
-        if (caption.isEmpty()) {
-            return
-        }
-        val scale = simulation.shown / Tokens.sizes[2]
-        paint.setShadowLayer(6f, 0f, 1f, color(Tokens.Color.captionShadow))
-        drawCentredText(
-            canvas,
-            caption,
-            frame.left + frame.width / 2.0,
-            frame.top + frame.height * 0.62 + Tokens.Type.captionSize * scale,
-            Tokens.Type.captionSize * scale,
-            Tokens.Type.captionWeight,
-            Tokens.Color.caption,
-            1.0,
-        )
-        paint.clearShadowLayer()
-    }
-
-    private fun drawBadge(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        frame: HoldDragResizeFrame,
-    ) {
-        val opacity = simulation.held.coerceIn(0.0, 1.0)
-        if (opacity <= 0.01) {
-            return
-        }
-        val label = Tokens.Copy.sizeNames[simulation.near]
-        setTextPaint(Tokens.Type.timeSize, 600, Tokens.Color.ink, opacity)
-        val labelWidth = paint.measureText(label)
-        val dotsWidth = Tokens.Badge.dot * 3.0 + Tokens.Space.xs * 2.0
-        val width = Tokens.Badge.padX * 2.0 + dotsWidth + Tokens.Badge.gap + labelWidth
-        val scale = Tokens.Badge.initialScale + (1.0 - Tokens.Badge.initialScale) * opacity
-        val centreX = frame.left + frame.width / 2.0
-        val bottom = frame.top + frame.height - Tokens.Badge.bottom + Tokens.Upgrade.badgeRise * (1.0 - opacity)
-        val rect = RectF(
-            (centreX - width / 2.0).toFloat(),
-            (bottom - Tokens.Badge.height).toFloat(),
-            (centreX + width / 2.0).toFloat(),
-            bottom.toFloat(),
-        )
-        canvas.save()
-        canvas.scale(scale.toFloat(), scale.toFloat(), centreX.toFloat(), (rect.centerY()).toFloat())
-        paint.style = Paint.Style.FILL
-        paint.color = color(Tokens.Color.badge)
-        paint.alpha = alpha(opacity)
-        canvas.drawRoundRect(rect, (Tokens.Badge.height / 2.0).toFloat(), (Tokens.Badge.height / 2.0).toFloat(), paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f
-        paint.color = color(Tokens.Color.badgeBorder)
-        canvas.drawRoundRect(rect, (Tokens.Badge.height / 2.0).toFloat(), (Tokens.Badge.height / 2.0).toFloat(), paint)
-        paint.style = Paint.Style.FILL
-        var dotX = rect.left + Tokens.Badge.padX.toFloat() + (Tokens.Badge.dot / 2.0).toFloat()
-        repeat(3) { index ->
-            paint.color = color(if (index == simulation.near) Tokens.Color.ink else Tokens.Color.badgeDot)
-            canvas.drawCircle(dotX, rect.centerY(), (Tokens.Badge.dot / 2.0).toFloat(), paint)
-            dotX += (Tokens.Badge.dot + Tokens.Space.xs).toFloat()
-        }
-        drawText(
-            canvas,
-            label,
-            rect.left + Tokens.Badge.padX + dotsWidth + Tokens.Badge.gap,
-            rect.centerY() + Tokens.Type.timeSize * 0.36,
-            Tokens.Type.timeSize,
-            600,
-            Tokens.Color.ink,
-            opacity,
-        )
-        canvas.restore()
-    }
-
-    private fun drawChrome(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        screenWidth: Double,
-        screenHeight: Double,
-        safeTop: Double,
-        safeBottom: Double,
-    ) {
-        val shown = simulation.shown
-        val fullness = HoldDragResizeGeometry.fullness(shown)
-        val editorOpacity = 1.0 - min(fullness * 1.6, 1.0)
-        val barY = safeTop + Tokens.Layout.barY
-        if (editorOpacity > 0.0) {
-            val leftX = Tokens.Layout.gutter + Tokens.Layout.barButton / 2.0
-            val rightX = screenWidth - Tokens.Layout.gutter - Tokens.Layout.barButton / 2.0
-            withControlTransform(canvas, simulation, Tokens.Control.topLeft, leftX, barY) {
-                val controlOpacity = editorOpacity * simulation.controlOpacity(Tokens.Control.topLeft)
-                drawCircleButton(canvas, leftX, barY, Tokens.Layout.barButton, Tokens.Color.chromeHi, controlOpacity)
-                drawChevron(canvas, leftX, barY, true, controlOpacity)
-            }
-            withControlTransform(canvas, simulation, Tokens.Control.topRight, rightX, barY) {
-                val controlOpacity = editorOpacity * simulation.controlOpacity(Tokens.Control.topRight)
-                drawCircleButton(canvas, rightX, barY, Tokens.Layout.barButton, Tokens.Color.blue, controlOpacity)
-                drawArrow(canvas, rightX, barY, controlOpacity)
-            }
-            drawToolRow(canvas, simulation, shown, screenWidth, screenHeight, safeBottom, editorOpacity)
-        }
-        val overlayOpacity = ((fullness - 0.85) / 0.15).coerceIn(0.0, 1.0)
-        if (overlayOpacity > 0.0) {
-            val leftX = Tokens.Layout.gutter + Tokens.Layout.barButton / 2.0
-            withControlTransform(canvas, simulation, Tokens.Control.topLeft, leftX, barY) {
-                val controlOpacity = overlayOpacity * simulation.controlOpacity(Tokens.Control.topLeft)
-                drawCircleButton(canvas, leftX, barY, Tokens.Layout.barButton, Tokens.Color.overlayButton, controlOpacity)
-                drawClose(canvas, leftX, barY, controlOpacity)
-            }
-            drawFullScreenControls(canvas, simulation, fullness, screenWidth, screenHeight, safeBottom, overlayOpacity)
-        }
-    }
-
-    private fun drawToolRow(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        shown: Double,
-        screenWidth: Double,
-        screenHeight: Double,
-        safeBottom: Double,
-        opacity: Double,
-    ) {
-        val top = screenHeight - safeBottom - Tokens.Layout.tools + Tokens.Squeeze.tools * HoldDragResizeGeometry.squeeze(shown)
-        paint.color = color(Tokens.Color.background)
-        paint.alpha = alpha(opacity)
-        canvas.drawRect(0f, top.toFloat(), screenWidth.toFloat(), screenHeight.toFloat(), paint)
-        Tokens.Copy.tools.forEachIndexed { index, label ->
-            val left = Tokens.Layout.toolInset + index * (Tokens.Layout.tool + Tokens.Layout.toolGap)
-            val iconTop = top + Tokens.Layout.toolTop
-            val dim = Tokens.Copy.toolDim[index]
-            val control = Tokens.Control.firstTool + index
-            val centreX = left + Tokens.Layout.tool / 2.0
-            val centreY = iconTop + Tokens.Layout.toolH / 2.0
-            withControlTransform(canvas, simulation, control, centreX, centreY) {
-                val controlOpacity = opacity * simulation.controlOpacity(control)
-                paint.color = color(Tokens.Color.chrome)
-                paint.alpha = alpha(controlOpacity)
-                canvas.drawRoundRect(
-                    RectF(left.toFloat(), iconTop.toFloat(), (left + Tokens.Layout.tool).toFloat(), (iconTop + Tokens.Layout.toolH).toFloat()),
-                    Tokens.Layout.toolRadius.toFloat(),
-                    Tokens.Layout.toolRadius.toFloat(),
-                    paint,
+    private fun drawWeek(canvas: Canvas, layout: HoldDragResizeLayout) {
+        val x = HoldDragResizeTokens.Layout.Edge
+        val width = layout.right - x
+        val y = layout.top + HoldDragResizeTokens.Layout.WeekY
+        glass.draw(canvas, x, y, width, HoldDragResizeTokens.Layout.WeekH, HoldDragResizeTokens.Layout.WeekRadius, HoldDragResizeTokens.Tint.Chrome)
+        val step = (width - 8) / 7
+        HoldDragResizeWeek.forEachIndexed { index, day ->
+            val centre = x + 4 + step * (index + 0.5)
+            val today = index == HoldDragResizeToday
+            if (today) {
+                glass.draw(
+                    canvas,
+                    centre - HoldDragResizeTokens.Layout.WeekCell / 2,
+                    y + 4,
+                    HoldDragResizeTokens.Layout.WeekCell,
+                    HoldDragResizeTokens.Layout.WeekH - 8,
+                    (HoldDragResizeTokens.Layout.WeekH - 8) / 2,
+                    HoldDragResizeTokens.Tint.Selected,
+                    thick = 1.0,
                 )
-                val iconColor = if (dim) Tokens.Color.toolDim else Tokens.Color.ink
-                drawCentredText(canvas, toolGlyph(index), centreX, iconTop + 27.0, if (index == 0) Tokens.Type.toolAaSize else 18.0, 700, iconColor, controlOpacity)
-                drawCentredText(canvas, label, centreX, iconTop + Tokens.Layout.toolH + 14.0, Tokens.Type.toolSize, Tokens.Type.toolWeight, iconColor, controlOpacity)
+            }
+            text(canvas, day.day, centre, y + 21, "weekday", if (today) HoldDragResizeTokens.Color.Ink else HoldDragResizeTokens.Color.Faint, align = 1)
+            text(
+                canvas,
+                day.date.toString(),
+                centre,
+                y + 40,
+                "weekdate",
+                if (today || index > HoldDragResizeToday) HoldDragResizeTokens.Color.Ink else HoldDragResizeTokens.Color.Mute,
+                if (today || index > HoldDragResizeToday) 1.0 else 0.9,
+                align = 1,
+            )
+            day.dots.forEachIndexed { dot, kind ->
+                canvas.drawCircle(
+                    (centre + (dot - (day.dots.size - 1) / 2.0) * 6).toFloat(),
+                    (y + 48).toFloat(),
+                    1.75f,
+                    fill(kindColor(kind), if (today) 1.0 else 0.7),
+                )
             }
         }
     }
 
-    private fun drawFullScreenControls(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        fullness: Double,
-        screenWidth: Double,
-        screenHeight: Double,
-        safeBottom: Double,
-        opacity: Double,
-    ) {
-        val iconY = screenHeight - safeBottom - Tokens.Layout.fullIconsBottom - Tokens.Layout.fullIcon / 2.0
-        Tokens.Copy.fullTools.forEachIndexed { index, label ->
-            val progress = ((fullness - 0.85 - Tokens.Upgrade.stagger * index) / 0.1).coerceIn(0.0, 1.0)
-            val x = Tokens.Layout.gutter + Tokens.Layout.fullIcon / 2.0 + index * (screenWidth - Tokens.Layout.gutter * 2.0 - Tokens.Layout.fullIcon) / (Tokens.Copy.fullTools.size - 1)
-            val y = iconY + Tokens.Layout.fullIconRise * (1.0 - progress)
-            drawCircleButton(canvas, x, y, Tokens.Layout.fullIcon, Tokens.Color.overlayButton, opacity * progress)
-            drawCentredText(canvas, fullGlyph(index), x, y + 5.5, 17.0, 600, Tokens.Color.ink, opacity * progress)
+    private fun drawLabels(canvas: Canvas, model: HoldDragResizeModel, edgeY: Double) {
+        val layout = model.layout
+        val nowY = layout.yOf(HoldDragResizeTokens.Day.Now.toDouble())
+        for (hour in HoldDragResizeTokens.Day.Start / 60..HoldDragResizeTokens.Day.End / 60) {
+            val y = layout.yOf(hour * 60.0)
+            var alpha = 1.0
+            if (edgeY >= 0) alpha *= 1 - labelMakesWay(model, abs(y - edgeY))
+            alpha *= smooth(12.0, 20.0, abs(y - nowY))
+            text(canvas, holdDragResizeClock(hour * 60.0), HoldDragResizeTokens.Layout.LabelRight, y + 4, "hour", HoldDragResizeTokens.Color.Faint, alpha, align = 2)
         }
-        val pillTop = screenHeight - safeBottom - Tokens.Layout.pillsBottom - Tokens.Layout.pillHeight
-        val editWidth = 112.0
-        val nextWidth = 91.0
-        withControlTransform(canvas, simulation, Tokens.Control.editVideo, Tokens.Layout.gutter + editWidth / 2.0, pillTop + Tokens.Layout.pillHeight / 2.0) {
-            drawPill(canvas, Tokens.Layout.gutter, pillTop, editWidth, Tokens.Copy.editVideo, Tokens.Color.overlayButton, opacity * simulation.controlOpacity(Tokens.Control.editVideo), false)
-        }
-        withControlTransform(canvas, simulation, Tokens.Control.next, screenWidth - Tokens.Layout.gutter - nextWidth / 2.0, pillTop + Tokens.Layout.pillHeight / 2.0) {
-            drawPill(canvas, screenWidth - Tokens.Layout.gutter - nextWidth, pillTop, nextWidth, Tokens.Copy.next, Tokens.Color.blue, opacity * simulation.controlOpacity(Tokens.Control.next), true)
+        var nowAlpha = 1.0
+        if (edgeY >= 0) nowAlpha *= 1 - labelMakesWay(model, abs(nowY - edgeY))
+        timePill(canvas, nowY, holdDragResizeClock(HoldDragResizeTokens.Day.Now.toDouble()), HoldDragResizeTokens.Color.Now, HoldDragResizeTokens.Color.Ink, nowAlpha)
+    }
+
+    private fun drawShadows(canvas: Canvas, model: HoldDragResizeModel, only: Int, skip: Int) {
+        HoldDragResizePlan.indices.forEach { index ->
+            if (index == skip || (only >= 0 && index != only)) return@forEach
+            val box = boxOf(model, index, lifted = index == only)
+            val width = box.width * box.scale
+            val height = box.height * box.scale
+            val rect = RectF(
+                (box.centreX - width / 2).toFloat(),
+                (box.centreY - height / 2).toFloat(),
+                (box.centreX + width / 2).toFloat(),
+                (box.centreY + height / 2).toFloat(),
+            )
+            val elevation = model.elevation[index] * if (model.kind[index] == HoldDragResizeKind.Meeting) 0.6 else 1.0
+            shadow.draw(canvas, rect, elevation, 2.2, min(HoldDragResizeTokens.Layout.Radius, height / 2) * box.scale)
         }
     }
 
-    private fun drawCoach(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        screenWidth: Double,
-        screenHeight: Double,
-    ) {
-        if (simulation.coach <= 0.001) {
-            return
-        }
-        paint.color = color(Tokens.Color.scrim)
-        paint.alpha = alpha(simulation.coach)
-        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), paint)
-        val handY = Tokens.Coach.handY + Tokens.Demo.coachTravel * simulation.coachProgress
-        paint.color = color(Tokens.Color.touch)
-        canvas.drawCircle(
-            (Tokens.Coach.handX + Tokens.Coach.touchX).toFloat(),
-            (handY + Tokens.Coach.touchY).toFloat(),
-            (Tokens.Coach.touchSize / 2.0).toFloat(),
-            paint,
-        )
-        canvas.save()
-        canvas.translate(Tokens.Coach.handX.toFloat(), handY.toFloat())
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = Tokens.Coach.handStroke.toFloat()
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeJoin = Paint.Join.ROUND
-        paint.color = color(Tokens.Color.ink)
-        paint.alpha = alpha(simulation.coach)
-        canvas.drawPath(handPath, paint)
-        paint.style = Paint.Style.FILL
-        canvas.restore()
-        drawCentredMultilineText(
-            canvas,
-            Tokens.Copy.coach,
-            screenWidth / 2.0,
-            Tokens.Coach.textTop,
-            Tokens.Type.coachSize,
-            Tokens.Type.coachLine,
-            Tokens.Type.coachWeight,
-            Tokens.Color.ink,
-            simulation.coach,
-        )
-        val button = RectF(
-            Tokens.Coach.buttonX.toFloat(),
-            Tokens.Coach.buttonY.toFloat(),
-            (Tokens.Coach.buttonX + Tokens.Coach.buttonWidth).toFloat(),
-            (Tokens.Coach.buttonY + Tokens.Coach.buttonHeight).toFloat(),
-        )
-        withControlTransform(canvas, simulation, Tokens.Control.gotIt, button.centerX().toDouble(), button.centerY().toDouble()) {
-            val opacity = simulation.coach * simulation.controlOpacity(Tokens.Control.gotIt)
-            paint.color = color(Tokens.Color.ink)
-            paint.alpha = alpha(opacity)
-            canvas.drawRoundRect(button, (Tokens.Coach.buttonHeight / 2.0).toFloat(), (Tokens.Coach.buttonHeight / 2.0).toFloat(), paint)
-            drawCentredText(canvas, Tokens.Copy.gotIt, button.centerX().toDouble(), button.centerY() + 4.5, Tokens.Type.coachButtonSize, Tokens.Type.coachButtonWeight, Tokens.Color.background, opacity)
+    private fun drawCapsules(canvas: Canvas, model: HoldDragResizeModel) {
+        HoldDragResizePlan.indices.forEach { index ->
+            val box = boxOf(model, index, lifted = index == model.shown)
+            val height = box.height * box.scale
+            val width = HoldDragResizeTokens.Layout.Capsule
+            val y = box.centreY - height / 2
+            val color = if (model.kind[index] == HoldDragResizeKind.Meeting) 0xFF6E727B.toInt() else kindColor(model.kind[index])
+            canvas.drawRoundRect(
+                RectF(
+                    (HoldDragResizeTokens.Layout.RailX - width / 2).toFloat(),
+                    y.toFloat(),
+                    (HoldDragResizeTokens.Layout.RailX + width / 2).toFloat(),
+                    (y + height).toFloat(),
+                ),
+                (width / 2).toFloat(),
+                (width / 2).toFloat(),
+                fill(color),
+            )
         }
     }
 
-    private fun drawGhost(
+    private fun drawBlock(
         canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
+        model: HoldDragResizeModel,
+        index: Int,
+        lifted: Boolean,
+        live: Pair<DoubleArray, DoubleArray>,
     ) {
-        if (simulation.ghostOpacity <= 0.001) {
-            return
+        val box = boxOf(model, index, lifted)
+        val item = HoldDragResizePlan[index]
+        val kind = model.kind[index]
+        val save = canvas.save()
+        if (box.scale != 1.0) {
+            canvas.scale(box.scale.toFloat(), box.scale.toFloat(), box.centreX.toFloat(), box.centreY.toFloat())
         }
-        val radius = Tokens.Layout.finger / 2.0 * (1.0 - 0.18 * simulation.ghostPress)
-        paint.color = color(Tokens.Color.finger)
-        paint.alpha = alpha(simulation.ghostOpacity)
-        canvas.drawCircle(simulation.ghostX.toFloat(), simulation.ghostY.toFloat(), radius.toFloat(), paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f
-        paint.color = color(Tokens.Color.fingerEdge)
-        canvas.drawCircle(simulation.ghostX.toFloat(), simulation.ghostY.toFloat(), radius.toFloat(), paint)
-        paint.style = Paint.Style.FILL
-    }
-
-    private fun drawBitmapCrop(
-        canvas: Canvas,
-        bitmap: Bitmap,
-        destination: RectF,
-        opacity: Double,
-    ) {
-        val sourceAspect = bitmap.width.toDouble() / bitmap.height
-        val destinationAspect = destination.width().toDouble() / destination.height()
-        val source = if (sourceAspect > destinationAspect) {
-            val sourceWidth = bitmap.height * destinationAspect
-            val left = (bitmap.width - sourceWidth) / 2.0
-            Rect(left.toInt(), 0, (left + sourceWidth).toInt(), bitmap.height)
+        val radius = min(HoldDragResizeTokens.Layout.Radius, box.height / 2)
+        val rect = RectF(box.x.toFloat(), box.y.toFloat(), (box.x + box.width).toFloat(), (box.y + box.height).toFloat())
+        val cardPress = if (index == model.pressedIndex) model.press else 0.0
+        val up = if (index == model.shown) model.lift else 0.0
+        val light = if (model.reducedMotion) 0.0 else max(cardPress, 0.75 * up)
+        val base = when (kind) {
+            HoldDragResizeKind.Focus -> HoldDragResizeTokens.Tint.Focus
+            HoldDragResizeKind.Task -> HoldDragResizeTokens.Tint.Task
+            else -> HoldDragResizeTokens.Tint.Meeting
+        }
+        val tint = if (kind == HoldDragResizeKind.Meeting) {
+            floatArrayOf(
+                (base[0] * (1 - 0.45 * model.lock[index])).toFloat(),
+                (base[1] * (1 - 0.45 * model.lock[index])).toFloat(),
+                (base[2] * (1 - 0.40 * model.lock[index])).toFloat(),
+                (base[3] + 0.08 * model.lock[index]).toFloat(),
+            )
         } else {
-            val sourceHeight = bitmap.width / destinationAspect
-            val top = (bitmap.height - sourceHeight) / 2.0
-            Rect(0, top.toInt(), bitmap.width, (top + sourceHeight).toInt())
+            floatArrayOf(base[0], base[1], base[2], (base[3] + 0.06 * max(cardPress, up)).toFloat())
         }
-        paint.alpha = alpha(opacity)
-        canvas.drawBitmap(bitmap, source, destination, paint)
-    }
+        glass.draw(canvas, box.x, box.y, box.width, box.height, radius, tint, up, light, model.fingerX, model.fingerY)
+        if (lifted) drawDelta(canvas, model, box, rect)
 
-    private fun clipOpacity(index: Int, clock: Double): Double {
-        val clip = Tokens.Timing.clip / 1000.0
-        val fade = Tokens.Timing.crossfade / 1000.0
-        val loop = Tokens.LOOP_MS / 1000.0
-        val start = index * clip - fade
-        if (index == 0) {
-            return if (clock < clip) {
-                1.0 - ((clock - (clip - fade)) / fade).coerceIn(0.0, 1.0)
+        val clip = canvas.save()
+        canvas.holdDragResizeClipRoundRect(rect, radius.toFloat())
+        val start = if (kind == HoldDragResizeKind.Meeting) model.start[index] else live.first[index]
+        val end = if (kind == HoldDragResizeKind.Meeting) model.end[index] else live.first[index] + live.second[index]
+        val subColor = if (kind == HoldDragResizeKind.Focus) HoldDragResizeTokens.Color.FocusInk else HoldDragResizeTokens.Color.Mute
+        var x = box.x + HoldDragResizeTokens.Layout.PadX
+        val right = box.x + box.width - HoldDragResizeTokens.Layout.PadX
+        val twoLines = box.height >= 44
+        val titleY = if (twoLines) box.y + HoldDragResizeTokens.Layout.PadY + 14 else box.y + box.height / 2 + 5
+        if (kind == HoldDragResizeKind.Task) {
+            canvas.drawCircle(
+                (x + HoldDragResizeTokens.Layout.Check / 2).toFloat(),
+                (titleY - 5).toFloat(),
+                (HoldDragResizeTokens.Layout.Check / 2 - 0.75).toFloat(),
+                stroke(HoldDragResizeTokens.Color.Task, 1.25f, 0.85),
+            )
+            x += HoldDragResizeTokens.Layout.Check + 8
+        }
+        val lockWidth = if (kind == HoldDragResizeKind.Meeting) 16 * smooth(0.0, 1.0, model.lock[index]) else 0.0
+        if (twoLines) {
+            text(canvas, fit("event", item.title, right - x - lockWidth), x, titleY, "event", HoldDragResizeTokens.Color.Ink)
+            val range = if (kind == HoldDragResizeKind.Focus) {
+                "${holdDragResizeClock(start)}–${holdDragResizeClock(end)} · ${holdDragResizeLength(end - start)}"
             } else {
-                ((clock - (loop - fade)) / fade).coerceIn(0.0, 1.0)
+                "${holdDragResizeClock(start)}–${holdDragResizeClock(end)}"
             }
-        }
-        if (index == 1) {
-            return if (clock >= start && clock < (index + 1) * clip) 1.0 else 0.0
-        }
-        return if (clock >= start && clock < (index + 1) * clip) {
-            ((clock - start) / fade).coerceIn(0.0, 1.0)
+            text(canvas, range, x, titleY + 18, "eventSub", subColor)
+            if (kind != HoldDragResizeKind.Focus && item.note.isNotEmpty()) {
+                val noteX = x + measure("eventSub", range)
+                text(canvas, fit("eventNote", " · ${item.note}", right - noteX), noteX, titleY + 18, "eventNote", subColor)
+            }
         } else {
+            val side = if (kind == HoldDragResizeKind.Meeting) item.note else holdDragResizeClock(start)
+            val sideStyle = if (kind == HoldDragResizeKind.Meeting) "eventNote" else "eventSub"
+            val pushed = kind == HoldDragResizeKind.Task && index != model.active && start > model.start[index] + 0.5
+            var sideWidth = measure(if (pushed) "eventNow" else sideStyle, side).toDouble()
+            text(canvas, side, right - lockWidth, titleY, if (pushed) "eventNow" else sideStyle, if (pushed) HoldDragResizeTokens.Color.Ink else subColor, align = 2)
+            val wasAlpha = if (kind == HoldDragResizeKind.Task) model.push[index] else 0.0
+            if (wasAlpha > 0.004) {
+                val old = holdDragResizeClock(model.was[index])
+                val oldWidth = measure("eventSub", old)
+                val oldX = right - sideWidth - 8 - oldWidth
+                text(canvas, old, oldX, titleY, "eventSub", HoldDragResizeTokens.Color.Faint, wasAlpha)
+                canvas.drawRect(
+                    (oldX - 1).toFloat(),
+                    (titleY - 4).toFloat(),
+                    (oldX + oldWidth + 1).toFloat(),
+                    (titleY - 3).toFloat(),
+                    fill(HoldDragResizeTokens.Color.Faint, wasAlpha),
+                )
+                if (pushed) sideWidth += 8 + oldWidth
+            }
+            text(canvas, fit("event", item.title, right - lockWidth - sideWidth - 12 - x), x, titleY, "event", HoldDragResizeTokens.Color.Ink)
+        }
+        canvas.restoreToCount(clip)
+        if (kind == HoldDragResizeKind.Meeting) drawLock(canvas, right - 4.5, titleY - 5, model.lock[index], model.reducedMotion)
+
+        if (lifted && model.lift > 0.01) {
+            val gripY = if (model.edge == 1) {
+                box.y + box.height - HoldDragResizeTokens.Layout.GripInset - HoldDragResizeTokens.Layout.GripH
+            } else {
+                box.y + HoldDragResizeTokens.Layout.GripInset
+            }
+            val grip = RectF(
+                (box.centreX - HoldDragResizeTokens.Layout.GripW / 2).toFloat(),
+                gripY.toFloat(),
+                (box.centreX + HoldDragResizeTokens.Layout.GripW / 2).toFloat(),
+                (gripY + HoldDragResizeTokens.Layout.GripH).toFloat(),
+            )
+            canvas.drawRoundRect(grip, (HoldDragResizeTokens.Layout.GripH / 2).toFloat(), (HoldDragResizeTokens.Layout.GripH / 2).toFloat(), fill(HoldDragResizeTokens.Color.Ink, 0.7 * pillShow(model)))
+        }
+        canvas.restoreToCount(save)
+    }
+
+    private fun drawDelta(canvas: Canvas, model: HoldDragResizeModel, box: BlockBox, rect: RectF) {
+        val alpha = pillShow(model)
+        if (alpha < 0.01 || model.shown < 0) return
+        val liftOffset = box.y - (model.layout.yOf(model.top[model.shown]) + HoldDragResizeTokens.Layout.CardInset)
+        val grab = model.layout.yOf(model.originalEdge) + liftOffset
+        val edge = model.layout.yOf(if (model.edge == 1) model.top[model.shown] + model.length[model.shown] else model.top[model.shown]) + liftOffset
+        val growth = if (model.edge == 1) edge - grab else grab - edge
+        if (growth > 1) {
+            val low = min(grab, edge)
+            val high = max(grab, edge)
+            val from = if (model.edge == 1) low else high
+            val to = if (model.edge == 1) high else low
+            val save = canvas.save()
+            canvas.holdDragResizeClipRoundRect(
+                rect,
+                min(HoldDragResizeTokens.Layout.Radius, box.height / 2).toFloat(),
+            )
+            canvas.drawRect(
+                box.x.toFloat(),
+                low.toFloat(),
+                (box.x + box.width).toFloat(),
+                high.toFloat(),
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        0f,
+                        from.toFloat(),
+                        0f,
+                        to.toFloat(),
+                        intArrayOf(0x00FFB547, Color.argb((0.2 * alpha * 255).toInt(), 255, 181, 71)),
+                        null,
+                        Shader.TileMode.CLAMP,
+                    )
+                },
+            )
+            canvas.restoreToCount(save)
+        }
+        if (model.delta > 0.004 && box.height >= 40) {
+            val minutes = model.deltaLast
+            val label = "${if (minutes >= 0) "+" else "−"}${holdDragResizeLength(abs(minutes))}"
+            val y = if (model.edge == 1) {
+                box.y + box.height - HoldDragResizeTokens.Layout.GripInset - 1
+            } else {
+                box.y + HoldDragResizeTokens.Layout.GripInset + 9
+            }
+            text(canvas, label, box.x + box.width - HoldDragResizeTokens.Layout.PadX, y, "delta", HoldDragResizeTokens.Color.FocusInk, alpha * model.delta, align = 2)
+        }
+    }
+
+    private fun drawBar(canvas: Canvas, model: HoldDragResizeModel) {
+        val layout = model.layout
+        val y = layout.barTop
+        val plusX = layout.right - HoldDragResizeTokens.Layout.BarPlus
+        val width = plusX - 8 - HoldDragResizeTokens.Layout.Edge
+        glass.draw(canvas, HoldDragResizeTokens.Layout.Edge, y, width, HoldDragResizeTokens.Layout.BarH, HoldDragResizeTokens.Layout.BarH / 2, HoldDragResizeTokens.Tint.Chrome)
+        glass.draw(canvas, plusX, y, HoldDragResizeTokens.Layout.BarPlus, HoldDragResizeTokens.Layout.BarH, HoldDragResizeTokens.Layout.BarH / 2, HoldDragResizeTokens.Tint.Chrome)
+        val baseline = y + HoldDragResizeTokens.Layout.BarH / 2 + 5
+        val rollRight = HoldDragResizeTokens.Layout.Edge + 20 + 64
+        drawRoll(canvas, model.open, rollRight, baseline + 1, HoldDragResizeTokens.Color.Ink, model.reducedMotion)
+        text(canvas, " open until 18:00", rollRight, baseline, "barMute", HoldDragResizeTokens.Color.Mute)
+        val centreX = plusX + HoldDragResizeTokens.Layout.BarPlus / 2
+        val centreY = y + HoldDragResizeTokens.Layout.BarH / 2
+        val pen = stroke(HoldDragResizeTokens.Color.Ink, 2f)
+        canvas.drawLine((centreX - 8).toFloat(), centreY.toFloat(), (centreX + 8).toFloat(), centreY.toFloat(), pen)
+        canvas.drawLine(centreX.toFloat(), (centreY - 8).toFloat(), centreX.toFloat(), (centreY + 8).toFloat(), pen)
+    }
+
+    private fun drawRoll(canvas: Canvas, value: Double, right: Double, baseline: Double, color: Int, reduced: Boolean) {
+        val current = max(value, 0.0)
+        val from = floor((current + 0.01) / HoldDragResizeTokens.Resize.Quarter) * HoldDragResizeTokens.Resize.Quarter
+        val fraction = ((current - from) / HoldDragResizeTokens.Resize.Quarter).coerceIn(0.0, 1.0)
+        val to = from + HoldDragResizeTokens.Resize.Quarter
+        val roll = if (reduced) 0.0 else 16.0
+        fun parts(minutes: Double): Pair<String, String> {
+            val rounded = round(minutes).toInt()
+            return (rounded / 60).toString() to "%02d".format(rounded % 60)
+        }
+        val (hoursA, minutesA) = parts(from)
+        val (hoursB, minutesB) = parts(to)
+        fun cell(old: String, new: String, x: Double, width: Double, anchor: Double = 0.5) {
+            fun at(value: String) = x + (width - measure("total", value)) * anchor
+            if (fraction < 0.002 || old == new) {
+                text(canvas, old, at(old), baseline, "total", color)
+                return
+            }
+            val save = canvas.save()
+            canvas.clipRect((x - 2).toFloat(), (baseline - 15).toFloat(), (x + width + 2).toFloat(), (baseline + 4).toFloat())
+            text(canvas, old, at(old), baseline - roll * fraction, "total", color, 1 - fraction)
+            text(canvas, new, at(new), baseline + roll * (1 - fraction), "total", color, fraction)
+            canvas.restoreToCount(save)
+        }
+        val tight = 1.5
+        val loose = 5.0
+        var x = right - measure("totalUnit", "m")
+        text(canvas, "m", x, baseline, "totalUnit", color)
+        x -= tight + 2 * digitWidth
+        cell(minutesA[0].toString(), minutesB[0].toString(), x, digitWidth.toDouble())
+        cell(minutesA[1].toString(), minutesB[1].toString(), x + digitWidth, digitWidth.toDouble())
+        x -= loose + measure("totalUnit", "h")
+        text(canvas, "h", x, baseline, "totalUnit", color)
+        val cells = max(hoursA.length, hoursB.length)
+        val paddedA = hoursA.padStart(cells, ' ')
+        val paddedB = hoursB.padStart(cells, ' ')
+        for (index in cells - 1 downTo 0) {
+            val old = paddedA[index].toString().trim()
+            val new = paddedB[index].toString().trim()
+            val width = max(measure("total", old), measure("total", new)).toDouble()
+            x -= (if (index == cells - 1) tight else 0.0) + width
+            cell(old, new, x, width, 1.0)
+        }
+    }
+
+    private fun drawLock(canvas: Canvas, x: Double, y: Double, alpha: Double, reduced: Boolean) {
+        if (alpha <= 0.01) return
+        val scale = if (reduced) 1.0 else 0.85 + 0.15 * alpha
+        val path = Path().apply {
+            moveTo((x - 2.5 * scale).toFloat(), (y - 0.5 * scale).toFloat())
+            lineTo((x - 2.5 * scale).toFloat(), (y - 2.5 * scale).toFloat())
+            cubicTo(
+                (x - 2.5 * scale).toFloat(),
+                (y - 6 * scale).toFloat(),
+                (x + 2.5 * scale).toFloat(),
+                (y - 6 * scale).toFloat(),
+                (x + 2.5 * scale).toFloat(),
+                (y - 2.5 * scale).toFloat(),
+            )
+            lineTo((x + 2.5 * scale).toFloat(), (y - 0.5 * scale).toFloat())
+        }
+        canvas.drawPath(path, stroke(HoldDragResizeTokens.Color.Ink, 1.25f, 0.7 * alpha))
+        canvas.drawRoundRect(
+            RectF(
+                (x - 4.5 * scale).toFloat(),
+                (y - scale).toFloat(),
+                (x + 4.5 * scale).toFloat(),
+                (y + 6 * scale).toFloat(),
+            ),
+            1.75f,
+            1.75f,
+            fill(HoldDragResizeTokens.Color.Ink, 0.7 * alpha),
+        )
+    }
+
+    private fun timePill(canvas: Canvas, centreY: Double, label: String, fill: Int, ink: Int, alpha: Double) {
+        if (alpha <= 0.004) return
+        val height = HoldDragResizeTokens.Layout.PillH
+        val width = measure("pill", label) + 2 * HoldDragResizeTokens.Layout.PillPad
+        val x = HoldDragResizeTokens.Layout.LabelRight + HoldDragResizeTokens.Layout.PillPad - width
+        canvas.drawRoundRect(
+            RectF(x.toFloat(), (centreY - height / 2).toFloat(), (x + width).toFloat(), (centreY + height / 2).toFloat()),
+            (height / 2).toFloat(),
+            (height / 2).toFloat(),
+            fill(fill, alpha),
+        )
+        text(canvas, label, HoldDragResizeTokens.Layout.LabelRight, centreY + 4, "pill", ink, alpha, align = 2)
+    }
+
+    private fun edgeY(model: HoldDragResizeModel): Double {
+        val index = model.shown
+        if (index < 0 || model.lift <= 0.001) return -1.0
+        return model.layout.yOf(if (model.edge == 1) model.top[index] + model.length[index] else model.top[index])
+    }
+
+    private fun boxOf(model: HoldDragResizeModel, index: Int, lifted: Boolean): BlockBox {
+        val planned = model.end[index] - model.start[index]
+        val squash = if (planned > 0) max(0.0, 1 - model.length[index] / planned) else 0.0
+        val bulge = if (model.kind[index] == HoldDragResizeKind.Meeting || index == model.active) {
             0.0
-        }
-    }
-
-    private fun drawCircleButton(
-        canvas: Canvas,
-        x: Double,
-        y: Double,
-        size: Double,
-        token: String,
-        opacity: Double = 1.0,
-    ) {
-        paint.color = color(token)
-        paint.alpha = alpha(opacity)
-        canvas.drawCircle(x.toFloat(), y.toFloat(), (size / 2.0).toFloat(), paint)
-    }
-
-    private fun drawPause(canvas: Canvas, x: Double, y: Double, playing: Boolean, opacity: Double) {
-        paint.color = color(Tokens.Color.ink)
-        paint.alpha = alpha(opacity)
-        if (playing) {
-            canvas.drawRoundRect(RectF((x - 4.0).toFloat(), (y - 6.0).toFloat(), (x - 1.0).toFloat(), (y + 6.0).toFloat()), 1f, 1f, paint)
-            canvas.drawRoundRect(RectF((x + 1.0).toFloat(), (y - 6.0).toFloat(), (x + 4.0).toFloat(), (y + 6.0).toFloat()), 1f, 1f, paint)
         } else {
-            val path = Path()
-            path.moveTo((x - 4.0).toFloat(), (y - 6.0).toFloat())
-            path.lineTo((x + 6.0).toFloat(), y.toFloat())
-            path.lineTo((x - 4.0).toFloat(), (y + 6.0).toFloat())
-            path.close()
-            canvas.drawPath(path, paint)
+            min(HoldDragResizeTokens.Resize.BulgeMax, HoldDragResizeTokens.Resize.SquashBulge * squash)
         }
+        val up = if (lifted && !model.reducedMotion) model.lift else 0.0
+        val give = if (model.kind[index] == HoldDragResizeKind.Meeting && !model.reducedMotion) 1.5 * model.lock[index] else 0.0
+        val y = model.layout.yOf(model.top[index]) + HoldDragResizeTokens.Layout.CardInset - HoldDragResizeTokens.Lift.Rise * up + give
+        val height = max(model.length[index] * model.layout.ppm - 2 * HoldDragResizeTokens.Layout.CardInset - give, 4.0)
+        val x = model.layout.cardX - bulge
+        val width = model.layout.cardW + 2 * bulge
+        val scale = 1 + HoldDragResizeTokens.Lift.Scale * up
+        return BlockBox(x, y, width, height, scale, x + width / 2, y + height / 2)
     }
 
-    private fun drawChevron(canvas: Canvas, x: Double, y: Double, up: Boolean, opacity: Double) {
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeJoin = Paint.Join.ROUND
-        paint.color = color(Tokens.Color.ink)
-        paint.alpha = alpha(opacity)
-        val direction = if (up) -1.0 else 1.0
-        val path = Path()
-        path.moveTo((x - 5.0).toFloat(), (y + 2.0 * direction).toFloat())
-        path.lineTo(x.toFloat(), (y - 3.0 * direction).toFloat())
-        path.lineTo((x + 5.0).toFloat(), (y + 2.0 * direction).toFloat())
-        canvas.drawPath(path, paint)
-        paint.style = Paint.Style.FILL
+    private fun labelMakesWay(model: HoldDragResizeModel, distance: Double): Double =
+        smooth(0.2, 0.5, model.lift) * (1 - smooth(22.0, 30.0, distance))
+
+    private fun pillShow(model: HoldDragResizeModel): Double = smooth(0.5, 1.0, model.lift)
+
+    private fun kindColor(kind: Int): Int = when (kind) {
+        HoldDragResizeKind.Focus -> HoldDragResizeTokens.Color.Focus
+        HoldDragResizeKind.Task -> HoldDragResizeTokens.Color.Task
+        else -> HoldDragResizeTokens.Color.Meeting
     }
 
-    private fun drawArrow(canvas: Canvas, x: Double, y: Double, opacity: Double) {
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeJoin = Paint.Join.ROUND
-        paint.color = color(Tokens.Color.ink)
-        paint.alpha = alpha(opacity)
-        canvas.drawLine((x - 6.0).toFloat(), y.toFloat(), (x + 5.0).toFloat(), y.toFloat(), paint)
-        canvas.drawLine((x + 1.0).toFloat(), (y - 4.0).toFloat(), (x + 5.0).toFloat(), y.toFloat(), paint)
-        canvas.drawLine((x + 1.0).toFloat(), (y + 4.0).toFloat(), (x + 5.0).toFloat(), y.toFloat(), paint)
-        paint.style = Paint.Style.FILL
+    private fun fit(style: String, value: String, width: Double): String {
+        if (measure(style, value) <= width) return value
+        var end = value.length
+        while (end > 1 && measure(style, "${value.take(end).trimEnd()}…") > width) end--
+        return "${value.take(end).trimEnd()}…"
     }
 
-    private fun drawClose(canvas: Canvas, x: Double, y: Double, opacity: Double) {
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.color = color(Tokens.Color.ink)
-        paint.alpha = alpha(opacity)
-        canvas.drawLine((x - 5.0).toFloat(), (y - 5.0).toFloat(), (x + 5.0).toFloat(), (y + 5.0).toFloat(), paint)
-        canvas.drawLine((x + 5.0).toFloat(), (y - 5.0).toFloat(), (x - 5.0).toFloat(), (y + 5.0).toFloat(), paint)
-        paint.style = Paint.Style.FILL
-    }
-
-    private fun drawUndo(canvas: Canvas, x: Double, y: Double, mirrored: Boolean, opacity: Double) {
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.7f
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.color = color(if (mirrored) Tokens.Color.faint else Tokens.Color.ink)
-        paint.alpha = alpha(opacity)
-        val direction = if (mirrored) -1.0 else 1.0
-        canvas.drawArc(RectF((x - 6.0).toFloat(), (y - 5.0).toFloat(), (x + 6.0).toFloat(), (y + 7.0).toFloat()), 205f, 250f * direction.toFloat(), false, paint)
-        paint.style = Paint.Style.FILL
-    }
-
-    private fun drawPill(
+    private fun text(
         canvas: Canvas,
-        left: Double,
-        top: Double,
-        width: Double,
-        label: String,
-        token: String,
-        opacity: Double,
-        arrow: Boolean,
-    ) {
-        paint.color = color(token)
-        paint.alpha = alpha(opacity)
-        val rect = RectF(left.toFloat(), top.toFloat(), (left + width).toFloat(), (top + Tokens.Layout.pillHeight).toFloat())
-        canvas.drawRoundRect(rect, (Tokens.Layout.pillHeight / 2.0).toFloat(), (Tokens.Layout.pillHeight / 2.0).toFloat(), paint)
-        val textX = if (arrow) left + width / 2.0 - 7.0 else left + width / 2.0
-        drawCentredText(canvas, label, textX, top + 28.0, Tokens.Type.pillSize, Tokens.Type.pillWeight, Tokens.Color.ink, opacity)
-        if (arrow) {
-            drawArrow(canvas, left + width - 19.0, top + Tokens.Layout.pillHeight / 2.0, opacity)
-        }
-    }
-
-    private inline fun withControlTransform(
-        canvas: Canvas,
-        simulation: HoldDragResizeSimulation,
-        control: Int,
-        centreX: Double,
-        centreY: Double,
-        draw: () -> Unit,
-    ) {
-        canvas.save()
-        val scale = simulation.controlScale(control).toFloat()
-        canvas.scale(scale, scale, centreX.toFloat(), centreY.toFloat())
-        draw()
-        canvas.restore()
-    }
-
-    private fun drawText(
-        canvas: Canvas,
-        text: String,
+        value: String,
         x: Double,
         baseline: Double,
-        size: Double,
-        weight: Int,
-        token: String,
-        opacity: Double,
+        style: String,
+        color: Int,
+        alpha: Double = 1.0,
+        align: Int = 0,
     ) {
-        setTextPaint(size, weight, token, opacity)
-        paint.textAlign = Paint.Align.LEFT
-        canvas.drawText(text, x.toFloat(), baseline.toFloat(), paint)
-    }
-
-    private fun drawCentredText(
-        canvas: Canvas,
-        text: String,
-        x: Double,
-        baseline: Double,
-        size: Double,
-        weight: Int,
-        token: String,
-        opacity: Double,
-    ) {
-        setTextPaint(size, weight, token, opacity)
-        paint.textAlign = Paint.Align.CENTER
-        canvas.drawText(text, x.toFloat(), baseline.toFloat(), paint)
-    }
-
-    private fun drawCentredMultilineText(
-        canvas: Canvas,
-        text: String,
-        x: Double,
-        top: Double,
-        size: Double,
-        lineHeight: Double,
-        weight: Int,
-        token: String,
-        opacity: Double,
-    ) {
-        text.lines().forEachIndexed { index, line ->
-            drawCentredText(canvas, line, x, top + size + index * lineHeight, size, weight, token, opacity)
+        if (alpha <= 0.004 || value.isEmpty()) return
+        configureTextPaint(style, color, alpha)
+        val left = when (align) {
+            1 -> x - paint.measureText(value) / 2
+            2 -> x - paint.measureText(value)
+            else -> x
         }
+        canvas.drawText(value, left.toFloat(), baseline.toFloat(), paint)
     }
 
-    private fun setTextPaint(size: Double, weight: Int, token: String, opacity: Double) {
-        paint.style = Paint.Style.FILL
-        paint.textSize = size.toFloat()
-        paint.typeface = typeface(weight)
-        paint.color = color(token)
-        paint.alpha = alpha(opacity)
+    private fun measure(style: String, value: String): Float {
+        configureTextPaint(style, Color.WHITE, 1.0)
+        return paint.measureText(value)
     }
 
-    private fun typeface(weight: Int): Typeface {
-        return when {
-            weight >= 700 -> Typeface.create("sans-serif", Typeface.BOLD)
-            weight >= 600 -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            weight >= 500 -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            else -> Typeface.create("sans-serif", Typeface.NORMAL)
-        }
+    private fun configureTextPaint(style: String, color: Int, alpha: Double) {
+        val token = requireNotNull(styles[style])
+        paint.reset()
+        paint.flags = Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG
+        paint.typeface = typeface(token.face)
+        paint.textSize = token.size
+        paint.color = color
+        paint.alpha = (Color.alpha(color) * alpha).toInt().coerceIn(0, 255)
     }
 
-    private fun HoldDragResizeFrame.rect(): RectF {
-        return RectF(left.toFloat(), top.toFloat(), (left + width).toFloat(), (top + height).toFloat())
+    private fun typeface(face: Face): Typeface = when (face) {
+        Face.Regular -> assets.regular
+        Face.Medium -> assets.medium
+        Face.Semibold -> assets.semibold
+        Face.Mono -> assets.mono
+        Face.MonoBold -> assets.monoBold
     }
 
-    private fun scaledRect(rect: RectF, scale: Double): RectF {
-        val dx = rect.width() * (scale - 1.0) / 2.0
-        val dy = rect.height() * (scale - 1.0) / 2.0
-        return RectF((rect.left - dx).toFloat(), (rect.top - dy).toFloat(), (rect.right + dx).toFloat(), (rect.bottom + dy).toFloat())
+    private fun fill(color: Int, alpha: Double = 1.0): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        this.alpha = (Color.alpha(color) * alpha).toInt().coerceIn(0, 255)
+        style = Paint.Style.FILL
     }
 
-    private fun roundRectPath(rect: RectF, radius: Float): Path {
-        return Path().apply {
-            addRoundRect(rect, radius, radius, Path.Direction.CW)
-        }
+    private fun stroke(color: Int, width: Float, alpha: Double = 1.0): Paint = fill(color, alpha).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = width
+        strokeCap = Paint.Cap.ROUND
     }
 
-    private fun toolGlyph(index: Int): String {
-        return arrayOf("Aa", "●", "♫", "▶", "▣", "✂", "●")[index]
-    }
+    private fun bitmapPaint(): Paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-    private fun fullGlyph(index: Int): String {
-        return arrayOf("▣", "T", "☺", "♫", "▱", "≡")[index]
-    }
-
-    private fun color(token: String): Int {
-        return colors[token] ?: Color.parseColor(token)
-    }
-
-    private fun alpha(value: Double): Int {
-        return (value.coerceIn(0.0, 1.0) * 255.0).toInt()
-    }
-
-    private companion object {
-        const val HAND_PATH = "M14 40V9a5 5 0 0 1 10 0v22a4.5 4.5 0 0 1 9 0v3a4.5 4.5 0 0 1 9 0v4a4 4 0 0 1 0.5 0v14c0 10-7 17-17 17h-4c-8 0-12-4-16-10L3 47c-2-3 0-7 4-6 3 0 5 2 7 5"
+    private fun smooth(low: Double, high: Double, value: Double): Double {
+        val progress = ((value - low) / (high - low)).coerceIn(0.0, 1.0)
+        return progress * progress * (3 - 2 * progress)
     }
 }

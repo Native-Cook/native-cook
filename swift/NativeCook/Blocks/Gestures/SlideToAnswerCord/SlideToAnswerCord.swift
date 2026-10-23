@@ -1,406 +1,221 @@
 import SwiftUI
 
-/// The SwiftUI shell preserves React Native's mixed coordinate spaces: the
-/// Canvas-like scene is scaled from 402 pt, while its labels and controls stay
-/// at their authored point sizes.
 struct SlideToAnswerCord: View {
-    static let loop: Double = SlideToAnswerCordMotion.loopMS / 1_000
+    static let loop: TimeInterval = SlideToAnswerCordMotion.loopMS / 1_000
 
+    private let autoPlay: Bool
     @State private var simulation: SlideToAnswerCordSimulation
     @State private var muted = false
-    @State private var pressRed = 1.0
-    @State private var pressGreen = 1.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(autoPlay: Bool = false) {
+        self.autoPlay = autoPlay
         _simulation = State(initialValue: SlideToAnswerCordSimulation(autoPlay: autoPlay))
     }
 
     var body: some View {
-        GeometryReader { safeAreaProxy in
-            GeometryReader { stageProxy in
-                let size = stageProxy.size
-                let frame = simulation.frame
-                let buttonsY = size.height - safeAreaProxy.safeAreaInsets.bottom
-                    - SlideToAnswerCordTheme.Layout.buttonsBottom
-                    - SlideToAnswerCordTheme.Layout.labelSize
-                    - SlideToAnswerCordTheme.Layout.labelGap
-                    - SlideToAnswerCordTheme.Layout.button / 2
-
-                ZStack(alignment: .topLeading) {
-                    SlideToAnswerCordScene(
-                        frame: frame,
-                        buttonsY: buttonsY,
-                        showsControls: false,
-                        pressRed: pressRed,
-                        pressGreen: pressGreen
-                    )
-
-                    if !SlideToAnswerCordTheme.replica {
-                        SlideToAnswerCordButtonHalos(
-                            frame: frame,
-                            buttonsY: buttonsY,
-                            size: size,
-                            pressRed: pressRed,
-                            pressGreen: pressGreen
-                        )
-                        // RN's BackdropBlur samples the already-rendered scene at
-                        // a fixed 18 pt radius. Re-render the same value-only
-                        // backdrop plus the source halos, then clip it to the
-                        // two glass surfaces.
-                        ZStack(alignment: .topLeading) {
-                            SlideToAnswerCordScene(
-                                frame: frame,
-                                buttonsY: buttonsY,
-                                showsControls: false,
-                                pressRed: pressRed,
-                                pressGreen: pressGreen
-                            )
-                            SlideToAnswerCordButtonHalos(
-                                frame: frame,
-                                buttonsY: buttonsY,
-                                size: size,
-                                pressRed: pressRed,
-                                pressGreen: pressGreen
-                            )
-                        }
-                        .blur(radius: SlideToAnswerCordTheme.Glass.blur)
-                        .mask(SlideToAnswerCordGlassBlurMask(
-                            frame: frame,
-                            buttonsY: buttonsY,
-                            size: size,
-                            pressRed: pressRed,
-                            pressGreen: pressGreen
-                        ))
-                        SlideToAnswerCordButtonSurfaces(
-                            frame: frame,
-                            buttonsY: buttonsY,
-                            size: size,
-                            pressRed: pressRed,
-                            pressGreen: pressGreen
-                        )
+        GeometryReader { safeArea in
+            let safeBottom = safeArea.safeAreaInsets.bottom
+            GeometryReader { stage in
+                content(size: stage.size, safeBottom: safeBottom)
+                    .onAppear {
+                        simulation.configure(size: stage.size, reducedMotion: reduceMotion)
+                        simulation.start()
                     }
-
-                    SlideToAnswerCordTouchView(simulation: simulation)
-                        .frame(width: size.width, height: size.height)
-
-                    if !SlideToAnswerCordTheme.replica {
-                        SlideToAnswerCordCopy(frame: frame, size: size)
-                        SlideToAnswerCordControls(
-                            frame: frame,
-                            size: size,
-                            buttonsY: buttonsY,
-                            muted: $muted,
-                            pressRed: $pressRed,
-                            pressGreen: $pressGreen,
-                            command: { simulation.command($0) }
-                        )
+                    .onDisappear { simulation.stop() }
+                    .onChange(of: stage.size) { _, size in
+                        simulation.configure(size: size, reducedMotion: reduceMotion)
                     }
-                }
-                .frame(width: size.width, height: size.height, alignment: .topLeading)
-                .contentShape(.rect)
-                .onAppear {
-                    SlideToAnswerCordAssets.assertAllLoaded()
-                    simulation.configure(size: size, reducedMotion: reduceMotion)
-                    simulation.start()
-                }
-                .onDisappear(perform: simulation.stop)
-                .onChange(of: size) { _, next in
-                    simulation.configure(size: next, reducedMotion: reduceMotion)
-                }
-                .onChange(of: reduceMotion) { _, next in
-                    simulation.configure(size: size, reducedMotion: next)
-                }
+                    .onChange(of: reduceMotion) { _, reduced in
+                        simulation.configure(size: stage.size, reducedMotion: reduced)
+                    }
             }
             .ignoresSafeArea()
         }
+        .background(SlideToAnswerCordTheme.Colors.page)
         .preferredColorScheme(.dark)
-        .background(SlideToAnswerCordTheme.Colors.skyTop)
+        .statusBarHidden(false)
     }
-}
 
-private struct SlideToAnswerCordCopy: View {
-    let frame: SlideToAnswerCordSimulation.Frame
-    let size: CGSize
+    private func content(size: CGSize, safeBottom: Double) -> some View {
+        let frame = simulation.frame
+        let width = size.width
+        let height = size.height
+        let layout = SlideToAnswerCordTheme.Layout.self
+        let buttonsY = height - safeBottom - layout.buttonsBottom - layout.labelSize - layout.labelGap - layout.button / 2
+        let pillTop = buttonsY + SlideToAnswerCordTheme.Glass.pillY - SlideToAnswerCordTheme.Glass.pillH / 2
+        let copyTop = height * layout.copyTopRatio
+        let copyHeight = layout.nameLine + layout.metaGap + layout.metaLine + layout.gap + layout.statusLine
+        let lift = max(0, copyTop + copyHeight - (pillTop - layout.copyToPill))
+        let connection = frame.connectedMix
+        let connected = frame.phase == .connected
+        let redEnabled = frame.phase == .ringing || connected
 
-    var body: some View {
+        return ZStack(alignment: .topLeading) {
+            SlideToAnswerCordBackdrop()
+            SlideToAnswerCordScene(frame: frame)
+            SlideToAnswerCordTouchView(simulation: simulation)
+
+            callCopy(frame: frame)
+                .frame(width: width - 2 * layout.side, height: copyHeight, alignment: .top)
+                .position(x: width / 2, y: copyTop + copyHeight / 2 - lift * connection)
+
+            controls(connection: connection)
+                .frame(width: width - 2 * layout.side, height: 76)
+                .position(x: width / 2, y: pillTop + SlideToAnswerCordTheme.Glass.pillH / 2 + 12 + 12 * (1 - connection))
+                .opacity(connection)
+                .allowsHitTesting(connected)
+
+            if frame.acceptGlow >= 0 {
+                Circle()
+                    .fill(SlideToAnswerCordTheme.Colors.accept.opacity(0.45 * (1 - frame.acceptGlow)))
+                    .frame(width: layout.button, height: layout.button)
+                    .scaleEffect(1 + 0.5 * frame.acceptGlow)
+                    .blur(radius: 10)
+                    .position(x: width / 2 + layout.buttonGap, y: buttonsY)
+                    .allowsHitTesting(false)
+            }
+
+            callButton(
+                color: SlideToAnswerCordTheme.Colors.decline,
+                symbol: "phone.down.fill",
+                label: connected ? SlideToAnswerCordTheme.Copy.end : SlideToAnswerCordTheme.Copy.decline,
+                enabled: redEnabled
+            ) {
+                simulation.command(connected ? .end : .decline)
+            }
+            .opacity(redEnabled ? 1 : 0.45)
+            .position(x: width / 2 - layout.buttonGap + layout.buttonGap * connection, y: buttonsY + 13)
+
+            callButton(
+                color: SlideToAnswerCordTheme.Colors.accept,
+                symbol: "phone.fill",
+                label: SlideToAnswerCordTheme.Copy.accept,
+                enabled: frame.phase == .ringing
+            ) {
+                simulation.command(.answer)
+            }
+            .opacity(1 - connection)
+            .position(x: width / 2 + layout.buttonGap, y: buttonsY + 13)
+            .allowsHitTesting(frame.phase == .ringing)
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .clipped()
+    }
+
+    private func callCopy(frame: SlideToAnswerCordSimulation.Frame) -> some View {
         VStack(spacing: 0) {
             Text(SlideToAnswerCordTheme.Copy.name)
-                .font(.system(size: SlideToAnswerCordTheme.Layout.nameSize, weight: .semibold))
+                .font(.system(size: SlideToAnswerCordTheme.Layout.nameSize, weight: .regular))
                 .tracking(SlideToAnswerCordTheme.Layout.titleTracking)
                 .foregroundStyle(SlideToAnswerCordTheme.Colors.ink)
                 .frame(height: SlideToAnswerCordTheme.Layout.nameLine)
-                .accessibilityAddTraits(.isHeader)
             Text(SlideToAnswerCordTheme.Copy.meta)
-                .font(.system(size: SlideToAnswerCordTheme.Layout.metaSize))
-                .foregroundStyle(SlideToAnswerCordTheme.Colors.rgba(244, 242, 255, 0.5))
-                .padding(.top, SlideToAnswerCordTheme.Space.xs)
-            SlideToAnswerCordStatus(
-                status: status,
-                key: frame.phase == .connected ? "timer" : status
-            )
-            .padding(.top, SlideToAnswerCordTheme.Layout.gap)
+                .font(.system(size: SlideToAnswerCordTheme.Layout.metaSize, weight: .regular))
+                .foregroundStyle(SlideToAnswerCordTheme.Colors.mute)
+                .frame(height: SlideToAnswerCordTheme.Layout.metaLine)
+                .padding(.top, SlideToAnswerCordTheme.Layout.metaGap)
+            Text(status(for: frame))
+                .font(.system(size: SlideToAnswerCordTheme.Layout.statusSize, weight: .regular).monospacedDigit())
+                .foregroundStyle(SlideToAnswerCordTheme.Colors.faint)
+                .frame(height: SlideToAnswerCordTheme.Layout.statusLine)
+                .padding(.top, SlideToAnswerCordTheme.Layout.gap)
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.2).delay(0.12), value: status(for: frame))
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.horizontal, SlideToAnswerCordTheme.Layout.side)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .offset(y: size.height * SlideToAnswerCordTheme.Layout.copyTopRatio)
-        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
     }
 
-    private var status: String {
+    private func status(for frame: SlideToAnswerCordSimulation.Frame) -> String {
         switch frame.phase {
-        case .connected:
-            let seconds = max(0, Int(frame.callElapsed))
-            return String(format: "%02d:%02d", seconds / 60, seconds % 60)
-        case .declined:
-            return SlideToAnswerCordTheme.Copy.declined
-        case .ended:
-            return SlideToAnswerCordTheme.Copy.ended
-        case .ringing:
-            return SlideToAnswerCordTheme.Copy.ringing
-        }
-    }
-}
-
-/// Reanimated mounts a new status for every phase but keeps the timer's key
-/// stable. Keep that identity behaviour while explicitly driving its 200 ms
-/// entering and 120 ms exiting opacity transitions in SwiftUI.
-private struct SlideToAnswerCordStatus: View {
-    let status: String
-    let key: String
-
-    @State private var previousStatus: String
-    @State private var previousKey: String
-    @State private var outgoing: String?
-    @State private var incomingOpacity = 1.0
-    @State private var outgoingOpacity = 0.0
-
-    init(status: String, key: String) {
-        self.status = status
-        self.key = key
-        _previousStatus = State(initialValue: status)
-        _previousKey = State(initialValue: key)
-    }
-
-    var body: some View {
-        ZStack {
-            if let outgoing {
-                text(outgoing)
-                    .opacity(outgoingOpacity)
-            }
-            text(status)
-                .opacity(incomingOpacity)
-        }
-        .frame(height: SlideToAnswerCordTheme.Layout.statusLine)
-        .onChange(of: status) { _, next in
-            defer { previousStatus = next }
-            guard key != previousKey else { return }
-            let departing = previousStatus
-            previousKey = key
-            outgoing = departing
-            outgoingOpacity = 1
-            incomingOpacity = 0
-            // Reanimated's FadeIn/FadeOut default to withTiming's exact
-            // Easing.inOut(Easing.quad), preserved by this custom animation.
-            withAnimation(Animation(SlideToAnswerCordInOutQuad(duration: SlideToAnswerCordMotion.Status.fadeOut))) { outgoingOpacity = 0 }
-            withAnimation(Animation(SlideToAnswerCordInOutQuad(duration: SlideToAnswerCordMotion.Status.fadeIn))) { incomingOpacity = 1 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + SlideToAnswerCordMotion.Status.fadeOut) {
-                guard outgoing == departing else { return }
-                outgoing = nil
-            }
+        case .ringing: SlideToAnswerCordTheme.Copy.ringing
+        case .connected: clock(frame.callElapsed)
+        case .declined: SlideToAnswerCordTheme.Copy.declined
+        case .ended: SlideToAnswerCordTheme.Copy.ended
         }
     }
 
-    private func text(_ value: String) -> some View {
-        Text(value)
-            .font(.system(size: SlideToAnswerCordTheme.Layout.statusSize))
-            .monospacedDigit()
-            .foregroundStyle(SlideToAnswerCordTheme.Colors.mute)
+    private func clock(_ value: Double) -> String {
+        let total = max(0, Int(value))
+        return String(format: "%02d:%02d", total / 60, total % 60)
     }
-}
 
-/// Reanimated `withTiming` default: Easing.inOut(Easing.quad). `value` is the
-/// vector to animate toward, so SwiftUI multiplies it by the same normalized
-/// piecewise-quadratic progress used on the React Native side.
-private struct SlideToAnswerCordInOutQuad: CustomAnimation {
-    let duration: TimeInterval
-
-    nonisolated func animate<V>(
-        value: V,
-        time: TimeInterval,
-        context: inout AnimationContext<V>
-    ) -> V? where V: VectorArithmetic {
-        guard time <= duration else { return nil }
-        let progress = max(0, min(1, time / duration))
-        let eased = progress < 0.5
-            ? 2 * progress * progress
-            : 1 - pow(-2 * progress + 2, 2) / 2
-        return value.scaled(by: eased)
-    }
-}
-
-private struct SlideToAnswerCordControls: View {
-    let frame: SlideToAnswerCordSimulation.Frame
-    let size: CGSize
-    let buttonsY: Double
-    @Binding var muted: Bool
-    @Binding var pressRed: Double
-    @Binding var pressGreen: Double
-    let command: (SlideToAnswerCordSimulation.Command) -> Void
-
-    private var isConnected: Bool { frame.phase == .connected }
-    private var isRinging: Bool { frame.phase == .ringing }
-    private var buttonHalf: Double { SlideToAnswerCordTheme.Layout.button / 2 }
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Button {
-                command(isConnected ? .end : .decline)
-            } label: {
-                Color.clear
-                    .frame(width: SlideToAnswerCordTheme.Layout.button, height: SlideToAnswerCordTheme.Layout.button)
-                    .contentShape(.circle)
-                    .overlay(alignment: .top) {
-                        Text(isConnected ? SlideToAnswerCordTheme.Copy.end : SlideToAnswerCordTheme.Copy.decline)
-                            .font(.system(size: SlideToAnswerCordTheme.Layout.labelSize))
-                            .foregroundStyle(SlideToAnswerCordTheme.Colors.label)
-                            .frame(width: SlideToAnswerCordTheme.Layout.labelWidth)
-                            .offset(y: SlideToAnswerCordTheme.Layout.button + SlideToAnswerCordTheme.Layout.labelGap)
-                    }
-            }
-            .buttonStyle(SlideToAnswerCordReportingPressStyle(
-                scale: $pressRed,
-                reducedMotion: frame.reducedMotion
-            ))
-            .accessibilityLabel(isConnected ? "End call" : "Decline call")
-            .disabled(!isRinging && !isConnected)
-            .frame(width: SlideToAnswerCordTheme.Layout.button, height: SlideToAnswerCordTheme.Layout.button, alignment: .top)
-            .position(
-                x: (isConnected ? size.width / 2 : size.width / 2 - SlideToAnswerCordTheme.Layout.buttonGap * frame.geometry.scale),
-                y: buttonsY
-            )
-
-            SlideToAnswerCordPillControls(muted: $muted, reducedMotion: frame.reducedMotion)
-                .opacity(max(0, (frame.morph - 0.6) / 0.4))
-                .scaleEffect(0.95 + 0.05 * frame.morph)
-                .allowsHitTesting(isConnected)
-                .frame(maxWidth: .infinity)
-                .frame(height: SlideToAnswerCordTheme.Glass.pillH)
-                .position(x: size.width / 2, y: buttonsY + SlideToAnswerCordTheme.Glass.pillY)
-
-            if !isConnected {
-                Button {
-                    command(.answer)
-                } label: {
-                    Color.clear
-                        .frame(width: SlideToAnswerCordTheme.Layout.button, height: SlideToAnswerCordTheme.Layout.button)
-                        .contentShape(.circle)
-                        .overlay(alignment: .top) {
-                            Text(SlideToAnswerCordTheme.Copy.accept)
-                                .font(.system(size: SlideToAnswerCordTheme.Layout.labelSize))
-                                .foregroundStyle(SlideToAnswerCordTheme.Colors.label)
-                                .frame(width: SlideToAnswerCordTheme.Layout.labelWidth)
-                                .offset(y: SlideToAnswerCordTheme.Layout.button + SlideToAnswerCordTheme.Layout.labelGap)
-                        }
-                }
-                .buttonStyle(SlideToAnswerCordReportingPressStyle(
-                    scale: $pressGreen,
-                    reducedMotion: frame.reducedMotion
-                ))
-                .accessibilityLabel("Accept call")
-                .disabled(!isRinging)
-                .frame(width: SlideToAnswerCordTheme.Layout.button, height: SlideToAnswerCordTheme.Layout.button, alignment: .top)
-                .position(
-                    x: size.width / 2 + SlideToAnswerCordTheme.Layout.buttonGap * frame.geometry.scale,
-                    y: buttonsY
-                )
-            }
-        }
-    }
-}
-
-private struct SlideToAnswerCordPillControls: View {
-    @Binding var muted: Bool
-    let reducedMotion: Bool
-
-    var body: some View {
+    private func controls(connection: Double) -> some View {
         HStack(spacing: 0) {
-            ForEach(SlideToAnswerCordTheme.Copy.controls, id: \.name) { control in
-                Button {
-                    if control.name == "mute" { muted.toggle() }
-                } label: {
-                    VStack(spacing: SlideToAnswerCordTheme.Layout.controlLabelGap) {
-                        Image(systemName: control.symbol)
-                            .font(.system(size: SlideToAnswerCordTheme.Layout.controlIconSize))
-                            .foregroundStyle(control.name == "mute" && muted ? SlideToAnswerCordTheme.Layout.controlInk : .white)
-                        Text(control.label)
-                            .font(.system(size: SlideToAnswerCordTheme.Layout.controlLabelSize, weight: .semibold))
-                            .foregroundStyle(control.name == "mute" && muted ? SlideToAnswerCordTheme.Layout.controlInk : SlideToAnswerCordTheme.Layout.controlLabel)
-                    }
-                    .frame(
-                        minWidth: SlideToAnswerCordTheme.Layout.controlMinimumWidth,
-                        minHeight: SlideToAnswerCordTheme.Layout.controlHeight
-                    )
-                    .background(control.name == "mute" && muted ? SlideToAnswerCordTheme.Layout.controlOn : .clear, in: Capsule())
-                }
-                .buttonStyle(SlideToAnswerCordPressStyle(reducedMotion: reducedMotion))
-                .accessibilityLabel(control.label)
-                .accessibilityAddTraits(control.name == "mute" && muted ? .isSelected : [])
+            control(symbol: "mic.slash.fill", label: "Mute", selected: muted) { muted.toggle() }
                 .frame(maxWidth: .infinity)
+            control(symbol: "circle.grid.3x3.fill", label: "Keypad", selected: false) {}
+                .frame(maxWidth: .infinity)
+            control(symbol: "speaker.wave.2.fill", label: "Speaker", selected: false) {}
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityHidden(connection < 0.5)
+    }
+
+    private func control(symbol: String, label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: SlideToAnswerCordTheme.Layout.controlLabelGap) {
+                Circle()
+                    .fill(selected ? SlideToAnswerCordTheme.Colors.controlOn : SlideToAnswerCordTheme.Colors.glass)
+                    .overlay {
+                        Circle().stroke(SlideToAnswerCordTheme.Colors.glassEdge, lineWidth: 0.5)
+                    }
+                    .overlay {
+                        Image(systemName: symbol)
+                            .font(.system(size: SlideToAnswerCordTheme.Layout.controlIconSize, weight: .regular))
+                            .foregroundStyle(selected ? SlideToAnswerCordTheme.Colors.controlOnInk : SlideToAnswerCordTheme.Colors.glyph)
+                    }
+                    .frame(width: SlideToAnswerCordTheme.Layout.controlHeight, height: SlideToAnswerCordTheme.Layout.controlHeight)
+                Text(label)
+                    .font(.system(size: SlideToAnswerCordTheme.Layout.controlLabelSize, weight: .medium))
+                    .foregroundStyle(SlideToAnswerCordTheme.Colors.mute)
+                    .frame(height: 16)
+            }
+            .frame(width: SlideToAnswerCordTheme.Layout.controlMinimumWidth)
+        }
+        .buttonStyle(SlideToAnswerCordPressStyle())
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func callButton(color: Color, symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: SlideToAnswerCordTheme.Layout.labelGap) {
+                Circle()
+                    .fill(color)
+                    .frame(width: SlideToAnswerCordTheme.Layout.button, height: SlideToAnswerCordTheme.Layout.button)
+                    .overlay {
+                        Image(systemName: symbol)
+                            .font(.system(size: SlideToAnswerCordTheme.Layout.glyph, weight: .regular))
+                            .foregroundStyle(SlideToAnswerCordTheme.Colors.glyph)
+                    }
+                Text(label)
+                    .font(.system(size: SlideToAnswerCordTheme.Layout.labelSize, weight: .medium))
+                    .foregroundStyle(SlideToAnswerCordTheme.Colors.ink)
+                    .frame(width: SlideToAnswerCordTheme.Layout.labelWidth, height: 16)
             }
         }
-        .padding(.horizontal, SlideToAnswerCordTheme.Space.lg)
+        .buttonStyle(SlideToAnswerCordPressStyle())
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 }
 
 private struct SlideToAnswerCordPressStyle: ButtonStyle {
-    let reducedMotion: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !reducedMotion ? SlideToAnswerCordMotion.Press.scale : 1)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? SlideToAnswerCordMotion.Press.scale : 1))
             .animation(
                 .timingCurve(
                     SlideToAnswerCordMotion.Press.control1.x,
                     SlideToAnswerCordMotion.Press.control1.y,
                     SlideToAnswerCordMotion.Press.control2.x,
                     SlideToAnswerCordMotion.Press.control2.y,
-                    duration: configuration.isPressed
-                        ? SlideToAnswerCordMotion.Press.inDuration
-                        : SlideToAnswerCordMotion.Press.outDuration
+                    duration: configuration.isPressed ? SlideToAnswerCordMotion.Press.inDuration : SlideToAnswerCordMotion.Press.outDuration
                 ),
                 value: configuration.isPressed
             )
     }
-}
-
-private struct SlideToAnswerCordReportingPressStyle: ButtonStyle {
-    @Binding var scale: Double
-    let reducedMotion: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .onChange(of: configuration.isPressed, initial: true) { _, pressed in
-                let target = pressed && !reducedMotion ? SlideToAnswerCordMotion.Press.scale : 1
-                withAnimation(
-                    .timingCurve(
-                        SlideToAnswerCordMotion.Press.control1.x,
-                        SlideToAnswerCordMotion.Press.control1.y,
-                        SlideToAnswerCordMotion.Press.control2.x,
-                        SlideToAnswerCordMotion.Press.control2.y,
-                        duration: pressed
-                            ? SlideToAnswerCordMotion.Press.inDuration
-                            : SlideToAnswerCordMotion.Press.outDuration
-                    )
-                ) {
-                    scale = target
-                }
-            }
-    }
-}
-
-#Preview {
-    SlideToAnswerCord(autoPlay: true)
 }

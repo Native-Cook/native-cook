@@ -6,8 +6,8 @@ import { COLORS } from './theme';
 
 export default function EnvelopeGiftRevealDemo() {
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.lime }}>
-      <StatusBar style="dark" />
+    <View style={{ flex: 1, backgroundColor: COLORS.table }}>
+      <StatusBar style="light" />
       <EnvelopeGiftReveal autoPlay />
     </View>
   );

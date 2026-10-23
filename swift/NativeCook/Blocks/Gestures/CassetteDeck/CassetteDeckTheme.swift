@@ -1,95 +1,131 @@
-import SwiftUI
+import CoreText
+import UIKit
 
-/// Every colour and size of the block. Sizes are points on the source's 402 × 874 pt screen,
-/// measured from the rectified frames (3 px per point), and scaled by width / 402.
+struct CassetteDeckRect {
+    let x: CGFloat
+    let y: CGFloat
+    let width: CGFloat
+    let height: CGFloat
+    let radius: CGFloat
+
+    init(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat, _ radius: CGFloat = 0) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.radius = radius
+    }
+
+    var cgRect: CGRect { CGRect(x: x, y: y, width: width, height: height) }
+}
+
+struct CassetteDeckPoint {
+    let x: CGFloat
+    let y: CGFloat
+}
+
 enum CassetteDeckTheme {
-    static let screen = CGSize(width: 402, height: 874)
+    static let stage = CGSize(width: 402, height: 778)
+    static let edge: CGFloat = 16
+    static let brandBaseline: CGFloat = 46
+    static let modelBaseline: CGFloat = 66
+    static let hintBaseline: CGFloat = 748
+    static let fingerSize: CGFloat = 44
 
-    enum Palette {
-        // Measured: flat #242225 with a faint lift above the cassette and a darker pool under it.
-        static let bg = Color(hex: 0x242225)
-        static let bgLift = Color.rgba(255, 252, 255, 0.045)
-        static let bgPool = Color.rgba(0, 0, 0, 0.16)
-        static let grille = Color(hex: 0x19181B)
-        static let grilleRim = Color.rgba(255, 255, 255, 0.05)
-        static let ledOff = CassetteDeckRGBA(hex: 0x3A393D)
-        static let ledOn = CassetteDeckRGBA(hex: 0x35E39A)
-        static let ledGlow = Color.rgba(53, 227, 154, 0.55)
-        static let glyphOff = CassetteDeckRGBA(hex: 0x2D2C30)
-        static let glyphOn = CassetteDeckRGBA(hex: 0xE9E8EC)
-        static let glyphGlow = Color.rgba(255, 255, 255, 0.35)
-        static let labelInk = Color(hex: 0x1C1B1D)
-        static let labelMute = Color(hex: 0x5E5C60)
-        static let wordmark = Color(hex: 0xECEAE4)
-        static let pillTop = Color(hex: 0xA9A9AB)
-        static let pillBottom = Color(hex: 0x7E7E81)
-        static let pillInk = Color(hex: 0x3A3A3C)
-        static let tape = Color(hex: 0x2B2421)
-        static let tapeEdge = Color.rgba(150, 118, 92, 0.35)
-        /// A narrow band of the key light, soft at both ends.
-        static let sheen: [Gradient.Stop] = [
-            .init(color: .rgba(255, 255, 255, 0), location: 0.3),
-            .init(color: .rgba(255, 255, 255, 0.06), location: 0.46),
-            .init(color: .rgba(255, 255, 255, 0.13), location: 0.5),
-            .init(color: .rgba(255, 255, 255, 0.06), location: 0.54),
-            .init(color: .rgba(255, 255, 255, 0), location: 0.7)
-        ]
-        /// The shell's side faces: lit from the top left, so the left face is brighter.
-        static let edgeLeft = [Color(hex: 0x2A292C), Color(hex: 0x141316)]
-        static let edgeRight = [Color(hex: 0x111013), Color(hex: 0x08080A)]
-        /// The room takes the hue of the loaded cassette's cover (track 1 keeps the source's neutral lift).
-        static let tints = [
-            CassetteDeckRGBA(255, 252, 255, 0.045),
-            CassetteDeckRGBA(150, 140, 255, 0.085),
-            CassetteDeckRGBA(80, 220, 190, 0.075)
-        ]
-        static let redSpill = Color.rgba(230, 40, 64, 0.32)
-        static let ledSpill = Color.rgba(53, 227, 154, 0.10)
-    }
+    static let plate = UIColor(hex: 0xCFD2D5)
+    static let plateLight = UIColor(hex: 0xE6E8EA)
+    static let plateDeep = UIColor(hex: 0xA9ADB2)
+    static let engrave = UIColor(hex: 0x4A4E54)
+    static let engraveMuted = UIColor(hex: 0x7B8086)
+    static let wellColor = UIColor(hex: 0x121314)
+    static let shell = UIColor(hex: 0x2A2B2E)
+    static let shellLight = UIColor(hex: 0x3A3B3F)
+    static let label = UIColor(hex: 0xF1E8D4)
+    static let labelLine = UIColor(red: 160 / 255, green: 120 / 255, blue: 90 / 255, alpha: 0.35)
+    static let labelBand = UIColor(hex: 0xD9573B)
+    static let pen = UIColor(hex: 0x1F2A63)
+    static let tape = UIColor(hex: 0x3B2418)
+    static let tapeLight = UIColor(hex: 0x6B4430)
+    static let hub = UIColor(hex: 0xF4F2EE)
+    static let counter = UIColor(hex: 0x0E0F10)
+    static let digit = UIColor(hex: 0xF2F0EA)
+    static let led = UIColor(hex: 0xFF8A2A)
+    static let ledOff = UIColor(hex: 0x3A2A20)
+    static let meterOn = UIColor(hex: 0x7BE38E)
+    static let meterHot = UIColor(hex: 0xFFB34A)
+    static let meterPeak = UIColor(hex: 0xFF5A3C)
+    static let meterOff = UIColor(hex: 0x23262A)
+    static let keyTopColor = UIColor(hex: 0xE9EBED)
+    static let keyFront = UIColor(hex: 0x9EA3A9)
+    static let keyDeep = UIColor(hex: 0x6E737A)
+    static let playMark = UIColor(hex: 0xE2462F)
+    static let finger = UIColor(red: 30 / 255, green: 32 / 255, blue: 36 / 255, alpha: 0.16)
+    static let fingerEdge = UIColor(red: 30 / 255, green: 32 / 255, blue: 36 / 255, alpha: 0.4)
 
-    /// The spacing scale from the React Native block. Source geometry keeps its measured positions;
-    /// additions use these named steps.
-    enum Space {
-        static let xs = 4.0
-        static let sm = 8.0
-        static let md = 12.0
-        static let lg = 16.0
-        static let xl = 24.0
-        static let xxl = 32.0
-    }
+    static let power = CassetteDeckPoint(x: 370, y: 40)
+    static let well = CassetteDeckRect(16, 98, 370, 300, 18)
+    static let cassette = CassetteDeckRect(36, 132, 330, 226, 12)
+    static let labelRect = CassetteDeckRect(52, 146, 298, 128, 6)
+    static let window = CassetteDeckRect(116, 210, 170, 52, 26)
+    static let reels = [CassetteDeckPoint(x: 148, y: 236), CassetteDeckPoint(x: 254, y: 236)]
+    static let hubRadius: CGFloat = 14
+    static let packMin: Double = 17
+    static let packMax: Double = 44
+    static let readoutY: CGFloat = 436
+    static let readoutHeight: CGFloat = 64
+    static let counterX: CGFloat = 16
+    static let metersX: CGFloat = 178
+    static let metersWidth: CGFloat = 208
+    static let keysY: CGFloat = 552
+    static let keysHeight: CGFloat = 140
+    static let keyGap: CGFloat = 8
+    static let keyTop: CGFloat = 22
+    static let keyWidth = (stage.width - 2 * edge - 4 * keyGap) / 5
 
-    /// Absolute positions in points on the 402 × 874 screen.
-    enum Layout {
-        static let grille = (cx: 44.3, cy: 88.7, pitch: 6.6, dot: 2.1, radius: 20.5)
-        static let led = (cx: 374.3, cy: 77.7, r: 2.1)
-        static let cassette = (x: 16.67, y: 223.33, w: 370.0, h: 240.0)
-        /// Inside the cassette frame.
-        static let reels = [(cx: 119.7, cy: 106.3), (cx: 248.0, cy: 106.3)]
-        static let reelSize = 70.0
-        /// The dark band through the label, where the tape packs show around the hubs.
-        static let window = (x: 95.0, y: 80.7, w: 179.0, h: 49.3)
-        static let tapePack = (min: 26.0, max: 62.0)
-        static let cover = (x: 38.3, y: 35.0, size: 37.3, radius: 1.0)
-        static let title = (x: 86.0, y: 36.5, size: 16.0, tracking: -0.6)
-        static let artist = (x: 86.0, y: 56.0, size: 11.2, tracking: -0.1)
-        static let wordmark = (right: 43.3, y: 145.5, size: 11.6, tracking: 1.6)
-        static let keys = (x0: 60.0, pitch: 53.75, y: 588.3, w: 65.0, h: 96.67, travel: 3.3)
-        static let glyphs = (y: 580.7, size: 10.0, x0: 92.5)
-        static let pill = (x: 17.7, y: 805.7, w: 31.3, h: 20.0)
-        /// The cassette strip sits this far inside the swipe area, above and below (RN's `20`).
-        static let swipeMargin = 20.0
-        /// The shell's edge faces: top and bottom insets in points, not scaled (RN's `styles.edge`).
-        static let edgeInset = (top: 6.0, bottom: 10.0)
-    }
-
-    static let tracks = [
-        (title: "Glass Hours", artist: "Northern Pilots", cover: 0),
-        (title: "Afterglow", artist: "Northern Pilots", cover: 1),
-        (title: "Undertow", artist: "Northern Pilots", cover: 2)
-    ]
-
-    /// An invented wordmark in the source's bold extended style.
     static let brand = "VELOR"
+    static let model = "TC-7  STEREO CASSETTE DECK"
+    static let side = "A"
+    static let title = "Glass Hours"
+    static let subtitle = "for Jun, summer mix"
+    static let counterLabel = "TAPE COUNTER"
+    static let memo = "MEMO"
+    static let hints = ["Press play", "Playing side A", "Winding", "Rewinding to 000", "Paused"]
+    static let keyNames = ["Rewind", "Play", "Fast forward", "Stop", "Pause"]
 
-    static let keyLabels = ["Play", "Pause", "Next track", "Rewind", "Fast forward"]
+    static func keyX(_ index: Int) -> CGFloat {
+        edge + CGFloat(index) * (keyWidth + keyGap)
+    }
+}
+
+struct CassetteDeckFonts {
+    let regular: UIFont
+    let medium: UIFont
+    let semibold: UIFont
+    let handwriting: UIFont
+
+    init() {
+        Self.registerOnce
+        regular = UIFont(name: "Inter24pt-Regular", size: 12) ?? .systemFont(ofSize: 12)
+        medium = UIFont(name: "Inter-Medium", size: 12) ?? .systemFont(ofSize: 12, weight: .medium)
+        semibold = UIFont(name: "Inter-SemiBold", size: 12) ?? .systemFont(ofSize: 12, weight: .semibold)
+        handwriting = UIFont(name: "CoveredByYourGrace", size: 12) ?? .systemFont(ofSize: 12)
+    }
+
+    private static let registerOnce: Void = {
+        ["Inter-Regular", "Inter-Medium", "Inter-SemiBold", "CoveredByYourGrace"].forEach { name in
+            guard let url = Bundle.main.url(forResource: "CassetteDeck-\(name)", withExtension: "ttf") else { return }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+    }()
+}
+
+extension UIColor {
+    fileprivate convenience init(hex: Int, alpha: CGFloat = 1) {
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
+    }
 }

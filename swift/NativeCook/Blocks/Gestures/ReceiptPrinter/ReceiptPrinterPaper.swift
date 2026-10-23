@@ -40,7 +40,7 @@ struct ReceiptPrinterPaper: View {
         }
         .frame(width: width, height: height, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Run receipt for 1.08 kilometers")
+        .accessibilityLabel("Run receipt for 6.21 kilometers")
     }
 
     private func y(_ screenY: Double) -> Double { screenY - t.SLOT.paperTop }
@@ -133,6 +133,28 @@ private struct ReceiptPrinterPaperRules: View {
             axis.addLine(to: CGPoint(x: right, y: base))
             context.stroke(axis, with: .color(t.COLOR.axis), lineWidth: chart.baseW)
 
+            var average = Path()
+            let averageY = paceY(ReceiptPrinterPace.average)
+            average.move(to: CGPoint(x: left, y: averageY))
+            average.addLine(to: CGPoint(x: right, y: averageY))
+            context.stroke(
+                average,
+                with: .color(t.COLOR.inkSoft),
+                style: StrokeStyle(lineWidth: 0.8, dash: [4, 3])
+            )
+
+            var pace = Path()
+            for (index, sample) in ReceiptPrinterPace.samples.enumerated() {
+                let xx = left + (right - left) * Double(index) / Double(ReceiptPrinterPace.samples.count - 1)
+                let point = CGPoint(x: xx, y: paceY(sample))
+                if index == 0 { pace.move(to: point) } else { pace.addLine(to: point) }
+            }
+            context.stroke(
+                pace,
+                with: .color(t.COLOR.ink),
+                style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round)
+            )
+
             for screenY in t.RECEIPT.zone.ys {
                 let radius = t.RECEIPT.zone.r
                 context.fill(
@@ -147,6 +169,30 @@ private struct ReceiptPrinterPaperRules: View {
 
     private func x(_ screenX: Double) -> Double { screenX - t.SLOT.paperX0 }
     private func y(_ screenY: Double) -> Double { screenY - t.SLOT.paperTop }
+
+    private func paceY(_ pace: Double) -> Double {
+        let chart = t.RECEIPT.chart
+        let progress = (pace - ReceiptPrinterPace.fast) / (ReceiptPrinterPace.slow - ReceiptPrinterPace.fast)
+        return y(chart.top) + 6 + progress * (y(chart.base) - y(chart.top) - 12)
+    }
+}
+
+private enum ReceiptPrinterPace {
+    static let average = 325.0
+    static let fast = 280.0
+    static let slow = 360.0
+    static let kilometers = 6.21
+
+    static let samples: [Double] = (0..<63).map { index in
+        let kilometer = Double(index) / 62 * kilometers
+        let settle = 15 * exp(-kilometer / 0.35)
+        let rise = 7 * exp(-pow(kilometer - 1.9, 2) / 0.05)
+            + 6 * exp(-pow(kilometer - 3.6, 2) / 0.04)
+        let unit = min(1, max(0, (kilometer - 4.6) / 1.4))
+        let kick = -20 * unit * unit * (3 - 2 * unit)
+        let breath = 2.2 * sin(Double(index) * 1.3) + 1.4 * sin(Double(index) * 0.55 + 0.7)
+        return 326 + settle + rise + kick + breath
+    }
 }
 
 private struct ReceiptPrinterPaperFastTag: View {
@@ -240,22 +286,43 @@ private enum ReceiptPrinterPaperArtwork {
     static let grain: UIImage = {
         // Keep the source's paper-scale resolution: no stretched low-resolution
         // texture alters its frequency when this cached image is displayed.
-        let size = CGSize(width: 333, height: 1281)
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = false
-        format.scale = 1
-        return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
-            let context = renderer.cgContext
-            for y in 0..<Int(size.height) {
-                for x in 0..<Int(size.width) {
-                    // RN FractalNoise uses frequency .9 and two octaves. Use
-                    // equal-amplitude, deterministic value-noise octaves here.
-                    let value = (valueNoise(x, y, frequency: 0.9) + valueNoise(x, y, frequency: 1.8)) / 2
-                    context.setFillColor(UIColor(white: value, alpha: 1).cgColor)
-                    context.fill(CGRect(x: x, y: y, width: 1, height: 1))
-                }
+        let width = 333
+        let height = 1281
+        let bytesPerPixel = 4
+        var pixels = [UInt8](repeating: 255, count: width * height * bytesPerPixel)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                // RN FractalNoise uses frequency .9 and two octaves. Use
+                // equal-amplitude, deterministic value-noise octaves here.
+                let value = (valueNoise(x, y, frequency: 0.9) + valueNoise(x, y, frequency: 1.8)) / 2
+                let gray = UInt8(clamping: Int((value * 255).rounded()))
+                let offset = (y * width + x) * bytesPerPixel
+                pixels[offset] = gray
+                pixels[offset + 1] = gray
+                pixels[offset + 2] = gray
             }
         }
+
+        guard
+            let provider = CGDataProvider(data: Data(pixels) as CFData),
+            let image = CGImage(
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bitsPerPixel: 32,
+                bytesPerRow: width * bytesPerPixel,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: false,
+                intent: .defaultIntent
+            )
+        else {
+            return UIImage()
+        }
+        return UIImage(cgImage: image, scale: 1, orientation: .up)
     }()
 
     private static func valueNoise(_ x: Int, _ y: Int, frequency: Double) -> CGFloat {

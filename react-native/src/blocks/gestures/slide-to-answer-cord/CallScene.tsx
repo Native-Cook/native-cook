@@ -1,231 +1,158 @@
-/** The whole canvas: horizon, grain, coiled cord, neon handset, ring pulse and the two call buttons. */
+/**
+ * The room and the receiver, in one canvas: a dark wall with a warm pool of light, the coiled cord (its far half-turns
+ * in shadow, its near ones catching the light) and the ivory bakelite handset, shaded and glossed by the same light
+ * from the upper left, with a soft shadow on the wall behind it. The call screen's type and buttons sit on top as views.
+ */
 import {
-  BackdropBlur, BlurMask, Circle, ColorMatrix, Fill, FractalNoise, Group, Image, LinearGradient, Path, RadialGradient, Rect, RoundedRect, Skia, vec,
-  type SkImage, type SkPath, type SkRRect, type Transforms3d,
+  BlurMask, Circle, Group, LinearGradient, Path, RadialGradient, Rect, Skia, vec, type SkPath, type Transforms3d,
 } from '@shopify/react-native-skia';
-import { interpolateColor, useDerivedValue, type DerivedValue, type SharedValue } from 'react-native-reanimated';
+import { useDerivedValue, type DerivedValue, type SharedValue } from 'react-native-reanimated';
 
-import type { HandsetPaths } from './handset-paths';
 import type { Geometry } from './call-sim';
-import { CHEVRON, REPLICA_SWING } from './motion';
-import { COLORS, CORD, GLASS, HANDSET, LAYOUT, REPLICA } from './theme';
+import { COLORS, CORD, HANDSET } from './theme';
 
 export type CallValues = {
   coilBack: DerivedValue<SkPath>;
   coilFront: DerivedValue<SkPath>;
   handset: DerivedValue<Transforms3d>;
-  face: DerivedValue<string>;
-  faceDeep: DerivedValue<string>;
-  ground: DerivedValue<string>;
-  pulseR: SharedValue<number>;
-  pulseO: SharedValue<number>;
-  pulseX: SharedValue<number>;
-  pulseY: SharedValue<number>;
-  glowOn: SharedValue<number>; // neon strength: 0 when declined
-  acceptGlow: SharedValue<number>;
-  declineGlow: SharedValue<number>;
+  shadow: DerivedValue<Transforms3d>;
+  lightX: SharedValue<number>;
+  lightY: SharedValue<number>;
   conn: SharedValue<number>;
-  off: SharedValue<number>;
-  morph: SharedValue<number>; // Accept disc → control pill
-  wash: SharedValue<number[]>; // x, y, progress
-  chev: SharedValue<number>; // chevron phase 0..1, −1 hidden
-  swing: SharedValue<number>; // time within the source's swing period
-  src: SharedValue<number>; // how far the handset is on the source's swing (1 at rest)
-  pressRed: SharedValue<number>; // press feedback on the discs: 1 → 0.95
-  pressGreen: SharedValue<number>;
 };
 
-type Props = { g: Geometry; paths: HandsetPaths; v: CallValues; buttonsY: number; images: {
-  pink: SkImage | null; green: SkImage | null; shell: SkImage | null; shellGreen: SkImage | null;
-  srcA: SkImage | null; srcRest: SkImage | null; srcB: SkImage | null;
-} };
-
-// assets/handset-src-*.png: the traced takes in the handset's frame (pt, origin at the cord's end; 3 px per pt).
-const SRC_BOX = { x: -100, y: -70, w: 260, h: 350 };
-// The pink neon turned 160° in hue: the connected handset's green.
-const GREEN = [-0.599, 1.142, 0.457, 0, 0, 0.462, 0.495, 0.043, 0, 0, 0.144, 1.631, -0.775, 0, 0, 0, 0, 0, 1, 0];
-// The takes' times in the source's 4 s swing: [time, take] (0 a, 1 rest, 2 b), linear in between.
-const SRC_KEYS = [[0, 0], [1.0, 1], [1.875, 2], [2.9, 1], [4, 0]] as const;
-function swingWeight(t: number, take: number) {
-  'worklet';
-  for (let i = 0; i < SRC_KEYS.length - 1; i++) {
-    const [t0, k0] = SRC_KEYS[i];
-    const [t1, k1] = SRC_KEYS[i + 1];
-    if (t >= t0 && t <= t1) {
-      const u = (t - t0) / (t1 - t0);
-      return (k0 === take ? 1 - u : 0) + (k1 === take ? u : 0);
-    }
-  }
-  return take === 0 ? 1 : 0;
+/** The receiver's outline: two round cups joined by a handle that narrows to its waist, one smooth path. */
+function outline(): SkPath {
+  const { cupR: r, topCupY: t, bottomCupY: b, waist: w } = HANDSET;
+  const a = (40 * Math.PI) / 180;
+  const ex = r * Math.cos(a);
+  const ey = r * Math.sin(a);
+  const mid = (t + b) / 2;
+  const p = Skia.PathBuilder.Make();
+  p.moveTo(ex, t + ey);
+  p.cubicTo(w + 1, t + ey + 14, w, mid - 22, w, mid);
+  p.cubicTo(w, mid + 22, w + 1, b - ey - 14, ex, b - ey);
+  p.arcToOval(Skia.XYWHRect(-r, b - r, 2 * r, 2 * r), -40, 260, false);
+  p.cubicTo(-w - 1, b - ey - 14, -w, mid + 22, -w, mid);
+  p.cubicTo(-w, mid - 22, -w - 1, t + ey + 14, -ex, t + ey);
+  p.arcToOval(Skia.XYWHRect(-r, t - r, 2 * r, 2 * r), 140, 260, false);
+  p.close();
+  return p.build();
 }
 
-export function CallScene({ g, paths, v, buttonsY, images }: Props) {
-  const { w, h, s } = g;
-  // Replica: which traced take shows at this point of the swing (a: left end, rest: the middle, b: right end).
-  // Off the source's swing (in the finger, in a call) the middle take stands for the handset.
-  const srcAO = useDerivedValue(() => v.src.value * swingWeight(v.swing.value, 0));
-  const srcRestO = useDerivedValue(() => v.src.value * swingWeight(v.swing.value, 1) + (1 - v.src.value));
-  const srcBO = useDerivedValue(() => v.src.value * swingWeight(v.swing.value, 2));
-  const half = (LAYOUT.button * s) / 2;
-  const left = w / 2 - LAYOUT.buttonGap * s;
-  const right = w / 2 + LAYOUT.buttonGap * s;
+/** The gloss: a long soft streak down the handle's lit side. */
+function gloss(): SkPath {
+  const { topCupY: t, bottomCupY: b, waist: w } = HANDSET;
+  const p = Skia.PathBuilder.Make();
+  const mid = (t + b) / 2;
+  p.moveTo(-w + 4, t + 34);
+  p.cubicTo(-w + 2.5, mid - 20, -w + 2.5, mid + 20, -w + 4, b - 34);
+  p.cubicTo(-w + 6.5, mid + 20, -w + 6.5, mid - 20, -w + 4, t + 34);
+  p.close();
+  return p.build();
+}
 
-  const sky = useDerivedValue(() => [...COLORS.sky.slice(0, 4), v.ground.value, COLORS.sky[5]]);
-  const lit = useDerivedValue(() => 1 - (1 - HANDSET.offOpacity) * v.off.value);
-  const pinkO = useDerivedValue(() => (1 - v.conn.value) * lit.value);
-  const handsetGreenO = useDerivedValue(() => v.conn.value * lit.value);
-  const pinkA = useDerivedValue(() => srcAO.value * pinkO.value);
-  const pinkR = useDerivedValue(() => srcRestO.value * pinkO.value);
-  const pinkB = useDerivedValue(() => srcBO.value * pinkO.value);
-  const greenA = useDerivedValue(() => srcAO.value * handsetGreenO.value);
-  const greenR = useDerivedValue(() => srcRestO.value * handsetGreenO.value);
-  const greenB = useDerivedValue(() => srcBO.value * handsetGreenO.value);
-  // The red button slides to the centre and becomes End once the call is connected.
-  const redX = useDerivedValue(() => left + (w / 2 - left) * v.conn.value);
-  const redT = useDerivedValue<Transforms3d>(() => [{ translateX: redX.value }, { translateY: buttonsY }, { scale: v.pressRed.value }]);
-  const redO = useDerivedValue(() => 1 - 0.55 * v.off.value);
-  const declineHalo = useDerivedValue(() => 0.35 + 0.65 * v.declineGlow.value);
-  const acceptRing = useDerivedValue(() => half + 6 + 8 * v.acceptGlow.value);
-  const pulseC = useDerivedValue(() => vec(v.pulseX.value, v.pulseY.value));
-  const redRect = useDerivedValue(() => ({ rect: { x: -half, y: -half, width: half * 2, height: half * 2 }, rx: half, ry: half }));
-  // Accept disc (right) → control pill (above the End button), radius from round to pill.
-  const pillRect = useDerivedValue(() => {
-    const m = v.morph.value;
-    const pw = (w - LAYOUT.side * 2 * s);
-    const cx = right + (w / 2 - right) * m;
-    const cy = buttonsY + (GLASS.pillY * s) * m;
-    const ww = half * 2 + (pw - half * 2) * m;
-    const hh = half * 2 + (GLASS.pillH * s - half * 2) * m;
-    return { rect: { x: cx - ww / 2, y: cy - hh / 2, width: ww, height: hh }, rx: hh / 2, ry: hh / 2 };
-  });
-  const pillTint = useDerivedValue(() => interpolateColor(v.morph.value, [0, 1], [GLASS.accept, GLASS.neutral]) as string);
-  const acceptO = useDerivedValue(() => 1 - 0.55 * v.off.value);
-  const acceptPressT = useDerivedValue<Transforms3d>(() => [
-    { translateX: right }, { translateY: buttonsY }, { scale: v.pressGreen.value }, { translateX: -right }, { translateY: -buttonsY },
-  ]);
-  const ringO = useDerivedValue(() => 0.45 * (1 - v.morph.value));
-  const acceptHaloO = useDerivedValue(() => (0.35 + 0.65 * v.acceptGlow.value) * (1 - v.morph.value));
-  const greenGlyphO = useDerivedValue(() => 1 - Math.min(1, v.morph.value * 3));
-  const greenGlyphT = useDerivedValue<Transforms3d>(() => [{ translateX: right }, { translateY: buttonsY }, { scale: s }]);
-  // Hue glow field behind the handset (pre-built gradient, never a live blur).
-  const field = useDerivedValue(() => vec(v.pulseX.value, v.pulseY.value));
-  const fieldColors = useDerivedValue(() => [v.face.value, 'rgba(0,0,0,0)']);
-  // State wash: the new state's colour floods out from the handset.
-  const washC = useDerivedValue(() => vec(v.wash.value[0], v.wash.value[1]));
-  const washR = useDerivedValue(() => Math.max(1, v.wash.value[2] * Math.hypot(w, h)));
-  const washO = useDerivedValue(() => (v.wash.value[2] > 0 && v.wash.value[2] < 1 ? 0.5 * (1 - v.wash.value[2]) : 0));
-  const washColors = useDerivedValue(() => ['rgba(0,0,0,0)', v.face.value, 'rgba(0,0,0,0)']);
-  // Lift chevrons drifting up above the handset while it rings.
-  const chevrons = useDerivedValue(() => {
-    const b = Skia.PathBuilder.Make();
-    if (v.chev.value < 0) return b.build();
-    for (let i = 0; i < 3; i++) {
-      const u = (v.chev.value + i / 3) % 1;
-      const y = v.pulseY.value - (HANDSET.comY + 26 + u * CHEVRON.rise * 2) * s;
-      const x = v.pulseX.value;
-      b.moveTo(x - 7 * s, y + 4 * s);
-      b.lineTo(x, y - 2 * s);
-      b.lineTo(x + 7 * s, y + 4 * s);
+/** A crescent of light on each cup's upper left, stroked. */
+function crescents(): SkPath {
+  const { cupR: r, topCupY: t, bottomCupY: b } = HANDSET;
+  const p = Skia.PathBuilder.Make();
+  for (const cy of [t, b]) p.addArc(Skia.XYWHRect(-r + 3.5, cy - r + 3.5, 2 * r - 7, 2 * r - 7), 200, 58);
+  return p.build();
+}
+
+/** The earpiece's holes (bottom cup) and the mouthpiece's (top cup): rings of small dark dots. */
+function holes(): SkPath {
+  const p = Skia.PathBuilder.Make();
+  const ring = (cy: number, rr: number, n: number, d: number, rot = 0) => {
+    for (let k = 0; k < n; k++) {
+      const a = rot + (2 * Math.PI * k) / n;
+      p.addCircle(Math.cos(a) * rr, cy + Math.sin(a) * rr, d);
     }
-    return b.build();
-  });
-  const chevO = useDerivedValue(() => (v.chev.value < 0 ? 0 : 0.7 * (1 - v.src.value)));
-  // At rest the scene is the source's: the hue field and the chevrons come up once the handset leaves its swing.
-  const fieldO = useDerivedValue(() => GLASS.fieldAlpha * (1 - v.src.value));
+  };
+  p.addCircle(0, HANDSET.topCupY, 1.6);
+  ring(HANDSET.topCupY, 6, 8, 1.3);
+  ring(HANDSET.topCupY, 11.5, 14, 1.3, 0.2);
+  p.addCircle(0, HANDSET.bottomCupY, 2.2);
+  ring(HANDSET.bottomCupY, 8, 6, 1.9, 0.5);
+  return p.build();
+}
 
+const OUTLINE = outline();
+const GLOSS = gloss();
+const CRESCENTS = crescents();
+const HOLES = holes();
+
+function Cup({ cy }: { cy: number }) {
+  const r = HANDSET.inner;
   return (
     <Group>
-      <Rect x={0} y={0} width={w} height={h}>
-        <LinearGradient start={vec(0, 0)} end={vec(0, h)} colors={sky} positions={COLORS.skyStops} />
-      </Rect>
-      {REPLICA ? null : (
-        <>
-          <Rect x={0} y={0} width={w} height={h} opacity={fieldO}>
-            <RadialGradient c={field} r={GLASS.field * s} colors={fieldColors} />
-          </Rect>
-          <Circle c={washC} r={washR} opacity={washO}>
-            <RadialGradient c={washC} r={washR} colors={washColors} positions={[0, 0.85, 1]} />
-          </Circle>
-          <Path path={chevrons} style="stroke" strokeWidth={2.2 * s} strokeCap="round" strokeJoin="round" color="#FFFFFF" opacity={chevO} />
-        </>
-      )}
-      <Rect x={0} y={0} width={w} height={h} opacity={COLORS.grain} blendMode="screen">
-        <FractalNoise freqX={0.9} freqY={0.9} octaves={2} />
-      </Rect>
-
-      <Circle c={pulseC} r={v.pulseR} style="stroke" strokeWidth={2 * s} color={v.face} opacity={v.pulseO}>
-        <BlurMask blur={3} style="solid" />
+      {/* The recessed face: darker toward the light (its rim shades it), lighter on the far side. */}
+      <Circle cx={0} cy={cy} r={r}>
+        <LinearGradient start={vec(-r, cy - r)} end={vec(r, cy + r)} colors={[COLORS.cupLo, COLORS.ivory, COLORS.cupHi]} positions={[0, 0.55, 1]} />
       </Circle>
-
-      {/* The source's cord: a deep-blue tube with a pink rim on its right and a lit left side. */}
-      <Group transform={[{ translateX: CORD.replicaRimDx * s }]}>
-        <Path path={v.coilFront} style="stroke" strokeWidth={(CORD.replicaWidth - 1) * s} color={COLORS.replicaRim} strokeCap="round" />
-      </Group>
-      <Group transform={[{ translateX: -CORD.replicaRimDx * 0.8 * s }]}>
-        <Path path={v.coilFront} style="stroke" strokeWidth={(CORD.replicaWidth - 1) * s} color={COLORS.replicaRimLeft} strokeCap="round" />
-      </Group>
-      <Path path={v.coilFront} style="stroke" strokeWidth={CORD.replicaWidth * s} color={COLORS.replicaCord} strokeCap="round" />
-
-      {/* The source's handset, traced from its frames: light added over the backdrop, the three takes cross-faded
-          along the swing (sharp at its ends, smeared by motion in the middle, as filmed); green once a call connects
-          (the same light turned in hue), dimmed when the call is off. */}
-      <Group transform={v.handset}>
-        <Group transform={[{ translateX: -REPLICA_SWING.attach[0] }, { translateY: -REPLICA_SWING.attach[1] }]}>
-          {[[images.srcA, pinkA], [images.srcRest, pinkR], [images.srcB, pinkB]].map(([im, o], i) => (
-            <Image key={i} image={im as SkImage | null} x={SRC_BOX.x} y={SRC_BOX.y} width={SRC_BOX.w} height={SRC_BOX.h} fit="fill" blendMode="plus" opacity={o as typeof srcAO} />
-          ))}
-          {[[images.srcA, greenA], [images.srcRest, greenR], [images.srcB, greenB]].map(([im, o], i) => (
-            <Image key={i} image={im as SkImage | null} x={SRC_BOX.x} y={SRC_BOX.y} width={SRC_BOX.w} height={SRC_BOX.h} fit="fill" blendMode="plus" opacity={o as typeof srcAO}>
-              <ColorMatrix matrix={GREEN} />
-            </Image>
-          ))}
-        </Group>
-      </Group>
-
-      {REPLICA ? null : (<>
-      {/* Upgrade, Liquid Glass: frosted glass controls over the scene (fixed blur radius, never animated). */}
-      <Group transform={redT} opacity={redO}>
-        <Circle cx={0} cy={0} r={half + 6} color={COLORS.decline} opacity={declineHalo}>
-          <BlurMask blur={16} style="normal" />
-        </Circle>
-        <GlassShape rect={redRect} tint={GLASS.decline} />
-        <Group transform={[{ scale: s }]}>
-          <Path path={paths.glyphDown} color={COLORS.glyph} />
-        </Group>
-      </Group>
-      {/* Hero morph: the Accept disc grows into the in-call control pill (container transform). */}
-      <Group opacity={acceptO} transform={acceptPressT}>
-        <Circle cx={right} cy={buttonsY} r={acceptRing} style="stroke" strokeWidth={1.5} color={COLORS.accept} opacity={ringO} />
-        <Circle cx={right} cy={buttonsY} r={half + 6} color={COLORS.accept} opacity={acceptHaloO}>
-          <BlurMask blur={16} style="normal" />
-        </Circle>
-        <GlassShape rect={pillRect} tint={pillTint} />
-        <Group transform={greenGlyphT} opacity={greenGlyphO}>
-          <Path path={paths.glyph} color={COLORS.glyph} />
-        </Group>
-      </Group>
-      </>)}
+      <Circle cx={0} cy={cy} r={r} style="stroke" strokeWidth={1.2} color={COLORS.ivoryEdge} />
+      <Circle cx={0} cy={cy} r={r + 1.4} style="stroke" strokeWidth={1.4}>
+        <LinearGradient start={vec(-r, cy - r)} end={vec(r, cy + r)} colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.25)']} positions={[0, 0.5, 1]} />
+      </Circle>
     </Group>
   );
 }
 
-/** A Liquid Glass surface: the scene behind blurred at a fixed radius, a tint, and a bright top edge. */
-function GlassShape({ rect, tint }: { rect: DerivedValue<SkRRect>; tint: DerivedValue<string> | string }) {
-  const clip = useDerivedValue(() => {
-    const b = Skia.PathBuilder.Make();
-    b.addRRect(rect.value);
-    return b.build();
+export function CallScene({ g, v }: { g: Geometry; v: CallValues }) {
+  const { w, h, s } = g;
+  const lightC = useDerivedValue(() => vec(v.lightX.value - 40 * s, v.lightY.value - 80 * s));
+  const lightColors = useDerivedValue(() => {
+    const k = v.conn.value;
+    // In a call the pool of light cools a little; it is the same lamp.
+    const a = 0.2 - 0.06 * k;
+    return [`rgba(255,${Math.round(214 + 20 * k)},${Math.round(170 + 30 * k)},${a})`, COLORS.lightEdge];
   });
-  const top = useDerivedValue(() => vec(0, rect.value.rect.y));
-  const bottom = useDerivedValue(() => vec(0, rect.value.rect.y + rect.value.rect.height));
+  const { cupR: r, topCupY: t, bottomCupY: b } = HANDSET;
   return (
     <Group>
-      <BackdropBlur blur={GLASS.blur} clip={clip}>
-        <Fill color={tint} />
-      </BackdropBlur>
-      <RoundedRect rect={rect} style="stroke" strokeWidth={1.2}>
-        <LinearGradient start={top} end={bottom} colors={[GLASS.edgeTop, GLASS.edgeBottom]} />
-      </RoundedRect>
+      <Rect x={0} y={0} width={w} height={h}>
+        <LinearGradient start={vec(0, 0)} end={vec(0, h)} colors={[COLORS.pageTop, COLORS.page, COLORS.pageBottom]} positions={[0, 0.5, 1]} />
+      </Rect>
+      <Rect x={0} y={0} width={w} height={h}>
+        <RadialGradient c={lightC} r={300 * s} colors={lightColors} />
+      </Rect>
+
+      {/* The receiver's shadow on the wall behind it: down and to the right, soft. */}
+      <Group transform={v.shadow}>
+        <Path path={OUTLINE} color={COLORS.shadow}>
+          <BlurMask blur={14} style="normal" />
+        </Path>
+      </Group>
+
+      {/* The cord: the far half-turns first, then the near ones over them, each a shaded tube. */}
+      <Path path={v.coilBack} style="stroke" strokeWidth={CORD.tube * s} strokeCap="round" strokeJoin="round" color={COLORS.cordBack} />
+      <Path path={v.coilFront} style="stroke" strokeWidth={(CORD.tube + 0.8) * s} strokeCap="round" strokeJoin="round" color={COLORS.cordEdge} />
+      <Path path={v.coilFront} style="stroke" strokeWidth={CORD.tube * s} strokeCap="round" strokeJoin="round" color={COLORS.cordFront} />
+      <Group transform={[{ translateX: -0.9 * s }, { translateY: -0.9 * s }]}>
+        <Path path={v.coilFront} style="stroke" strokeWidth={1.1 * s} strokeCap="round" color={COLORS.cordHi} />
+      </Group>
+
+      <Group transform={v.handset}>
+        {/* Ivory bakelite, lit from the upper left. */}
+        <Path path={OUTLINE}>
+          <LinearGradient start={vec(-r, 0)} end={vec(r, b + r)} colors={[COLORS.ivoryHi, COLORS.ivory, COLORS.ivoryMid, COLORS.ivoryLo]} positions={[0, 0.3, 0.7, 1]} />
+        </Path>
+        {/* The far edge turns away from the light. */}
+        <Path path={OUTLINE} style="stroke" strokeWidth={6}>
+          <LinearGradient start={vec(-r, 0)} end={vec(r, 0)} colors={['rgba(120,96,60,0)', 'rgba(120,96,60,0)', 'rgba(110,88,56,0.35)']} positions={[0, 0.55, 1]} />
+          <BlurMask blur={3} style="inner" />
+        </Path>
+        <Path path={OUTLINE} style="stroke" strokeWidth={1} color={COLORS.ivoryEdge} />
+        <Cup cy={t} />
+        <Cup cy={b} />
+        <Path path={HOLES} color={COLORS.hole} />
+        <Path path={GLOSS} color={COLORS.specular}>
+          <BlurMask blur={2.2} style="normal" />
+        </Path>
+        <Path path={CRESCENTS} style="stroke" strokeWidth={3} strokeCap="round" color={COLORS.specular}>
+          <BlurMask blur={1.6} style="normal" />
+        </Path>
+      </Group>
     </Group>
   );
 }

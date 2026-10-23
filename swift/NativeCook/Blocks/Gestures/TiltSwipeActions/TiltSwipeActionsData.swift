@@ -1,40 +1,62 @@
-import SwiftUI
+import Foundation
 
-/// One invented purchase. Icons are Feather names.
-struct TiltSwipeActionsTransaction: Identifiable {
+struct TiltSwipeActionsTransaction: Identifiable, Equatable {
     let key: String
     let title: String
-    let when: String
-    let amount: String
-    let icon: TiltSwipeActionsFeather
-    let tint: Color
-
+    let category: String
+    let day: String
+    let amount: Double
+    let icon: TiltSwipeActionsGlyphName
     var id: String { key }
+}
 
-    /// "-34$" -> 34: deleting a spend gives it back to the balance.
-    var value: Double {
-        Double(amount.filter { $0.isNumber || $0 == "." }) ?? 0
-    }
+struct TiltSwipeActionsPerson: Identifiable {
+    let name: String
+    let initials: String
+    var id: String { initials }
 }
 
 enum TiltSwipeActionsData {
-    static let balance = 1148.9
-
-    static let spending: [TiltSwipeActionsTransaction] = [
-        .init(key: "groceries", title: "Groceries", when: "Today", amount: "-34$", icon: .shoppingCart, tint: TiltSwipeActionsTint.yellow),
-        .init(key: "rent", title: "Rent", when: "Today", amount: "-114$", icon: .home, tint: TiltSwipeActionsTint.lilac),
-        .init(key: "coffee", title: "Corner Caf\u{00E9}", when: "Yesterday", amount: "-4.80$", icon: .coffee, tint: TiltSwipeActionsTint.peach),
-        .init(key: "metro", title: "Metro card", when: "Yesterday", amount: "-25$", icon: .navigation, tint: TiltSwipeActionsTint.sky),
-        .init(key: "cinema", title: "Cinema", when: "Sat", amount: "-18$", icon: .film, tint: TiltSwipeActionsTint.rose),
-        .init(key: "gym", title: "Climbing gym", when: "Fri", amount: "-45$", icon: .activity, tint: TiltSwipeActionsTint.mint),
-        .init(key: "books", title: "Bookshop", when: "Thu", amount: "-22$", icon: .bookOpen, tint: TiltSwipeActionsTint.yellow),
-        .init(key: "pharmacy", title: "Pharmacy", when: "Wed", amount: "-12.60$", icon: .plusSquare, tint: TiltSwipeActionsTint.mint),
+    static let balance = 1_148.90
+    static let cardNumber = "4021"
+    static let spending = [
+        TiltSwipeActionsTransaction(key: "greenleaf", title: "Greenleaf Market", category: "Groceries", day: "Today", amount: -34, icon: .bag),
+        TiltSwipeActionsTransaction(key: "harbour", title: "Harbour Electric", category: "Utilities", day: "Today", amount: -114, icon: .bolt),
+        TiltSwipeActionsTransaction(key: "saigon", title: "Little Saigon Kitchen", category: "Dining", day: "Yesterday", amount: -96.60, icon: .dining),
+        TiltSwipeActionsTransaction(key: "metro", title: "Metro card", category: "Transport", day: "Yesterday", amount: -25, icon: .tram),
+        TiltSwipeActionsTransaction(key: "cinema", title: "Lumen Cinema", category: "Entertainment", day: "Sat", amount: -18, icon: .ticket),
+        TiltSwipeActionsTransaction(key: "boulder", title: "Boulder Hall", category: "Fitness", day: "Fri", amount: -45, icon: .dumbbell),
+    ]
+    static let people = [
+        TiltSwipeActionsPerson(name: "You", initials: "LT"),
+        TiltSwipeActionsPerson(name: "Mai", initials: "MP"),
+        TiltSwipeActionsPerson(name: "Leo", initials: "LN"),
+        TiltSwipeActionsPerson(name: "Kai", initials: "KO"),
+        TiltSwipeActionsPerson(name: "Ana", initials: "AR"),
     ]
 
-    /// The balance as the card prints it: one decimal, none when it is a whole number.
-    static func format(_ value: Double) -> String {
-        let rounded = (value * 10).rounded() / 10
-        let text = String(format: "%.1f", rounded)
-        return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
+    static func shares(_ amount: Double, count: Int) -> [Double] {
+        let total = Int((abs(amount) * 100).rounded())
+        let each = total / count
+        return (0..<count).map { ($0 == 0 ? total - each * (count - 1) : each).asMoney }
     }
+
+    static func money(_ value: Double, signed: Bool = true) -> (whole: String, cents: String) {
+        let cents = Int((abs(value) * 100).rounded())
+        let dollars = cents / 100
+        let number = NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal)
+        let minus = signed && value < 0 && cents > 0 ? "–" : ""
+        return ("\(minus)$\(number)", String(format: ".%02d", cents % 100))
+    }
+
+    static func weekTotal(splitCount: Int?) -> Double {
+        spending.reduce(0) { sum, item in
+            if item.key == "saigon", let splitCount { return sum - shares(item.amount, count: splitCount)[0] }
+            return sum + item.amount
+        }
+    }
+}
+
+private extension Int {
+    var asMoney: Double { Double(self) / 100 }
 }

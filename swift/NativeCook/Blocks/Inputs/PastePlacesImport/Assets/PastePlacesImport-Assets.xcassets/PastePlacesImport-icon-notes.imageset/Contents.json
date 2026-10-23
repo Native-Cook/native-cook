@@ -1,0 +1,13 @@
+{
+  "images" : [
+    {
+      "filename" : "PastePlacesImport-icon-notes.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

@@ -115,37 +115,6 @@ object SlideToAnswerCordSimulation {
         val events: MutableList<Int>,
         var wSrc: Double,
         var look: Double,
-    ) {
-        internal var loopCheckpoint: LoopCheckpoint? = null
-        internal var resumeFrom: ResumeSnapshot? = null
-        internal var resumeT = 0.0
-    }
-
-    internal data class LoopCheckpoint(
-        val clock: Double,
-        val px: DoubleArray,
-        val py: DoubleArray,
-        val vx: DoubleArray,
-        val vy: DoubleArray,
-        val th: Double,
-        val tw: Double,
-        val ax: Double,
-        val ay: Double,
-        val natLen: Double,
-        val natTarget: Double,
-        val phase: Int,
-        val phaseT: Double,
-        val callT: Double,
-        val wConn: Double,
-        val wOff: Double,
-        val wSrc: Double,
-        val look: Double,
-    )
-
-    internal data class ResumeSnapshot(
-        val px: DoubleArray,
-        val py: DoubleArray,
-        val th: Double,
     )
 
     fun makeGeometry(w: Double, h: Double): Geometry {
@@ -288,18 +257,8 @@ object SlideToAnswerCordSimulation {
     fun input(s: Sim, g: Geometry, ev: Input) {
         if (ev is Input.Command) {
             s.demoOn = false
-            s.resumeFrom = null
             s.quiet = 0.0
             s.scripted = false
-            if (s.grab) {
-                val n = Tokens.CORD.links
-                val limit = Tokens.DRAG.releaseSpeed
-                s.vx[n] = clamp(s.vx[n], -limit, limit)
-                s.vy[n] = clamp(s.vy[n], -limit, limit)
-                s.grab = false
-                s.armed = 0
-                s.tickAt = 0
-            }
             when (ev.action) {
                 Input.Action.answer -> if (s.phase == PHASE.ringing) setPhase(s, g, PHASE.connected)
                 Input.Action.decline -> if (s.phase == PHASE.ringing) setPhase(s, g, PHASE.declined)
@@ -311,7 +270,6 @@ object SlideToAnswerCordSimulation {
             s.scripted = ev.script
             if (!s.scripted) {
                 s.demoOn = false
-                s.resumeFrom = null
                 s.quiet = 0.0
             }
             val n = Tokens.CORD.links
@@ -332,7 +290,6 @@ object SlideToAnswerCordSimulation {
             return
         }
         if (ev is Input.Move) {
-            if (!s.scripted) s.quiet = 0.0
             if (!s.grab) return
             s.fx = ev.x
             s.fy = ev.y
@@ -341,11 +298,7 @@ object SlideToAnswerCordSimulation {
             return
         }
         ev as Input.Up
-        if (!s.scripted) s.quiet = 0.0
-        if (!s.grab) {
-            s.scripted = false
-            return
-        }
+        if (!s.grab) return
         s.grab = false
         val n = Tokens.CORD.links
         val limit = Tokens.DRAG.releaseSpeed
@@ -483,24 +436,21 @@ object SlideToAnswerCordSimulation {
     private fun fixedStep(s: Sim, g: Geometry, autoPlay: Boolean) {
         val dt = Tokens.STEP
         val n = Tokens.CORD.links
-        var crossedLoopSeam = false
-        if (s.demoOn && !s.reduced) {
+        if (s.demoOn) {
             val t0 = s.demoT
             var t1 = t0 + dt
             runScript(s, g, t0, t1)
-            if (t1 + LOOP_EPSILON >= Tokens.LOOP) {
+            if (t1 * 1000 >= Tokens.LOOP_MS) {
                 t1 -= Tokens.LOOP
-                crossedLoopSeam = true
             }
-            s.demoT = if (abs(t1) < LOOP_EPSILON) 0.0 else t1
-        } else if (autoPlay && !s.reduced && !s.grab && s.resumeFrom == null) {
+            s.demoT = t1
+        } else if (autoPlay && !s.grab) {
             s.quiet += dt
-            // RESUME_MS remains 3500 for source parity. The product contract says resume two
-            // seconds after the last real touch, so runtime intentionally uses this override.
-            if (s.quiet >= RUNTIME_RESUME_SECONDS &&
+            if (s.quiet * 1000 >= Tokens.RESUME_MS &&
                 (s.phase == PHASE.ringing || s.phase == PHASE.connected)
             ) {
-                beginResume(s, g)
+                s.demoOn = true
+                s.demoT = if (s.phase == PHASE.connected) Tokens.RESUME_IN_CALL else 0.0
             }
         }
 
@@ -521,13 +471,6 @@ object SlideToAnswerCordSimulation {
         s.wConn += ((if (s.phase == PHASE.connected) 1.0 else 0.0) - s.wConn) * colorK
         s.wOff += ((if (s.phase == PHASE.declined || s.phase == PHASE.ended) 1.0 else 0.0) -
             s.wOff) * colorK
-
-        // Reduced Motion keeps the current physical pose fixed. State, colour, and call timers above
-        // remain live, while autoplay, gravity settling, swing drive, and scripted drags stay stopped.
-        if (s.reduced) {
-            s.clock += dt
-            return
-        }
 
         if (s.grab) {
             val distance = dragDistance(s, g)
@@ -657,12 +600,6 @@ object SlideToAnswerCordSimulation {
         }
         s.ax = s.px[n] - previousX
         s.clock += dt
-
-        if (s.resumeFrom != null) {
-            applyResumeEase(s, dt)
-        } else if (crossedLoopSeam) {
-            restoreLoopCheckpoint(s)
-        }
     }
 
     fun stepSim(
@@ -672,13 +609,6 @@ object SlideToAnswerCordSimulation {
         autoPlay: Boolean,
         uncapped: Boolean = false,
     ) {
-        if (s.reduced) {
-            s.demoOn = false
-            if (s.scripted) {
-                s.grab = false
-                s.scripted = false
-            }
-        }
         s.acc = if (uncapped) {
             s.acc + frameDt
         } else {
@@ -687,14 +617,13 @@ object SlideToAnswerCordSimulation {
                 Tokens.STEP * Tokens.MAX_STEPS,
             )
         }
-        while (s.acc + LOOP_EPSILON >= Tokens.STEP) {
+        while (s.acc >= Tokens.STEP) {
             fixedStep(s, g, autoPlay)
             s.acc -= Tokens.STEP
-            if (abs(s.acc) < LOOP_EPSILON) s.acc = 0.0
         }
     }
 
-    /** Pre-rolls into the stable swing, then records the exact frame restored at each 12 s seam. */
+    /** Runs the autoplay for a few loops before the first frame so the swing is already stable. */
     fun preroll(s: Sim, g: Geometry) {
         val steps = (
             Tokens.PREROLL_LOOPS * Tokens.LOOP / Tokens.STEP
@@ -702,12 +631,10 @@ object SlideToAnswerCordSimulation {
         repeat(steps) {
             fixedStep(s, g, autoPlay = true)
         }
-        s.demoT = 0.0
         s.events.clear()
-        s.loopCheckpoint = captureLoopCheckpoint(s)
     }
 
-    /** Ringing buzz in radians and neon pulse progress. */
+    /** Ringing buzz in radians and accept-button halo progress. */
     fun ringState(s: Sim): RingState {
         if (Tokens.REPLICA) return RingState(buzz = 0.0, pulse = -1.0)
         if (s.phase != PHASE.ringing || s.grab || s.reduced) {
@@ -730,97 +657,4 @@ object SlideToAnswerCordSimulation {
         return RingState(buzz = buzz, pulse = pulse)
     }
 
-    private fun captureLoopCheckpoint(s: Sim): LoopCheckpoint {
-        return LoopCheckpoint(
-            clock = s.clock,
-            px = s.px.copyOf(),
-            py = s.py.copyOf(),
-            vx = s.vx.copyOf(),
-            vy = s.vy.copyOf(),
-            th = s.th,
-            tw = s.tw,
-            ax = s.ax,
-            ay = s.ay,
-            natLen = s.natLen,
-            natTarget = s.natTarget,
-            phase = s.phase,
-            phaseT = s.phaseT,
-            callT = s.callT,
-            wConn = s.wConn,
-            wOff = s.wOff,
-            wSrc = s.wSrc,
-            look = s.look,
-        )
-    }
-
-    private fun restoreLoopCheckpoint(s: Sim) {
-        val checkpoint = s.loopCheckpoint ?: return
-        checkpoint.px.copyInto(s.px)
-        checkpoint.py.copyInto(s.py)
-        checkpoint.vx.copyInto(s.vx)
-        checkpoint.vy.copyInto(s.vy)
-        s.clock = checkpoint.clock
-        s.th = checkpoint.th
-        s.tw = checkpoint.tw
-        s.ax = checkpoint.ax
-        s.ay = checkpoint.ay
-        s.natLen = checkpoint.natLen
-        s.natTarget = checkpoint.natTarget
-        s.phase = checkpoint.phase
-        s.phaseT = checkpoint.phaseT
-        s.callT = checkpoint.callT
-        s.wConn = checkpoint.wConn
-        s.wOff = checkpoint.wOff
-        s.wSrc = checkpoint.wSrc
-        s.look = checkpoint.look
-        s.grab = false
-        s.scripted = false
-        s.armed = 0
-        s.tickAt = 0
-        s.demoOn = true
-        s.demoT = 0.0
-        s.quiet = 0.0
-        s.events.clear()
-    }
-
-    private fun beginResume(s: Sim, g: Geometry) {
-        val checkpoint = s.loopCheckpoint
-        if (checkpoint == null) {
-            s.demoOn = true
-            s.demoT = 0.0
-            s.quiet = 0.0
-            return
-        }
-        s.resumeFrom = ResumeSnapshot(
-            px = s.px.copyOf(),
-            py = s.py.copyOf(),
-            th = s.th,
-        )
-        s.resumeT = 0.0
-        s.demoOn = false
-        s.demoT = 0.0
-        s.phase = PHASE.ringing
-        s.phaseT = checkpoint.phaseT
-        s.natTarget = g.baseLength
-    }
-
-    private fun applyResumeEase(s: Sim, dt: Double) {
-        val start = s.resumeFrom ?: return
-        val checkpoint = s.loopCheckpoint ?: return
-        s.resumeT += dt
-        val linear = clamp(s.resumeT / Tokens.RESUME_EASE)
-        val eased = (1.0 - cos(PI * linear)) / 2.0
-        for (i in s.px.indices) {
-            s.px[i] = start.px[i] + (checkpoint.px[i] - start.px[i]) * eased
-            s.py[i] = start.py[i] + (checkpoint.py[i] - start.py[i]) * eased
-        }
-        s.th = start.th + (checkpoint.th - start.th) * eased
-        if (linear >= 1.0) {
-            s.resumeFrom = null
-            restoreLoopCheckpoint(s)
-        }
-    }
-
-    private const val RUNTIME_RESUME_SECONDS = Tokens.TOUCH_RESUME_MS / 1000.0
-    private const val LOOP_EPSILON = 1e-9
 }

@@ -1,7 +1,15 @@
 package com.ngocdevv.nativecook.blocks.gestures.pinchtosummarize
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,12 +20,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,9 +41,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -41,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.sin
 
 /** Native measured rows animate in draw/layer phases, never by recomposing the screen. */
 @Composable
@@ -53,10 +69,31 @@ internal fun PinchToSummarizeSummary(
     summary: PtsSummaryLayout,
 ) {
     val top = ptsCardTop(1f) + PtsLayout.cardHeight + PtsLayout.summaryGap
-    val footerBottom = max(PtsLayout.footerBottom, insetBottom - PtsLayout.footerBottom)
+    val footerBottom = max(PtsLayout.footerMin, insetBottom - PtsLayout.footerLift)
     val cardWidth = ptsCardWidth(stage)
     val live = state.mode == PtsMode.Summary
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    var sharing by remember { mutableStateOf(false) }
+    val shareLift by animateFloatAsState(
+        targetValue = if (sharing) 1f else 0f,
+        animationSpec = if (sharing) spring(dampingRatio = .8f, stiffness = 520f) else tween(PtsTiming.dropMs.toInt()),
+        label = "summary share lift",
+    )
+    LaunchedEffect(live) {
+        if (!live) sharing = false
+    }
     Box(Modifier.fillMaxSize()) {
+        if (sharing) {
+            Box(
+                Modifier.fillMaxSize().clickable(
+                    interactionSource = null,
+                    indication = null,
+                    onClickLabel = "Put the summary back",
+                    onClick = { sharing = false },
+                ),
+            )
+        }
         Row(
             Modifier.offset(x = ((stage.width - cardWidth) / 2f).dp)
                 .width(cardWidth.dp).height(16.dp)
@@ -75,44 +112,101 @@ internal fun PinchToSummarizeSummary(
         Box(
             Modifier.offset(y = top.dp).fillMaxWidth()
                 .height((stage.height - top - footerBottom - PtsLayout.footerHeight).coerceAtLeast(0f).dp)
+                .graphicsLayer {
+                    val scale = 1f + (PtsTiming.shareScale - 1f) * shareLift
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .pointerInput(live) {
+                    detectTapGestures(
+                        onLongPress = {
+                            if (live) {
+                                sharing = true
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        },
+                    )
+                }
                 .clipToBounds().clearAndSetSemantics {
                     if (live) contentDescription = "Summary. ${state.summaryText}"
                 },
         ) {
+            Box(
+                Modifier.fillMaxSize().padding(horizontal = (PtsLayout.textInset - PtsLayout.sharePad).dp)
+                    .graphicsLayer { alpha = shareLift }
+                    .clip(RoundedCornerShape(PtsLayout.shareRadius.dp))
+                    .background(PtsColor.shareGlass)
+                    .border(.5.dp, PtsColor.shareBorder, RoundedCornerShape(PtsLayout.shareRadius.dp)),
+            )
             summary.rows.forEachIndexed { index, row ->
                 PtsSummaryText(row, index, summary.revealTotal, state, reduceMotion)
             }
+            summary.entityY?.let { y ->
+                Row(
+                    Modifier.offset(x = PtsLayout.textInset.dp, y = y.dp)
+                        .graphicsLayer {
+                            alpha = ptsClamp01(state.reveal.value / summary.revealTotal) * state.summaryAlpha.value
+                        },
+                    horizontalArrangement = Arrangement.spacedBy(PtsLayout.entityGapX.dp),
+                ) {
+                    summary.entities.forEach { entity ->
+                        Box(
+                            Modifier.height(PtsLayout.entityHeight.dp).clip(CircleShape)
+                                .background(PtsColor.entityFill)
+                                .border(.5.dp, PtsColor.entityBorder, CircleShape)
+                                .padding(horizontal = PtsLayout.entityPadX.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(entity.label, style = PtsType.entity) }
+                    }
+                }
+            }
         }
-        PtsFooter(stage, footerBottom, state, reduceMotion, summary.revealTotal, live)
+        PtsFooter(stage, footerBottom, state, live, shareLift)
+        PtsShareActions(
+            stage = stage,
+            footerBottom = footerBottom,
+            visible = sharing,
+            alpha = shareLift,
+            onCopy = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Halo One summary", state.summaryText))
+                sharing = false
+            },
+            onShare = {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, state.summaryText)
+                }
+                context.startActivity(Intent.createChooser(intent, PtsCopy.share[1]))
+                sharing = false
+            },
+        )
     }
 }
 
 private fun ptsLineProgress(state: PtsState, index: Int, total: Float, reduced: Boolean): Float =
     if (reduced) ptsClamp01(state.reveal.value / max(1f, total))
-    else ptsClamp01((state.reveal.value - index * PtsTiming.lineStagger) / PtsTiming.lineMs)
-
-/** Reanimated interpolateColor's default sRGB gamma correction (gamma 2.2). */
-private fun ptsInterpolateColor(from: Color, to: Color, fraction: Float): Color {
-    val t = ptsClamp01(fraction)
-    fun channel(a: Float, b: Float): Float = ptsMix(a.pow(2.2f), b.pow(2.2f), t).pow(1f / 2.2f)
-    return Color(channel(from.red, to.red), channel(from.green, to.green), channel(from.blue, to.blue), ptsMix(from.alpha, to.alpha, t))
-}
+    else ptsClamp01((state.reveal.value - PtsFlight.landMs - index * PtsTiming.lineStagger) / PtsTiming.lineMs)
 
 @Composable
 private fun PtsSummaryText(row: PtsSummaryLayout.Row, index: Int, total: Float, state: PtsState, reduced: Boolean) {
     val final = if (row.kind == PtsSummaryLayout.Kind.Body) PtsColor.summaryInkSoft else PtsColor.summaryInk
-    Canvas(Modifier.offset(x = row.x.dp, y = row.y.dp).width((row.width + 8f).dp).height(row.layout.layoutInput.style.lineHeight.value.dp)) {
+    Canvas(
+        Modifier.offset(x = row.x.dp, y = row.y.dp)
+            .width((row.width + 8f).dp).height(row.layout.layoutInput.style.lineHeight.value.dp)
+            .then(
+                if (state.mode == PtsMode.Summary) Modifier.clickable(
+                    interactionSource = null,
+                    indication = null,
+                    onClick = { state.requestSource(row.source) },
+                ) else Modifier,
+            ),
+    ) {
         val u = ptsLineProgress(state, index, total, reduced)
         val rise = if (reduced) 0f else (1f - u) * PtsTiming.lineRise.dp.toPx()
-        if (!reduced) {
-            val ghostAlpha = PtsTiming.ghostAlpha * sin(Math.PI.toFloat() * u) * state.summaryAlpha.value
-            val shift = (1f - u) * PtsTiming.ghostOffset.dp.toPx()
-            drawText(row.layout, color = PtsColor.summaryArrive, topLeft = Offset(-shift, rise), alpha = ghostAlpha)
-            drawText(row.layout, color = PtsColor.summaryArrive, topLeft = Offset(shift, rise), alpha = ghostAlpha)
-        }
         drawText(
             row.layout,
-            color = ptsInterpolateColor(PtsColor.summaryArrive, final, (u - .35f) / .65f),
+            color = final,
             topLeft = Offset(0f, rise), alpha = u * state.summaryAlpha.value,
         )
     }
@@ -130,67 +224,87 @@ private fun PtsSummaryText(row: PtsSummaryLayout.Row, index: Int, total: Float, 
             contentAlignment = Alignment.Center,
         ) { PtsIonicon(row.icon, PtsColor.iconGlyph, Modifier.size(13.dp)) }
     }
-}
-
-@Composable
-private fun PtsFooter(stage: PtsStage, footerBottom: Float, state: PtsState, reduced: Boolean, revealTotal: Float, live: Boolean) {
-    // Draw the changing rect itself: scaling a parent changes its pivot and corner shape.
-    Canvas(Modifier.fillMaxSize()) {
-        val t = ptsClamp01(state.p.value)
-        val e = t * t * (3f - 2f * t)
-        val width = ptsMix(PtsLayout.toolbarPill.width, PtsLayout.creditPill.width, e)
-        val height = ptsMix(PtsLayout.toolbarPill.height, PtsLayout.creditPill.height, e)
-        val left = ptsMix(stage.width / 2f - PtsLayout.toolbarPill.width / 2f, PtsLayout.textInset - PtsLayout.creditPad, e)
-        val bottom = ptsMix(PtsLayout.toolbarCenterFromBottom - PtsLayout.toolbarPill.height / 2f, footerBottom + (PtsLayout.footerHeight - PtsLayout.creditPill.height) / 2f, e)
-        val opacity = when {
-            QA_HOLD != null -> 0f
-            reduced -> ptsClamp01((t - .9f) / .1f)
-            else -> ptsClamp01(t / .25f)
-        }
-        drawRoundRect(
-            color = ptsInterpolateColor(PtsColor.toolbar, PtsColor.closeFill, e),
-            topLeft = Offset(left.dp.toPx(), (stage.height - bottom - height).dp.toPx()),
-            size = Size(width.dp.toPx(), height.dp.toPx()),
-            cornerRadius = CornerRadius(height.dp.toPx() / 2f), alpha = opacity,
-        )
-    }
-    val creditTop = stage.height - footerBottom - PtsLayout.footerHeight + (PtsLayout.footerHeight - 26f) / 2f
-    Box(Modifier.offset(x = PtsLayout.textInset.dp, y = creditTop.dp).graphicsLayer {
-        alpha = if (QA_HOLD != null) {
-            state.summaryAlpha.value * ptsClamp01((state.reveal.value - revealTotal + PtsTiming.lineMs) / PtsTiming.lineMs)
-        } else ptsClamp01((state.p.value - .92f) / .08f)
-    }.clearAndSetSemantics {
-        if (live) contentDescription = PtsCopy.credit.joinToString(". ")
-    }) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(Brush.linearGradient(PtsColor.creditIcon)), contentAlignment = Alignment.Center) {
-                PtsIonicon("sparkles", PtsColor.closeInk, Modifier.size(12.dp))
-            }
-            Column {
-                Text(PtsCopy.credit[0], style = PtsType.credit)
-                Text(PtsCopy.credit[1], style = PtsType.credit)
-            }
-        }
+    if (row.kind == PtsSummaryLayout.Kind.Title && row.text == PtsCopy.items.first().title) {
         Canvas(
-            Modifier.offset(x = (-PtsLayout.creditPad).dp, y = (-(PtsLayout.creditPill.height - 26f) / 2f).dp)
-                .size(PtsLayout.creditPill.width.dp, PtsLayout.creditPill.height.dp)
-                .clip(RoundedCornerShape(PtsLayout.creditPill.height.dp / 2f)),
+            Modifier.offset(x = (row.x + 137f).dp, y = (row.y + 9f).dp)
+                .width((PtsLayout.meterSegW * 5f + PtsLayout.meterGap * 4f).dp)
+                .height(PtsLayout.meterSegH.dp),
         ) {
-            val at = state.bloomAt.value
-            val u = if (at < 0f) 0f else ptsClamp01((state.clock.value - at - revealTotal - PtsTiming.sweepDelay) / PtsTiming.sweepMs)
-            if (u > 0f && u < 1f) {
-                val e = if (u < .5f) 4f * u * u * u else 1f - (-2f * u + 2f).pow(3) / 2f
-                val x = -PtsLayout.sweepWidth + e * (PtsLayout.creditPill.width + PtsLayout.sweepWidth)
-                translate(left = x.dp.toPx()) {
-                    drawRect(Brush.horizontalGradient(PtsColor.sweep, endX = PtsLayout.sweepWidth.dp.toPx()), size = Size(PtsLayout.sweepWidth.dp.toPx(), size.height))
+            val u = ptsLineProgress(state, index, total, reduced) * state.summaryAlpha.value
+            repeat(5) { segment ->
+                val left = segment * (PtsLayout.meterSegW + PtsLayout.meterGap).dp.toPx()
+                drawRoundRect(
+                    color = PtsColor.meterTrack,
+                    topLeft = Offset(left, 0f),
+                    size = Size(PtsLayout.meterSegW.dp.toPx(), size.height),
+                    cornerRadius = CornerRadius(size.height / 2f),
+                    alpha = u,
+                )
+                if (segment < 4) {
+                    drawRoundRect(
+                        color = PtsColor.meterFill,
+                        topLeft = Offset(left, 0f),
+                        size = Size(PtsLayout.meterSegW.dp.toPx(), size.height),
+                        cornerRadius = CornerRadius(size.height / 2f),
+                        alpha = u,
+                    )
                 }
             }
         }
     }
-    // Native 48 dp minimum covers the source's 32 + 6 + 6 dp close target.
-    Box(
-        Modifier.offset(x = (stage.width - 20f - PtsLayout.closeSize - 6f).dp, y = (stage.height - footerBottom - PtsLayout.footerHeight + (PtsLayout.footerHeight - PtsLayout.closeSize) / 2f - 6f).dp)
-            .size((PtsLayout.closeSize + 12f).dp).graphicsLayer { alpha = ptsClamp01((state.p.value - .9f) / .1f) }
+}
+
+@Composable
+private fun PtsFooter(stage: PtsStage, footerBottom: Float, state: PtsState, live: Boolean, shareLift: Float) {
+    val footerAlpha = ptsClamp01((state.p.value - .9f) / .1f) * state.summaryAlpha.value * (1f - shareLift)
+    val footerTop = stage.height - footerBottom - PtsLayout.footerHeight
+    Canvas(Modifier.fillMaxSize()) {
+        val frame = ptsPageFrame(stage, state.p.value, state.lift.value, state.driftX.value, state.driftY.value)
+        val barWidth = ptsCardWidth(stage) - PtsLayout.progressInset * 2f
+        val barLeft = frame.x + PtsLayout.progressInset
+        val barTop = frame.y + frame.height - PtsLayout.progressBottom - PtsLayout.progressHeight
+        drawRoundRect(
+            color = PtsColor.progressTrack,
+            topLeft = Offset(barLeft.dp.toPx(), barTop.dp.toPx()),
+            size = Size(barWidth.dp.toPx(), PtsLayout.progressHeight.dp.toPx()),
+            cornerRadius = CornerRadius(PtsLayout.progressHeight.dp.toPx() / 2f),
+            alpha = footerAlpha,
+        )
+        drawRoundRect(
+            color = PtsColor.progressFill,
+            topLeft = Offset(barLeft.dp.toPx(), barTop.dp.toPx()),
+            size = Size((barWidth * .5f).dp.toPx(), PtsLayout.progressHeight.dp.toPx()),
+            cornerRadius = CornerRadius(PtsLayout.progressHeight.dp.toPx() / 2f),
+            alpha = footerAlpha,
+        )
+    }
+    Row(
+        Modifier.offset(x = PtsLayout.textInset.dp, y = footerTop.dp)
+            .width((stage.width - PtsLayout.textInset * 2f).dp).height(PtsLayout.footerHeight.dp)
+            .graphicsLayer { alpha = footerAlpha }
+            .clearAndSetSemantics {
+                if (live) contentDescription = "${PtsCopy.credit}. ${PtsCopy.creditRead}"
+            },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            Modifier.height(PtsLayout.creditPill.height.dp)
+                .clip(CircleShape).background(PtsColor.closeFill)
+                .padding(start = PtsLayout.creditPadLeft.dp, end = PtsLayout.creditPadRight.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(Modifier.size(20.dp).clip(CircleShape).background(Brush.linearGradient(PtsColor.creditIcon)), contentAlignment = Alignment.Center) {
+                PtsIonicon("sparkles", PtsColor.closeInk, Modifier.size(12.dp))
+            }
+            Column {
+                Text(PtsCopy.credit, style = PtsType.creditTitle)
+                Text(PtsCopy.creditRead, style = PtsType.creditSub)
+            }
+        }
+        Box(
+            Modifier.size(PtsLayout.closeSize.dp)
             .then(if (live) Modifier.clickable(interactionSource = null, indication = null, role = Role.Button, onClickLabel = "Close summary", onClick = state::requestArticle)
                 .clearAndSetSemantics {
                     role = Role.Button
@@ -199,11 +313,60 @@ private fun PtsFooter(stage: PtsStage, footerBottom: Float, state: PtsState, red
                         state.requestArticle()
                         true
                     }
-                } else Modifier.clearAndSetSemantics {}),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.size(PtsLayout.closeSize.dp).clip(CircleShape).background(PtsColor.closeFill), contentAlignment = Alignment.Center) {
+                } else Modifier.clearAndSetSemantics {})
+                .clip(CircleShape).background(PtsColor.closeFill),
+            contentAlignment = Alignment.Center,
+        ) {
             PtsIonicon("close", PtsColor.closeInk, Modifier.size(16.dp))
         }
+    }
+}
+
+@Composable
+private fun PtsShareActions(
+    stage: PtsStage,
+    footerBottom: Float,
+    visible: Boolean,
+    alpha: Float,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+) {
+    Row(
+        Modifier.offset(
+            x = PtsLayout.textInset.dp,
+            y = (stage.height - footerBottom - PtsLayout.actionHeight).dp,
+        ).width((stage.width - PtsLayout.textInset * 2f).dp)
+            .height(PtsLayout.actionHeight.dp)
+            .graphicsLayer {
+                this.alpha = alpha
+                translationY = (1f - alpha) * PtsTiming.shareRise.dp.toPx()
+            },
+        horizontalArrangement = Arrangement.spacedBy(PtsLayout.actionGap.dp),
+    ) {
+        PtsShareAction(PtsCopy.share[0], "copy-outline", visible, onCopy, Modifier.weight(1f))
+        PtsShareAction(PtsCopy.share[1], "share-outline", visible, onShare, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun PtsShareAction(
+    label: String,
+    icon: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    Row(
+        modifier.height(PtsLayout.actionHeight.dp)
+            .then(
+                if (enabled) Modifier.clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+                else Modifier,
+            )
+            .clip(CircleShape).background(PtsColor.actionFill),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PtsIonicon(icon, PtsColor.summaryInk, Modifier.size(17.dp))
+        Text(label, style = PtsType.action)
     }
 }

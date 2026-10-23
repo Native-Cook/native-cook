@@ -250,7 +250,7 @@ function fixedStep(s: Sim, g: Geometry, autoPlay: boolean) {
     s.quiet += dt;
     if (s.quiet * 1000 >= RESUME_MS && (s.mode === MODE.idle || s.mode === MODE.open)) {
       s.demoOn = true;
-      s.demoT = s.mode === MODE.open ? 5 : 0;
+      s.demoT = s.mode === MODE.open ? SCRIPT.resumeOpen : 0;
     }
   }
 

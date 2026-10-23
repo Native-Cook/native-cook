@@ -13,21 +13,21 @@ import androidx.core.view.WindowCompat
 
 @Composable
 fun EnvelopeGiftRevealDemo() {
-    // The page is lime, so the status bar wants dark icons (StatusBar style="dark").
+    // The dark linen page uses light system-bar icons.
     val view = LocalView.current
     val activity = LocalActivity.current
     DisposableEffect(view, activity) {
         val controller = activity?.window?.let { WindowCompat.getInsetsController(it, view) }
         val lightStatus = controller?.isAppearanceLightStatusBars
         val lightNavigation = controller?.isAppearanceLightNavigationBars
-        controller?.isAppearanceLightStatusBars = true
-        controller?.isAppearanceLightNavigationBars = true
+        controller?.isAppearanceLightStatusBars = false
+        controller?.isAppearanceLightNavigationBars = false
         onDispose {
             if (lightStatus != null) controller.isAppearanceLightStatusBars = lightStatus
             if (lightNavigation != null) controller.isAppearanceLightNavigationBars = lightNavigation
         }
     }
-    Box(modifier = Modifier.fillMaxSize().background(EnvelopeColors.lime)) {
+    Box(modifier = Modifier.fillMaxSize().background(EnvelopeGiftRevealColors.table)) {
         EnvelopeGiftReveal(autoPlay = true)
     }
 }

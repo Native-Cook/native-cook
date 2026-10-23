@@ -10,7 +10,6 @@ struct MoodOrbJarFrame {
     struct Sprite {
         var x: Double
         var y: Double
-        var spin: Double
         var scale: Double
         var opacity: Double
         var mood: Int
@@ -18,6 +17,7 @@ struct MoodOrbJarFrame {
         var vx: Double
         var vy: Double
         var isFlying: Bool
+        var isFront: Bool
     }
 
     /// The landed orb's copy that flies to the new entry's avatar.
@@ -62,17 +62,19 @@ struct MoodOrbJarFrame {
             default:
                 break
             }
+            let isFront = orb.state == .held || orb.state == .returning || orb.state == .leaving
+                || (orb.state == .flying && (orb.vy < 0 || orb.y < g.mouthY + Layout.orb * g.scale))
             return Sprite(
                 x: orb.x,
                 y: orb.y,
-                spin: orb.spin,
                 scale: scale,
                 opacity: orb.state == .off ? 0 : orb.fade,
                 mood: orb.mood,
                 squash: orb.squash,
                 vx: orb.vx,
                 vy: orb.vy,
-                isFlying: orb.state == .flying
+                isFlying: orb.state == .flying,
+                isFront: isFront
             )
         }
         slots = s.slotScale
@@ -89,7 +91,7 @@ struct MoodOrbJarFrame {
     static func avatar(_ g: MoodOrbJarGeometry) -> CGPoint {
         CGPoint(
             x: Layout.side * g.scale + MoodOrbJarTokens.Space.cardPadding + Layout.entryOrb,
-            y: g.rowY + MoodOrbJarTokens.Space.avatarTop + Layout.entryOrb
+            y: g.rowY + Layout.entryHeight / 2
         )
     }
 

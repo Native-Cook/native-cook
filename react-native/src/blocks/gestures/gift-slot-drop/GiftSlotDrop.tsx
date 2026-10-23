@@ -1,53 +1,75 @@
-import type { ReactNode } from 'react';
 /**
- * Gift Slot Drop: swipe through welcome gifts, drag one down into the glowing slot, and the activated
- * offer prints back out. The stage is one Skia canvas; words and buttons are views on top of it.
+ * Gift Slot Drop: a wallet's welcome gift. Swipe through four gift cards, pull one down into the slot in the glass
+ * shelf; it goes in, the slot reads it, and the activated gift rises back out and turns over to its code. The screen is
+ * one Skia picture drawn from the slot's shared values (scene.ts) over a page made once at mount (backdrop.ts); views
+ * on top only take touches and speak to VoiceOver.
  */
+import { Canvas, Picture, createPicture, useTypeface } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { ReduceMotion, cubicBezier, useAnimatedStyle, useReducedMotion, withDelay, withTiming } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
+import { useDerivedValue, useReducedMotion } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnUI } from 'react-native-worklets';
 
-import { GIFT_BOX } from './gift-assets';
-import { GiftScene } from './GiftScene';
-import { BUTTON_PRESS, PRINT, REDUCED_MS } from './motion';
-import { COLORS, GIFTS, LAYOUT, START_INDEX, SPACE } from './theme';
+import { makeBackdrop } from './backdrop';
+import { drawScene, makeScene, type Faces, type SceneCtx } from './scene';
+import { COLOR, GIFTS, LAYOUT, START_INDEX, makeLayout, type Layout } from './theme';
 import { PHASE, useGiftSlot, type Haptic } from './use-gift-slot';
 
 export type GiftSlotDropProps = { autoPlay?: boolean; onShop?: (giftId: string) => void };
 
-// A geometric sans like the source's; Avenir Next is the closest system face on iOS.
-const FONT = process.env.EXPO_OS === 'ios' ? 'Avenir Next' : undefined;
-
 const HAPTIC: Record<Haptic, () => void> = {
-  select: () => { void Haptics.selectionAsync(); },
-  armed: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); },
-  insert: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); },
-  success: () => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); },
-  light: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); },
+  select: () => { void Haptics.selectionAsync().catch(() => {}); },
+  armed: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); },
+  insert: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); },
+  success: () => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); },
+  light: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); },
 };
 
-/** The glossy 3D gift box from the source, generated as artwork. */
-function GiftIcon({ size = LAYOUT.giftSize }: { size?: number }) {
-  return <Image source={GIFT_BOX} style={{ width: size, height: size }} accessibilityIgnoresInvertColors />;
-}
-
 export function GiftSlotDrop({ autoPlay = false, onShop }: GiftSlotDropProps) {
+  const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const reduced = useReducedMotion();
-  return <Stage key={`${width}x${height}-${reduced}`} width={width} height={height} reduced={reduced} autoPlay={autoPlay} onShop={onShop} />;
+  const regular = useTypeface(require('./assets/Inter-Regular.ttf'));
+  const medium = useTypeface(require('./assets/Inter-Medium.ttf'));
+  const semibold = useTypeface(require('./assets/Inter-SemiBold.ttf'));
+  const mono = useTypeface(require('./assets/JetBrainsMono-Medium.ttf'));
+  if (!regular || !medium || !semibold || !mono) return <View style={styles.root} />;
+  const lay = makeLayout(width, height, insets.top, insets.bottom);
+  // Reduce Motion: no demo; a finger still swipes and drops a gift in.
+  return (
+    <Stage key={`${width}x${height}-${insets.top}-${reduced}`} lay={lay} faces={{ regular, medium, semibold, mono }}
+      reduced={reduced} autoPlay={autoPlay && !reduced} onShop={onShop} />
+  );
 }
 
-function Stage({ width, height, reduced, autoPlay, onShop }: { width: number; height: number; reduced: boolean; autoPlay: boolean; onShop?: (id: string) => void }) {
+type StageProps = { lay: Layout; faces: Faces; reduced: boolean; autoPlay: boolean; onShop?: (id: string) => void };
+
+function Stage({ lay, faces, reduced, autoPlay, onShop }: StageProps) {
   const [phase, setPhase] = useState<number>(PHASE.choosing);
-  const [armed, setArmed] = useState(false);
   const [index, setIndex] = useState(START_INDEX);
   const onHaptic = useCallback((k: Haptic) => HAPTIC[k](), []);
-  const { values: v, input } = useGiftSlot(width, autoPlay, reduced, { onPhase: setPhase, onArmed: setArmed, onIndex: setIndex, onHaptic });
+  const onArmed = useCallback(() => {}, []);
+  const { values: v, input } = useGiftSlot(lay, autoPlay, reduced, { onPhase: setPhase, onArmed, onIndex: setIndex, onHaptic });
   const gift = GIFTS[index];
+
+  const ctx: SceneCtx | null = useMemo(() => {
+    const back = makeBackdrop(lay, PixelRatio.get());
+    return back ? makeScene(lay, faces, back) : null;
+  }, [lay, faces]);
+  const picture = useDerivedValue(() => {
+    const f = {
+      now: v.clock.get(), offset: v.offset.get(), pullX: v.pullX.get(), pullY: v.pullY.get(), lift: v.lift.get(),
+      phase: v.phase.get(), armed: v.armed.get(), titleAt: v.titleAt.get(), titleWas: v.titleWas.get(),
+      releasedAt: v.releasedAt.get(), releasedFrom: v.releasedFrom.get(), closeAt: v.closeAt.get(),
+      selected: v.selected.get(), ghost: v.ghost.get(), reduced,
+    };
+    return createPicture((canvas) => {
+      if (ctx) drawScene(canvas, ctx, f);
+    });
+  });
 
   const pan = useMemo(() => Gesture.Pan().minDistance(0).maxPointers(1)
     .onBegin((e) => { input.takeOver(); input.down(e.absoluteX, e.absoluteY, false); })
@@ -61,39 +83,20 @@ function Stage({ width, height, reduced, autoPlay, onShop }: { width: number; he
   }), [input]);
 
   const choosing = phase === PHASE.choosing || phase === PHASE.pulling || phase === PHASE.swiping;
-  const activating = phase === PHASE.inserting || phase === PHASE.activating;
   const offer = phase === PHASE.offer;
-  const fade = (on: boolean, delay = 0) => {
-    'worklet';
-    return withDelay(on ? delay : 0, withTiming(on ? 1 : 0, { duration: 220, reduceMotion: ReduceMotion.Never }));
-  };
-  const chooseStyle = useAnimatedStyle(() => ({ opacity: fade(choosing && !armed) }), [choosing, armed]);
-  const armedStyle = useAnimatedStyle(() => ({ opacity: fade(choosing && armed) }), [choosing, armed]);
-  const activeStyle = useAnimatedStyle(() => ({ opacity: fade(activating, reduced ? 0 : 200) }), [activating]);
-  const topStyle = useAnimatedStyle(() => ({ opacity: fade(!offer) }), [offer]);
-  const hintStyle = useAnimatedStyle(() => ({ opacity: fade(phase === PHASE.choosing || phase === PHASE.swiping) }), [phase]);
-  // How-to and the button rise in once the printed offer has risen.
-  const detailDelay = reduced ? REDUCED_MS : PRINT.feeds * (PRINT.feedMs + PRINT.feedGap) + PRINT.detailsDelay;
-  const detail = (k: number) => {
-    'worklet';
-    const delay = offer ? detailDelay + k * PRINT.stagger : 0;
-    return {
-      opacity: fade(offer, detailDelay + k * PRINT.stagger),
-      transform: [{ translateY: withDelay(delay, withTiming(offer || reduced ? 0 : 12, { duration: 320 })) }],
-    };
-  };
-  const detail0 = useAnimatedStyle(() => detail(0), [offer]);
-  const detail1 = useAnimatedStyle(() => detail(1), [offer]);
-  const detail2 = useAnimatedStyle(() => detail(2), [offer]);
-  const detail3 = useAnimatedStyle(() => detail(3), [offer]);
+  const bw = lay.width - 2 * LAYOUT.edge;
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <GestureDetector gesture={pan}>
         <View style={styles.root} collapsable={false}>
-          <GiftScene v={v} width={width} height={height} index={index} reduced={reduced} />
+          <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Picture picture={picture} />
+          </Canvas>
+          <View accessible accessibilityRole="header" accessibilityLabel={offer ? 'Your gift is ready' : 'Choose your welcome gift'}
+            style={[styles.a11y, { top: lay.top + 76, left: 40, right: 40, height: 76 }]} />
           <View pointerEvents="none" accessible accessibilityRole="adjustable"
-            accessibilityLabel={`${gift.name}, ${gift.headline} ${gift.line} ${gift.cap}. Gift ${index + 1} of ${GIFTS.length}`}
+            accessibilityLabel={`${gift.shop}, ${gift.kind}: ${gift.offer} ${gift.line}, ${gift.cap}. Gift ${index + 1} of ${GIFTS.length}`}
             accessibilityHint="Swipe up or down to change gift. Double tap to activate it."
             accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }, { name: 'activate' }]}
             onAccessibilityAction={(e) => {
@@ -102,97 +105,23 @@ function Stage({ width, height, reduced, autoPlay, onShop }: { width: number; he
               else ui(() => { 'worklet'; input.step(name === 'increment' ? 1 : -1); });
             }}
             accessibilityElementsHidden={!choosing}
-            style={[styles.cardA11y, { left: (width - LAYOUT.cardW) / 2, top: LAYOUT.cardY - LAYOUT.cardH / 2 }]} />
+            style={[styles.a11y, { left: lay.cx - LAYOUT.cardW / 2, top: lay.cardY - LAYOUT.cardH / 2, width: LAYOUT.cardW, height: LAYOUT.cardH }]} />
         </View>
       </GestureDetector>
-
-      <Animated.View pointerEvents="none" style={[styles.header, { top: LAYOUT.headerTop }, topStyle]}>
-        <Svg width={20} height={20} viewBox="0 0 20 20">
-          <Path d="M12.5 4 L6.5 10 L12.5 16" stroke={COLORS.ink} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-        <Text style={styles.headerText}>T&Cs</Text>
-      </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.centre, { top: LAYOUT.giftY - LAYOUT.giftSize / 2, left: LAYOUT.giftDx, right: -LAYOUT.giftDx }, topStyle]}>
-        <GiftIcon />
-      </Animated.View>
-      <View pointerEvents="none" style={[styles.centre, { top: LAYOUT.titleY - LAYOUT.titleLine }]}>
-        <Animated.Text style={[styles.title, chooseStyle]} accessibilityRole="header">Choose your{'\n'}welcome gift</Animated.Text>
-        <Animated.Text style={[styles.title, styles.titleYellow, styles.overlay, armedStyle]} accessibilityLiveRegion="polite">
-          Release to{'\n'}activate offer!
-        </Animated.Text>
-      </View>
-      <Animated.View pointerEvents="none" style={[styles.centre, { top: LAYOUT.cardY - 70 }, activeStyle]}>
-        <GiftIcon size={32} />
-        <Text style={[styles.title, styles.titleYellow, { marginTop: 12 }]} accessibilityLiveRegion="polite">
-          Activating the{'\n'}offer for you…
-        </Text>
-      </Animated.View>
-      <Animated.Text pointerEvents="none" style={[styles.hint, { top: LAYOUT.hintY - 9 }, hintStyle]}>Drag down to activate offer</Animated.Text>
-
+      <Pressable style={[styles.a11y, { top: lay.top, left: LAYOUT.edge, width: 44, height: 44 }]} hitSlop={8}
+        accessibilityRole="button" accessibilityLabel={offer ? 'Done' : 'Back'}
+        onPress={() => { if (offer) ui(() => { 'worklet'; input.close(); }); }} />
       {offer && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          <Animated.View style={[styles.header, { top: LAYOUT.offerHeaderTop }, detail0]}>
-            <PressScale onPress={() => ui(() => { 'worklet'; input.close(); })} hitSlop={12} accessibilityRole="button" accessibilityLabel="Done">
-              <Svg width={20} height={20} viewBox="0 0 20 20">
-                <Path d="M5 5 L15 15 M15 5 L5 15" stroke={COLORS.ink} strokeWidth={2} strokeLinecap="round" />
-              </Svg>
-            </PressScale>
-            <Text style={styles.headerText}>Help</Text>
-          </Animated.View>
-          <View style={[styles.details, { top: LAYOUT.howTop }]}>
-            <Animated.Text style={[styles.howTitle, detail1]} accessibilityRole="header">How to avail cashback?</Animated.Text>
-            <Animated.View style={[styles.stepRow, detail2]}>
-              <Text style={styles.stepNum}>1</Text>
-              <Text style={styles.stepText}>{gift.use}</Text>
-            </Animated.View>
-          </View>
-          <Animated.View style={[styles.buttonWrap, { top: LAYOUT.buttonTop, left: (width - LAYOUT.buttonW) / 2, width: LAYOUT.buttonW }, detail3]}>
-            <PressScale style={styles.button} accessibilityRole="button" accessibilityLabel={`Order from ${gift.name}`}
-              onPress={() => (onShop ? onShop(gift.id) : ui(() => { 'worklet'; input.close(); }))}>
-              <Text style={styles.buttonText}>Order from {gift.name}</Text>
-            </PressScale>
-          </Animated.View>
-        </View>
+        <Pressable style={[styles.a11y, { top: lay.buttonY, left: LAYOUT.edge, width: bw, height: LAYOUT.buttonH }]}
+          accessibilityRole="button" accessibilityLabel={gift.action}
+          accessibilityHint={`Your code is ${gift.code.split('').join(' ')}`}
+          onPress={() => (onShop ? onShop(gift.id) : ui(() => { 'worklet'; input.close(); }))} />
       )}
     </GestureHandlerRootView>
   );
 }
 
-// Press feedback on the screen's buttons: scale 0.97 on press-in (100 ms), back on release (160 ms), strong ease-out.
-function PressScale({ children, style, outer, ...rest }: PressableProps & { style?: StyleProp<ViewStyle>; outer?: StyleProp<ViewStyle> }) {
-  return (
-    <Pressable {...rest} style={outer}>
-      {({ pressed }) => (
-        <Animated.View style={[style, {
-          transform: [{ scale: pressed ? BUTTON_PRESS.scale : 1 }],
-          transitionProperty: 'transform',
-          transitionDuration: pressed ? BUTTON_PRESS.inMs : BUTTON_PRESS.outMs,
-          transitionTimingFunction: cubicBezier(0.23, 1, 0.32, 1),
-        }]}>
-          {children as ReactNode}
-        </Animated.View>
-      )}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.stageEdge },
-  cardA11y: { position: 'absolute', width: LAYOUT.cardW, height: LAYOUT.cardH },
-  header: { position: 'absolute', left: LAYOUT.headerLeft, right: LAYOUT.headerRight, height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerText: { color: COLORS.ink, fontSize: 14, fontFamily: FONT, fontWeight: '700' },
-  centre: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  title: { color: COLORS.ink, fontSize: LAYOUT.titleSize, lineHeight: LAYOUT.titleLine, fontFamily: FONT, fontWeight: '700', textAlign: 'center', letterSpacing: 0 },
-  titleYellow: { color: COLORS.yellow },
-  overlay: { position: 'absolute', top: 0 },
-  hint: { position: 'absolute', left: 0, right: 0, textAlign: 'center', color: COLORS.hint, fontSize: 17.8, fontFamily: FONT, fontWeight: '600' },
-  details: { position: 'absolute', left: SPACE.gutter, right: SPACE.xxl, gap: SPACE.xl },
-  howTitle: { color: COLORS.yellow, fontSize: 17.3, fontFamily: FONT, fontWeight: '700' },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
-  stepNum: { width: 34, color: COLORS.ink, fontSize: 40, fontWeight: '200' },
-  stepText: { maxWidth: 250, color: COLORS.ink, fontSize: 18.4, lineHeight: 24, fontFamily: FONT, fontWeight: '600' },
-  buttonWrap: { position: 'absolute' },
-  button: { height: LAYOUT.buttonH, borderRadius: LAYOUT.buttonH / 2, backgroundColor: COLORS.button, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: COLORS.buttonInk, fontSize: 16, fontFamily: FONT, fontWeight: '600' },
+  root: { flex: 1, backgroundColor: COLOR.page },
+  a11y: { position: 'absolute' },
 });
-

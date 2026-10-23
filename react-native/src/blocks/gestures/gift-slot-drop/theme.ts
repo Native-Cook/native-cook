@@ -1,112 +1,146 @@
-/** Colours, layout (measured from the source, 402 pt wide) and the gifts on offer. */
-/** Colours and layout measured from source 09 (screen 250 px → 402 pt, 1.61 pt/px). */
-export const COLORS = {
-  // Gate 2b (16 Oct): stage darkened to the source's own exposure (swatch dE <= 5).
-  stage: '#605133',
-  stageEdge: '#302816',
-  floor: '#332A13',
-  floorLow: '#2D2511',
-  floorLine: 'rgba(255,240,190,0.08)',
-  pocket: '#251902',
-  /** The pocket's top fades in from the stage: the source shows no hard upper edge. */
-  pocketFade: 'rgba(37,25,2,0)',
-  pocketLow: '#4F3803',
-  ink: '#FFFFFF',
-  mute: '#B9B3A0',
-  hint: '#CFCABB',
-  /** The stage barely takes the centred card's hue: the source keeps it warm whichever card is chosen. */
-  hueTint: 0.05,
-  stageWarm: 0.3,
-  stageWarmInk: '#E07A2A',
-  pocketLight: 'rgba(255,224,60,1)',
-  glowCore: '#F7B812',
-  cardLift: 0.2,
-  offerWarm: 'rgba(214,200,140,0.28)',
-  /** The card art darkened (black) and multiplied by its own hue, to the source's exposure. */
-  cardShade: [0.2, 0.25],
-  cardShadeInk: '#8A4C00',
-  yellow: '#FFD23F',
-  yellowDeep: '#F2A900',
-  outline: 'rgba(255,255,255,0.42)',
-  button: '#FCD43C',
-  buttonInk: '#2A2112',
-  step: '#D8D3C4',
+/**
+ * A wallet's welcome gift, at night. A warm charcoal page lit from one place only: the slot in the glass shelf under
+ * the cards, where a gift goes in and comes back activated. Four gift cards from invented shops, each its own
+ * material, drawn in code. Inter for words, JetBrains Mono for codes and small labels. 4 pt grid, 16 pt edges.
+ */
+export const COLOR = {
+  page: '#0D0B09',
+  ink: '#F6F2EC',
+  mute: 'rgba(246,242,236,0.58)',
+  faint: 'rgba(246,242,236,0.36)',
+  amber: '#FFB54A',
+  amberInk: '#FFD08A',
+  slotDeep: '#050403',
+  lip: 'rgba(255,236,200,0.55)',
+  button: '#F6F2EC',
+  buttonInk: '#16120D',
 } as const;
 
-/** Spacing scale (pt), from the source's own gaps: 4-pt steps up to the offer screen's 28-pt gutter. */
-export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, gutter: 28 } as const;
+/** Glass tints, linear [r, g, b, strength]. */
+export const TINT = {
+  chrome: [0.95, 0.9, 0.84, 0.06],
+  shelf: [1.0, 0.86, 0.68, 0.07],
+  code: [1.0, 0.95, 0.88, 0.1],
+} as const;
 
-/** Measured on the rectified reference (ref/gift-slot-drop-{rest,a,b}.png, 1206 × 2622 = 3 px/pt). */
+export const TYPE = {
+  eyebrow: { face: 'mono', size: 11 },
+  title: { face: 'semibold', size: 28 },
+  sub: { face: 'regular', size: 15 },
+  nav: { face: 'medium', size: 15 },
+  hint: { face: 'medium', size: 13 },
+  mark: { face: 'semibold', size: 14 },
+  offer: { face: 'semibold', size: 54 },
+  offerLine: { face: 'medium', size: 15 },
+  cap: { face: 'regular', size: 13 },
+  tag: { face: 'mono', size: 10 },
+  codeLabel: { face: 'mono', size: 11 },
+  code: { face: 'mono', size: 22 },
+  step: { face: 'regular', size: 15 },
+  stepNum: { face: 'mono', size: 13 },
+  button: { face: 'semibold', size: 16 },
+} as const;
+export type TypeRole = keyof typeof TYPE;
+
 export const LAYOUT = {
-  headerTop: 63,
-  /** The offer screen's close and Help sit higher (source frame b). */
-  offerHeaderTop: 25,
-  headerLeft: 14,
-  headerRight: 50,
-  giftY: 144,
-  /** The bow sits right on our box; the box's body is centred like the source's icon. */
-  giftDx: -2.5,
-  giftSize: 47,
-  titleY: 214,
-  titleSize: 25.5,
+  edge: 16,
+  nav: 44,
+  /** Below the safe area: eyebrow baseline, then the two title lines. */
+  eyebrowY: 70,
+  titleY: 106,
   titleLine: 34,
-  cardY: 427,
-  cardW: 158,
-  cardH: 206,
-  cardR: 12,
-  spacing: 172,
-  turnDeg: 42,
-  sideScale: 1,
-  chevronY: 605,
-  /** The lit pocket under the card: a rounded opening that runs down to the floor. */
-  pocketW: 180,
-  pocketTop: 634,
-  floorY: 669,
-  slotY: 678,
-  slotW: 170,
-  slotH: 24,
-  /** The glow sits low in the pocket, near its bottom (source rest frame). */
-  glowDrop: 21,
-  /** The pocket's inner glow, relative to the slot line: a tall bloom whose brightest part sits at the pocket's bottom. */
-  glowTop: -14,
-  glowH: 92,
-  /** How far the pocket's rounded bottom sits below the floor line. */
-  pocketDepth: 28,
-  hintY: 764.5,
-  offerY: 366,
-  offerW: 292,
-  offerH: 505,
-  howTop: 669,
-  stepTop: 716,
-  buttonTop: 780,
-  buttonH: 60,
-  buttonW: 357,
+  /** The carousel: card centre below the safe area. */
+  cardY: 356,
+  cardW: 212,
+  cardH: 272,
+  cardR: 22,
+  /** Neighbours: smaller, turned away, kept clear of the centre card by `gap`. */
+  sideScale: 0.84,
+  sideTurn: 20,
+  gap: 16,
+  /** The glass shelf and the slot in it, below the safe area. */
+  shelfY: 612,
+  shelfW: 304,
+  shelfH: 64,
+  slotW: 236,
+  slotH: 12,
+  hintY: 548,
+  /** The activated gift: a larger card that rises out of the slot and turns over. */
+  giftW: 248,
+  giftH: 318,
+  giftY: 330,
+  /** Under the activated gift: how to use it and the button. */
+  stepsY: 522,
+  buttonH: 52,
 } as const;
 
 export type Gift = {
   id: string;
-  /** Name typed in the card's wordmark and used in copy. */
-  name: string;
-  /** Wordmark text as printed on the card (cased like the brand). */
-  wordmark: string;
-  headline: string;
+  shop: string;
+  /** What the shop is, for VoiceOver and the steps. */
+  kind: string;
+  offer: string;
   line: string;
   cap: string;
-  use: string;
-  expires: string;
+  code: string;
+  steps: [string, string];
+  action: string;
+  bg: string;
+  bg2: string;
   ink: string;
-  /** Background of the carousel while this card is centred. */
-  glow: string;
+  sub: string;
+  /** Which emblem the card carries (drawn in code). */
+  mark: 'bowl' | 'rails' | 'leaf' | 'bean';
 };
 
-/** Invented shops in the style of the source's four cards. Artwork lives in assets/ (generated from the frames). */
-// Order as in the source (frames 001–013): a white card, the light-blue parcels card, the burger card, the red card.
+/** Four invented shops, four materials: fired clay, a rail line's livery, a plant shop's paper, roasted coffee. */
 export const GIFTS: Gift[] = [
-  { id: 'white', name: 'Loomwell', wordmark: 'loomwell', headline: '50%', line: 'cashback', cap: 'up to $20', use: 'Use AERO Pay at Loomwell', expires: 'Expires on 27 Nov', ink: '#22201C', glow: '#E9E4DA' },
-  { id: 'parcels', name: 'Nimbus', wordmark: 'nimbus', headline: '50%', line: 'cashback', cap: 'up to $25', use: 'Use AERO Pay to shop on Nimbus', expires: 'Expires on 27 Nov', ink: '#1A2433', glow: '#9CCADC' },
-  { id: 'burger', name: 'Bunbox', wordmark: 'BUNBOX', headline: '50%', line: 'cashback', cap: 'up to $10', use: 'Order on Bunbox and pay with AERO Pay', expires: 'Expires on 27 Nov', ink: '#FFFFFF', glow: '#E8612A' },
-  { id: 'red', name: 'Volta', wordmark: 'volta', headline: '50%', line: 'cashback on', cap: 'mobile recharge', use: 'Recharge your Volta number with AERO Pay', expires: 'Expires on 27 Nov', ink: '#FFFFFF', glow: '#D9141C' },
+  {
+    id: 'kiln', shop: 'Kiln & Clay', kind: 'studio ceramics', offer: '20%', line: 'off your first order', cap: 'up to $30',
+    code: 'KILN-20-H7QM', steps: ['Add pieces worth $40 or more', 'Paste the code at checkout'], action: 'Shop Kiln & Clay',
+    bg: '#B9573A', bg2: '#8E3B24', ink: '#FFF4EA', sub: 'rgba(255,244,234,0.72)', mark: 'bowl',
+  },
+  {
+    id: 'northline', shop: 'Northline', kind: 'rail tickets', offer: '$15', line: 'off your first trip', cap: 'any route, any day',
+    code: 'NORTH-15-K4QZ', steps: ['Book any single or return', 'Paste the code before paying'], action: 'Book with Northline',
+    bg: '#1F4D40', bg2: '#123128', ink: '#EAF4EE', sub: 'rgba(234,244,238,0.7)', mark: 'rails',
+  },
+  {
+    id: 'fernhouse', shop: 'Fernhouse', kind: 'houseplants', offer: '2 for 1', line: 'on any houseplant', cap: 'pots included',
+    code: 'FERN-241-P2LD', steps: ['Pick two plants, pay for one', 'Paste the code at checkout'], action: 'Shop Fernhouse',
+    bg: '#EDE6D6', bg2: '#D9CFB9', ink: '#1F2A22', sub: 'rgba(31,42,34,0.66)', mark: 'leaf',
+  },
+  {
+    id: 'ember', shop: 'Ember Roasters', kind: 'coffee', offer: 'Free', line: 'flat white for a week', cap: 'one a day, 7 days',
+    code: 'EMBER-7-W9TB', steps: ['Show the code at the counter', 'One flat white a day, 7 days'], action: 'Find a café',
+    bg: '#2C1E17', bg2: '#1A110C', ink: '#F1D9BC', sub: 'rgba(241,217,188,0.66)', mark: 'bean',
+  },
 ];
 
-/** The source opens on the burger card. */
-export const START_INDEX = 2;
+/** The screen opens on Northline. */
+export const START_INDEX = 1;
+
+/** Where things sit for a screen `width` × `height` with safe-area insets `top` / `bottom`. */
+export function makeLayout(width: number, height: number, top: number, bottom: number) {
+  const cx = width / 2;
+  const sideW = LAYOUT.cardW * LAYOUT.sideScale;
+  return {
+    width,
+    height,
+    top,
+    bottom,
+    cx,
+    cardY: top + LAYOUT.cardY,
+    /** Centre-to-centre distance: the neighbour's near edge sits `gap` from the centre card. */
+    spacing: LAYOUT.cardW / 2 + sideW / 2 + LAYOUT.gap,
+    slotY: top + LAYOUT.shelfY,
+    hintY: top + LAYOUT.hintY,
+    giftY: top + LAYOUT.giftY,
+    stepsY: top + LAYOUT.stepsY,
+    buttonY: height - Math.max(bottom, LAYOUT.edge) - 8 - LAYOUT.buttonH,
+    /** Under the shelf: which gift of four, and the fine print on the screen's last line. */
+    dotsY: top + LAYOUT.shelfY + 76,
+    printY: height - Math.max(bottom, LAYOUT.edge) - 20,
+  };
+}
+export type Layout = ReturnType<typeof makeLayout>;

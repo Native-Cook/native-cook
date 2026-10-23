@@ -10,7 +10,7 @@ import kotlin.math.sqrt
  * Reanimated) or springs to a target (`value.set(withSpring(target, config))`).
  * The spring is the closed-form damped oscillator, so it does not depend on the frame rate.
  */
-internal class EnvelopeAnimatedFloat(initial: Float = 0f) {
+internal class EnvelopeGiftRevealAnimatedFloat(initial: Float = 0f) {
     var value: Float = initial
         private set
 
@@ -20,7 +20,7 @@ internal class EnvelopeAnimatedFloat(initial: Float = 0f) {
     private var velocity0 = 0f
     private var elapsed = 0.0
     private var initialEnergy = 0.0
-    private var config = EnvelopeSprings.close
+    private var config = EnvelopeGiftRevealSprings.close
 
     fun set(next: Float) {
         springing = false
@@ -28,7 +28,7 @@ internal class EnvelopeAnimatedFloat(initial: Float = 0f) {
     }
 
     /** [velocity] is in units per second, like withSpring's `velocity`. */
-    fun springTo(to: Float, spring: EnvelopeSpringConfig, velocity: Float = 0f) {
+    fun springTo(to: Float, spring: EnvelopeGiftRevealSpringConfig, velocity: Float = 0f) {
         springing = true
         target = to
         from = value
@@ -87,7 +87,7 @@ internal class EnvelopeAnimatedFloat(initial: Float = 0f) {
         }
     }
 
-    private fun energy(displacement: Double, velocity: Double, spring: EnvelopeSpringConfig): Double =
+    private fun energy(displacement: Double, velocity: Double, spring: EnvelopeGiftRevealSpringConfig): Double =
         0.5 * spring.stiffness * displacement * displacement +
             0.5 * spring.mass * velocity * velocity
 

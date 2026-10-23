@@ -1,123 +1,84 @@
 package com.ngocdevv.nativecook.blocks.gestures.cassettedeck
 
-import kotlin.math.roundToInt
+internal data class CassetteDeckRect(
+    val x: Double,
+    val y: Double,
+    val width: Double,
+    val height: Double,
+    val radius: Double = 0.0,
+)
 
-/** `rgba()` in the React Native theme, as an Android ARGB int. */
-internal fun cassetteDeckArgb(r: Int, g: Int, b: Int, a: Double = 1.0): Int {
-    val alpha = (a * 255.0).roundToInt().coerceIn(0, 255)
-    return (alpha shl 24) or (r shl 16) or (g shl 8) or b
-}
+internal data class CassetteDeckPoint(val x: Double, val y: Double)
 
-/** `#rrggbb` in the React Native theme, as an opaque ARGB int. */
-internal fun cassetteDeckHex(rgb: Int): Int = (0xFF shl 24) or rgb
-
-/**
- * Every colour and size of the block (RN `theme.ts`). Sizes are points on the source's 402 x 874 pt screen
- * and are scaled by width / 402 when drawn.
- */
+/** Every colour, copy string, and stage-space measurement from the React Native reference. */
 internal object CassetteDeckTheme {
-    const val SCREEN_W = 402.0
-    const val SCREEN_H = 874.0
+    const val STAGE_WIDTH = 402.0
+    const val STAGE_HEIGHT = 778.0
+    const val EDGE = 16.0
+    const val BRAND_BASELINE = 46.0
+    const val MODEL_BASELINE = 66.0
+    const val HINT_BASELINE = 748.0
+    const val FINGER_SIZE = 44.0
 
-    // RN theme.ts spacing scale, step 0.
-    object Space {
-        const val xs = 4.0
-        const val sm = 8.0
-        const val md = 12.0
-        const val lg = 16.0
-        const val xl = 24.0
-        const val xxl = 32.0
-    }
+    val plate = 0xFFCFD2D5.toInt()
+    val plateLight = 0xFFE6E8EA.toInt()
+    val plateDeep = 0xFFA9ADB2.toInt()
+    val engrave = 0xFF4A4E54.toInt()
+    val engraveMuted = 0xFF7B8086.toInt()
+    val wellColor = 0xFF121314.toInt()
+    val shell = 0xFF2A2B2E.toInt()
+    val shellLight = 0xFF3A3B3F.toInt()
+    val label = 0xFFF1E8D4.toInt()
+    val labelLine = 0x59A0785A
+    val labelBand = 0xFFD9573B.toInt()
+    val pen = 0xFF1F2A63.toInt()
+    val tape = 0xFF3B2418.toInt()
+    val tapeLight = 0xFF6B4430.toInt()
+    val hub = 0xFFF4F2EE.toInt()
+    val counter = 0xFF0E0F10.toInt()
+    val digit = 0xFFF2F0EA.toInt()
+    val led = 0xFFFF8A2A.toInt()
+    val ledOff = 0xFF3A2A20.toInt()
+    val meterOn = 0xFF7BE38E.toInt()
+    val meterHot = 0xFFFFB34A.toInt()
+    val meterPeak = 0xFFFF5A3C.toInt()
+    val meterOff = 0xFF23262A.toInt()
+    val keyTop = 0xFFE9EBED.toInt()
+    val keyFront = 0xFF9EA3A9.toInt()
+    val keyDeep = 0xFF6E737A.toInt()
+    val playMark = 0xFFE2462F.toInt()
+    val finger = 0x291E2024
+    val fingerEdge = 0x661E2024
 
-    // RN theme.ts:7-9. Measured: flat #242225 with a faint lift above the cassette and a darker pool under it.
-    val bg = cassetteDeckHex(0x242225)
-    // Unused by the RN drawing code (the lift is derived from `tints`); kept so every theme value exists.
-    val bgLift = cassetteDeckArgb(255, 252, 255, 0.045)
-    val bgPool = cassetteDeckArgb(0, 0, 0, 0.16)
-    val grille = cassetteDeckHex(0x19181B)
-    val grilleRim = cassetteDeckArgb(255, 255, 255, 0.05)
-    val ledOff = cassetteDeckHex(0x3A393D)
-    val ledOn = cassetteDeckHex(0x35E39A)
-    val ledGlow = cassetteDeckArgb(53, 227, 154, 0.55)
-    val glyphOff = cassetteDeckHex(0x2D2C30)
-    val glyphOn = cassetteDeckHex(0xE9E8EC)
-    val glyphGlow = cassetteDeckArgb(255, 255, 255, 0.35)
-    val labelInk = cassetteDeckHex(0x1C1B1D)
-    val labelMute = cassetteDeckHex(0x5E5C60)
-    val wordmark = cassetteDeckHex(0xECEAE4)
-    val pillTop = cassetteDeckHex(0xA9A9AB)
-    val pillBottom = cassetteDeckHex(0x7E7E81)
-    val pillInk = cassetteDeckHex(0x3A3A3C)
-    val tape = cassetteDeckHex(0x2B2421)
-    val tapeEdge = cassetteDeckArgb(150, 118, 92, 0.35)
+    val power = CassetteDeckPoint(370.0, 40.0)
+    val well = CassetteDeckRect(16.0, 98.0, 370.0, 300.0, 18.0)
+    val cassette = CassetteDeckRect(36.0, 132.0, 330.0, 226.0, 12.0)
+    val labelRect = CassetteDeckRect(52.0, 146.0, 298.0, 128.0, 6.0)
+    val window = CassetteDeckRect(116.0, 210.0, 170.0, 52.0, 26.0)
+    val reels = arrayOf(CassetteDeckPoint(148.0, 236.0), CassetteDeckPoint(254.0, 236.0))
+    const val HUB_RADIUS = 14.0
+    const val PACK_MIN = 17.0
+    const val PACK_MAX = 44.0
+    const val READOUT_Y = 436.0
+    const val READOUT_HEIGHT = 64.0
+    const val COUNTER_X = 16.0
+    const val METERS_X = 178.0
+    const val METERS_WIDTH = 208.0
+    const val KEYS_Y = 552.0
+    const val KEYS_HEIGHT = 140.0
+    const val KEY_GAP = 8.0
+    const val KEY_TOP = 22.0
+    const val KEY_WIDTH = (STAGE_WIDTH - 2.0 * EDGE - 4.0 * KEY_GAP) / 5.0
 
-    // A narrow band of the key light, soft at both ends.
-    val sheen = intArrayOf(
-        cassetteDeckArgb(255, 255, 255, 0.0),
-        cassetteDeckArgb(255, 255, 255, 0.06),
-        cassetteDeckArgb(255, 255, 255, 0.13),
-        cassetteDeckArgb(255, 255, 255, 0.06),
-        cassetteDeckArgb(255, 255, 255, 0.0),
-    )
-    val sheenStops = floatArrayOf(0.3f, 0.46f, 0.5f, 0.54f, 0.7f)
+    const val brand = "VELOR"
+    const val model = "TC-7  STEREO CASSETTE DECK"
+    const val side = "A"
+    const val title = "Glass Hours"
+    const val subtitle = "for Jun, summer mix"
+    const val counterLabel = "TAPE COUNTER"
+    const val memo = "MEMO"
+    val hints = arrayOf("Press play", "Playing side A", "Winding", "Rewinding to 000", "Paused")
+    val keyNames = arrayOf("Rewind", "Play", "Fast forward", "Stop", "Pause")
 
-    // The shell's side faces: lit from the top left, so the left face is brighter.
-    val edgeL = intArrayOf(cassetteDeckHex(0x2A292C), cassetteDeckHex(0x141316))
-    val edgeR = intArrayOf(cassetteDeckHex(0x111013), cassetteDeckHex(0x08080A))
-
-    // The room takes the hue of the loaded cassette's cover: r, g, b, alpha per track.
-    val tints = arrayOf(
-        doubleArrayOf(255.0, 252.0, 255.0, 0.045),
-        doubleArrayOf(150.0, 140.0, 255.0, 0.085),
-        doubleArrayOf(80.0, 220.0, 190.0, 0.075),
-    )
-    val redSpill = cassetteDeckArgb(230, 40, 64, 0.32)
-    val ledSpill = cassetteDeckArgb(53, 227, 154, 0.10)
-
-    // The room lift's far end (RN CassetteDeck.tsx:251).
-    val liftFar = cassetteDeckArgb(255, 255, 255, 0.0)
-
-    class Grille(val cx: Double, val cy: Double, val pitch: Double, val dot: Double, val radius: Double)
-    class Led(val cx: Double, val cy: Double, val r: Double)
-    class Box(val x: Double, val y: Double, val w: Double, val h: Double)
-    class Point(val cx: Double, val cy: Double)
-    class Pack(val min: Double, val max: Double)
-    class Cover(val x: Double, val y: Double, val size: Double, val radius: Double)
-    class Label(val x: Double, val y: Double, val size: Double, val tracking: Double)
-    class Wordmark(val right: Double, val y: Double, val size: Double, val tracking: Double)
-    class Keys(val x0: Double, val pitch: Double, val y: Double, val w: Double, val h: Double, val travel: Double)
-    class Glyphs(val y: Double, val size: Double, val x0: Double)
-
-    // RN theme.ts:36-50. Absolute positions in points on the 402 x 874 screen.
-    val grilleDots = Grille(cx = 44.3, cy = 88.7, pitch = 6.6, dot = 2.1, radius = 20.5)
-    val led = Led(cx = 374.3, cy = 77.7, r = 2.1)
-    val cassette = Box(x = 16.67, y = 223.33, w = 370.0, h = 240.0)
-
-    // Inside the cassette frame.
-    val reels = arrayOf(Point(119.7, 106.3), Point(248.0, 106.3))
-    const val REEL_SIZE = 70.0
-
-    // The dark band through the label, where the tape packs show around the hubs.
-    val window = Box(x = 95.0, y = 80.7, w = 179.0, h = 49.3)
-    val tapePack = Pack(min = 26.0, max = 62.0)
-    val cover = Cover(x = 38.3, y = 35.0, size = 37.3, radius = 1.0)
-    val title = Label(x = 86.0, y = 36.5, size = 16.0, tracking = -0.6)
-    val artist = Label(x = 86.0, y = 56.0, size = 11.2, tracking = -0.1)
-    val wordmarkLabel = Wordmark(right = 43.3, y = 145.5, size = 11.6, tracking = 1.6)
-    val keys = Keys(x0 = 60.0, pitch = 53.75, y = 588.3, w = 65.0, h = 96.67, travel = 3.3)
-    val glyphs = Glyphs(y = 580.7, size = 10.0, x0 = 92.5)
-    val pill = Box(x = 17.7, y = 805.7, w = 31.3, h = 20.0)
-
-    class Track(val title: String, val artist: String, val cover: Int)
-
-    val tracks = listOf(
-        Track("Glass Hours", "Northern Pilots", 0),
-        Track("Afterglow", "Northern Pilots", 1),
-        Track("Undertow", "Northern Pilots", 2),
-    )
-
-    // An invented wordmark in the source's bold extended style.
-    const val BRAND = "VELOR"
-
-    val keyLabels = listOf("Play", "Pause", "Next track", "Rewind", "Fast forward")
+    fun keyX(index: Int): Double = EDGE + index * (KEY_WIDTH + KEY_GAP)
 }

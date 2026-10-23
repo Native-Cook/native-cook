@@ -1,28 +1,31 @@
-/** Colours, type, layout and copy. Layout in points on a 402 × 874 screen. */
-import { Platform } from 'react-native';
-
+/**
+ * A streaming app's film page at night. The poster (drawn in code, see poster-art.ts) is the only colour: its dusk
+ * spills into the page behind it as a blurred backdrop, and gold is kept for the foil title and the saved state.
+ * Instrument Serif for the film's name, Inter for everything else. 4 pt grid, 16 pt edges.
+ */
 export const COLOR = {
-  bg: '#1B1A17',
-  bgDeep: '#0B0A09',
-  ink: '#FFFFFF',
-  inkSoft: 'rgba(255,255,255,0.6)',
-  inkFaint: 'rgba(255,255,255,0.42)',
-  inkGhost: 'rgba(255,255,255,0.2)',
-  pill: '#1B1A16',
-  pillGhost: 'rgba(255,255,255,0.04)',
-  glass: 'rgba(255,255,255,0.12)',
-  glassBorder: 'rgba(255,255,255,0.08)',
-  trophy: 'rgba(245,192,74,0.6)',
-  // The source's stage light: a cool glow from the top-left corner over the backdrop.
-  stageLight: 'rgba(140,168,235,0.42)',
+  bg: '#0E0C10',
+  ink: '#F5F1EA',
+  inkSoft: 'rgba(245,241,234,0.62)',
+  inkFaint: 'rgba(245,241,234,0.42)',
+  glass: 'rgba(255,255,255,0.1)',
+  glassBorder: 'rgba(255,255,255,0.14)',
+  play: '#F5F1EA',
+  playInk: '#16131A',
+  trophy: '#E9C47A',
   gold: ['#8A5A17', '#F3D27A', '#FFF4C8', '#C8902E', '#7A4B10'],
   foil: 'rgba(255,255,255,0.85)',
-  rim: 'rgba(255,255,255,0.22)',
-  glare: 'rgba(255,240,220,0.55)',
+  embossDark: 'rgba(20,10,20,0.55)',
+  embossLight: 'rgba(255,236,200,0.35)',
+  posterInk: 'rgba(246,226,200,0.72)',
+  rim: 'rgba(255,255,255,0.2)',
+  glare: 'rgba(255,240,220,0.5)',
   shadow: '#000000',
-  // The poster's red-gold, spilled onto the page around a lifted card.
-  glow: 'rgba(214,104,44,0.42)',
-  back: ['rgba(38,24,16,0.88)', 'rgba(16,11,8,0.96)'],
+  /** The poster's warm horizon, spilled onto the page around a lifted card. */
+  glow: 'rgba(230,140,90,0.4)',
+  /** The print's edge: cream board, darker towards the back. */
+  edge: ['#E8DCC6', '#B9A88C'],
+  back: ['#221A22', '#120E14'],
   backRule: 'rgba(243,210,122,0.5)',
   backInk: 'rgba(255,244,226,0.92)',
   backMute: 'rgba(255,244,226,0.52)',
@@ -31,85 +34,81 @@ export const COLOR = {
   goldInk: '#F3D27A',
   // Holographic foil hues (pale, so the gold stays gold under them).
   holo: ['#FF9FD2', '#FFE7A0', '#A9FFD0', '#9FD8FF', '#C8A8FF', '#FF9FD2'],
-  backdropSide: ['rgba(27,26,23,0)', 'rgba(27,26,23,0.4)'],
-  backdropFade: ['rgba(27,26,23,0)', 'rgba(27,26,23,0.35)', '#1B1A17'],
-  finger: 'rgba(255,255,255,0.32)',
-  fingerRing: 'rgba(255,255,255,0.7)',
+  backdropFade: ['rgba(14,12,16,0.15)', 'rgba(14,12,16,0.55)', '#0E0C10'],
+  finger: 'rgba(255,255,255,0.14)',
+  fingerRing: 'rgba(255,255,255,0.42)',
 } as const;
 
-export const SCRIPT_FONT = Platform.select({ ios: 'Snell Roundhand', default: 'cursive' }) as string;
-export const UI_FONT = Platform.select({ ios: 'Helvetica Neue', default: 'sans-serif' }) as string;
+export const FONT = { serif: 'TPP-InstrumentSerif', regular: 'TPP-Inter-Regular', medium: 'TPP-Inter-Medium', semibold: 'TPP-Inter-SemiBold' } as const;
 
 export const TYPE = {
-  title: { fontSize: 26, lineHeight: 32, fontWeight: '500' as const, color: COLOR.ink, textAlign: 'center' as const },
-  date: { fontSize: 14, lineHeight: 18, fontWeight: '500' as const, color: COLOR.inkFaint, textAlign: 'center' as const },
-  pill: { fontSize: 15, fontWeight: '600' as const, color: COLOR.ink },
-  award: { fontSize: 13, fontWeight: '500' as const, color: COLOR.inkFaint },
-  awardStrong: { fontWeight: '800' as const },
-  body: { fontSize: 15, lineHeight: 17.5, fontWeight: '400' as const, color: COLOR.ink },
-  more: { fontSize: 14, fontWeight: '600' as const, color: COLOR.inkFaint },
-  // The poster's script title (Skia), in card points.
-  posterTitle: 44,
-  backTitle: 28,
-  credit: 7.5,
+  title: { fontFamily: FONT.serif, fontSize: 36, lineHeight: 44, color: COLOR.ink, textAlign: 'center' as const, letterSpacing: -0.2 },
+  meta: { fontFamily: FONT.regular, fontSize: 14, lineHeight: 20, color: COLOR.inkFaint, textAlign: 'center' as const },
+  pill: { fontFamily: FONT.semibold, fontSize: 15, lineHeight: 20, color: COLOR.ink },
+  award: { fontFamily: FONT.medium, fontSize: 13, lineHeight: 18, color: COLOR.inkSoft },
+  awardStrong: { fontFamily: FONT.semibold, color: COLOR.ink },
+  body: { fontFamily: FONT.regular, fontSize: 15, lineHeight: 22, color: COLOR.inkSoft },
+  more: { fontFamily: FONT.semibold, fontSize: 14, lineHeight: 20, color: COLOR.ink },
+  chip: { fontFamily: FONT.semibold, fontSize: 11, lineHeight: 14, color: COLOR.inkSoft, letterSpacing: 0.4 },
+  // The poster's type (Skia), in card points: the foil title's size and line step, the back's title, the credits.
+  posterTitle: 50,
+  posterLine: 46,
+  backTitle: 30,
+  credit: 8,
 } as const;
 
 export const LAYOUT = {
-  gutter: 25,
-  topBar: -5,
-  close: 36,
-  awardHeight: 30,
-  cardTop: 69,
-  stageLight: 230,
-  // The backdrop photo covers the top ~0.6 of the screen (402 × 520 asset).
-  backdropAspect: 520 / 402,
-  // Measured on the source: a small card, ~0.42 of the width at rest, centred under the top bar.
-  cardWidthRatio: 0.343,
-  cardAspect: 1.486,
-  cardRadius: 18,
-  titleGap: 18,
-  pillHeight: 51,
-  pillGap: 13,
+  gutter: 16,
+  /** Under the safe area: the top bar, then the card. */
+  topBar: 4,
+  close: 44,
+  awardHeight: 32,
+  cardTop: 64,
+  // The backdrop covers the top of the screen: the blurred poster, this share of the height.
+  backdropShare: 0.62,
+  cardWidthRatio: 0.6,
+  cardAspect: 1.48,
+  cardRadius: 16,
+  titleGap: 24,
+  pillHeight: 52,
+  pillGap: 12,
   bodyGap: 20,
-  // The plate is larger than the card so it can slide without showing an edge.
-  plateOverscan: 1.24,
-  // Where the title sits on the card (share of its height) and how far it leans.
-  titleY: 0.66,
-  titleSkew: -0.08,
+  // Where the poster's title sits (share of the card's height, first baseline).
+  titleY: 0.2,
   fingerRadius: 22,
 } as const;
 
 // The back of the card, in card shares and points.
 export const BACK = {
-  plateOpacity: 0.5,
-  plateBlur: 10,
-  titleY: 0.27,
-  ruleY: 0.33,
+  titleY: 0.26,
+  ruleY: 0.31,
   rule: 28,
-  creditsY: 0.43,
-  lineStep: 11,
+  creditsY: 0.41,
+  lineStep: 13,
 } as const;
 
-// The spacing scale the block uses (pt). Source values that sit off it stay as measured (see the design doc).
 export const SPACE = { xs: 4, s: 8, m: 12, l: 16, xl: 20, x2: 24 } as const;
 
 export const COPY = {
-  title: 'Solenne',
-  date: 'April 24, 2026 · In 2 days',
-  award: ['1', ' nomination, ', '2', ' wins'],
+  title: 'The Long Light',
+  posterTitle: ['The Long', 'Light'],
+  posterCredit: 'A FILM BY ILSE VARGA',
+  meta: '2026  ·  Drama  ·  1 h 52 min  ·  12',
+  award: ['3', ' festival awards'],
   watchlist: 'Watchlist',
   added: 'Added',
-  watched: 'Watch',
-  body: 'Discover the story of Solenne Marchetti, the voice that filled arenas from a single silver microphone, and the life she lived beyond the music: the towns, the losses and the songs she never released.',
+  play: 'Play trailer',
+  body: 'After her father’s funeral, a lighthouse keeper’s daughter walks the old coast path north to scatter his ashes, and finds the people he never mentioned waiting at every stop along the way.',
   credits: [
     { text: 'A FILM BY', strong: false },
     { text: 'ILSE VARGA', strong: true },
-    { text: 'NARRATED BY', strong: false, gap: 8 },
-    { text: 'TEO BRANDT', strong: true, gap: 8 },
-    { text: 'Documentary · 1 h 48 min', strong: false, gap: 16 },
-    { text: 'Marchetti Pictures', strong: false, gap: 16 },
+    { text: 'STARRING', strong: false, gap: 10 },
+    { text: 'MARA OKAFOR   TEO BRANDT', strong: true, gap: 10 },
+    { text: 'Drama · 1 h 52 min', strong: false, gap: 20 },
+    { text: 'Northlight Pictures', strong: false, gap: 20 },
   ] as { text: string; strong: boolean; gap?: number }[],
+  formats: ['4K', 'HDR', 'Dolby Atmos', 'AD'],
   more: 'Show more',
   less: 'Show less',
-  posterLabel: 'Poster of Solenne: a singer in a red stage jacket under warm arena lights',
+  posterLabel: 'Poster of The Long Light: a walker on a ridge at dusk, a low sun behind the hills',
 } as const;

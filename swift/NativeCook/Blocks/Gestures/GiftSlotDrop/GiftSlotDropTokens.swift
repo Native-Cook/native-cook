@@ -1,119 +1,225 @@
+import CoreText
 import SwiftUI
+import UIKit
 
 enum GiftSlotDropTokens {
     enum Colors {
-        static let stage = "#605133", stageEdge = "#302816", floor = "#332A13", floorLow = "#2D2511"
-        static let floorLine = "rgba(255,240,190,0.08)", pocket = "#251902", pocketFade = "rgba(37,25,2,0)", pocketLow = "#4F3803"
-        static let ink = "#FFFFFF", mute = "#B9B3A0", hint = "#CFCABB", stageWarmInk = "#E07A2A"
-        static let pocketLight = "rgba(255,224,60,1)", glowCore = "#F7B812", offerWarm = "rgba(214,200,140,0.28)"
-        static let cardShadeInk = "#8A4C00", yellow = "#FFD23F", yellowDeep = "#F2A900", outline = "rgba(255,255,255,0.42)"
-        static let button = "#FCD43C", buttonInk = "#2A2112", step = "#D8D3C4"
-        static let hueTint = 0.05, stageWarm = 0.3, cardLift = 0.2
-        static let cardShade = (base: 0.2, multiply: 0.25)
-    }
-
-    enum Space {
-        static let xs: CGFloat = 4, sm: CGFloat = 8, md: CGFloat = 12, lg: CGFloat = 16
-        static let xl: CGFloat = 20, xxl: CGFloat = 24, gutter: CGFloat = 28
+        static let page = "#0D0B09"
+        static let ink = "#F6F2EC"
+        static let mute = "rgba(246,242,236,0.58)"
+        static let faint = "rgba(246,242,236,0.36)"
+        static let amber = "#FFB54A"
+        static let amberInk = "#FFD08A"
+        static let slotDeep = "#050403"
+        static let lip = "rgba(255,236,200,0.55)"
+        static let button = "#F6F2EC"
+        static let buttonInk = "#16120D"
     }
 
     enum Layout {
-        static let headerTop: CGFloat = 63, offerHeaderTop: CGFloat = 25, headerLeft: CGFloat = 14, headerRight: CGFloat = 50
-        static let giftY: CGFloat = 144, giftDx: CGFloat = -2.5, giftSize: CGFloat = 47
-        static let titleY: CGFloat = 214, titleSize: CGFloat = 25.5, titleLine: CGFloat = 34
-        static let cardY: CGFloat = 427, cardW: CGFloat = 158, cardH: CGFloat = 206, cardR: CGFloat = 12
-        static let spacing: CGFloat = 172, turnDeg: CGFloat = 42, sideScale: CGFloat = 1, chevronY: CGFloat = 605
-        static let pocketW: CGFloat = 180, pocketTop: CGFloat = 634, floorY: CGFloat = 669
-        static let slotY: CGFloat = 678, slotW: CGFloat = 170, slotH: CGFloat = 24
-        static let glowDrop: CGFloat = 21, glowTop: CGFloat = -14, glowH: CGFloat = 92, pocketDepth: CGFloat = 28
-        static let hintY: CGFloat = 764.5, offerY: CGFloat = 366, offerW: CGFloat = 292, offerH: CGFloat = 505
-        static let howTop: CGFloat = 669, stepTop: CGFloat = 716, buttonTop: CGFloat = 780, buttonH: CGFloat = 60, buttonW: CGFloat = 357
+        static let edge: CGFloat = 16
+        static let nav: CGFloat = 44
+        static let eyebrowY: CGFloat = 70
+        static let titleY: CGFloat = 106
+        static let titleLine: CGFloat = 34
+        static let cardY: CGFloat = 356
+        static let cardW: CGFloat = 212
+        static let cardH: CGFloat = 272
+        static let cardR: CGFloat = 22
+        static let sideScale = 0.84
+        static let sideTurn: CGFloat = 20
+        static let gap: CGFloat = 16
+        static let shelfY: CGFloat = 612
+        static let shelfW: CGFloat = 304
+        static let shelfH: CGFloat = 64
+        static let slotW: CGFloat = 236
+        static let slotH: CGFloat = 12
+        static let hintY: CGFloat = 548
+        static let giftW: CGFloat = 248
+        static let giftH: CGFloat = 318
+        static let giftY: CGFloat = 330
+        static let stepsY: CGFloat = 522
+        static let buttonH: CGFloat = 52
     }
 
-    enum TypeStyle {
-        static let header: CGFloat = 14, hint: CGFloat = 17.8, howTitle: CGFloat = 17.3
-        static let stepNumber: CGFloat = 40, stepText: CGFloat = 18.4, stepLine: CGFloat = 24, button: CGFloat = 16
-        static let mark: CGFloat = 12, cardBig: CGFloat = 30, cardLine: CGFloat = 15
-        static let offerBig: CGFloat = 52, offerLine: CGFloat = 28, offerSmall: CGFloat = 15, offerMark: CGFloat = 20
+    struct ScreenLayout: Equatable {
+        let width: CGFloat
+        let height: CGFloat
+        let top: CGFloat
+        let bottom: CGFloat
+        let cx: CGFloat
+        let cardY: CGFloat
+        let spacing: CGFloat
+        let slotY: CGFloat
+        let hintY: CGFloat
+        let giftY: CGFloat
+        let stepsY: CGFloat
+        let buttonY: CGFloat
+        let dotsY: CGFloat
+        let printY: CGFloat
+
+        init(width: CGFloat, height: CGFloat, top: CGFloat, bottom: CGFloat) {
+            self.width = width
+            self.height = height
+            self.top = top
+            self.bottom = bottom
+            cx = width / 2
+            let sideWidth = Layout.cardW * Layout.sideScale
+            spacing = Layout.cardW / 2 + sideWidth / 2 + Layout.gap
+            cardY = top + Layout.cardY
+            slotY = top + Layout.shelfY
+            hintY = top + Layout.hintY
+            giftY = top + Layout.giftY
+            stepsY = top + Layout.stepsY
+            buttonY = height - max(bottom, Layout.edge) - 8 - Layout.buttonH
+            dotsY = top + Layout.shelfY + 76
+            printY = height - max(bottom, Layout.edge) - 20
+        }
     }
 
     struct Gift: Identifiable, Equatable {
+        enum Mark { case bowl, rails, leaf, bean }
+
         let id: String
-        let name: String
-        let wordmark: String
-        let headline: String
+        let shop: String
+        let kind: String
+        let offer: String
         let line: String
         let cap: String
-        let use: String
-        let expires: String
+        let code: String
+        let steps: [String]
+        let action: String
+        let bg: String
+        let bg2: String
         let ink: String
-        let glow: String
+        let sub: String
+        let mark: Mark
     }
 
     static let gifts = [
-        Gift(id: "white", name: "Loomwell", wordmark: "loomwell", headline: "50%", line: "cashback", cap: "up to $20", use: "Use AERO Pay at Loomwell", expires: "Expires on 27 Nov", ink: "#22201C", glow: "#E9E4DA"),
-        Gift(id: "parcels", name: "Nimbus", wordmark: "nimbus", headline: "50%", line: "cashback", cap: "up to $25", use: "Use AERO Pay to shop on Nimbus", expires: "Expires on 27 Nov", ink: "#1A2433", glow: "#9CCADC"),
-        Gift(id: "burger", name: "Bunbox", wordmark: "BUNBOX", headline: "50%", line: "cashback", cap: "up to $10", use: "Order on Bunbox and pay with AERO Pay", expires: "Expires on 27 Nov", ink: "#FFFFFF", glow: "#E8612A"),
-        Gift(id: "red", name: "Volta", wordmark: "volta", headline: "50%", line: "cashback on", cap: "mobile recharge", use: "Recharge your Volta number with AERO Pay", expires: "Expires on 27 Nov", ink: "#FFFFFF", glow: "#D9141C")
+        Gift(
+            id: "kiln", shop: "Kiln & Clay", kind: "studio ceramics", offer: "20%", line: "off your first order",
+            cap: "up to $30", code: "KILN-20-H7QM", steps: ["Add pieces worth $40 or more", "Paste the code at checkout"],
+            action: "Shop Kiln & Clay", bg: "#B9573A", bg2: "#8E3B24", ink: "#FFF4EA",
+            sub: "rgba(255,244,234,0.72)", mark: .bowl
+        ),
+        Gift(
+            id: "northline", shop: "Northline", kind: "rail tickets", offer: "$15", line: "off your first trip",
+            cap: "any route, any day", code: "NORTH-15-K4QZ", steps: ["Book any single or return", "Paste the code before paying"],
+            action: "Book with Northline", bg: "#1F4D40", bg2: "#123128", ink: "#EAF4EE",
+            sub: "rgba(234,244,238,0.70)", mark: .rails
+        ),
+        Gift(
+            id: "fernhouse", shop: "Fernhouse", kind: "houseplants", offer: "2 for 1", line: "on any houseplant",
+            cap: "pots included", code: "FERN-241-P2LD", steps: ["Pick two plants, pay for one", "Paste the code at checkout"],
+            action: "Shop Fernhouse", bg: "#EDE6D6", bg2: "#D9CFB9", ink: "#1F2A22",
+            sub: "rgba(31,42,34,0.66)", mark: .leaf
+        ),
+        Gift(
+            id: "ember", shop: "Ember Roasters", kind: "coffee", offer: "Free", line: "flat white for a week",
+            cap: "one a day, 7 days", code: "EMBER-7-W9TB", steps: ["Show the code at the counter", "One flat white a day, 7 days"],
+            action: "Find a café", bg: "#2C1E17", bg2: "#1A110C", ink: "#F1D9BC",
+            sub: "rgba(241,217,188,0.66)", mark: .bean
+        ),
     ]
-    static let startIndex = 2
+    static let startIndex = 1
 
     enum Drag {
-        static let decide: CGFloat = 8, commit: CGFloat = 170, full: CGFloat = 250
-        static let minScale = 0.92, leanDeg: CGFloat = 64, lift = 1.03, upResist = 0.2, swipeVelocity: CGFloat = 600
+        static let decide: CGFloat = 8
+        static let commit: CGFloat = 150
+        static let full: CGFloat = 210
+        static let minScale = 0.8
+        static let leanDeg: CGFloat = 46
+        static let lift = 1.03
+        static let upResist = 0.2
+        static let sideResist = 0.25
+        static let swipeVelocity: CGFloat = 600
     }
 
-    struct Spring { let stiffness: Double, damping: Double, mass: Double }
+    struct Spring { let duration: Double; let dampingRatio: Double; let stiffness: Double; let damping: Double }
     enum Springs {
-        static let snap = Spring(stiffness: 260, damping: 28, mass: 1)
-        static let back = Spring(stiffness: 320, damping: 26, mass: 1)
-        static let centre = Spring(stiffness: 420, damping: 30, mass: 0.8)
-        static let rise = Spring(stiffness: 170, damping: 20, mass: 1)
-        static let lift = Spring(stiffness: 500, damping: 30, mass: 0.6)
+        static let snap = Spring(duration: 420, dampingRatio: 0.86, stiffness: 235, damping: 26)
+        static let back = Spring(duration: 380, dampingRatio: 0.8, stiffness: 270, damping: 26)
+        static let lift = Spring(duration: 200, dampingRatio: 1, stiffness: 500, damping: 34)
     }
 
-    enum Insert { static let centreMs = 160.0, sinkMs = 300.0, flashMs = 420.0; static let sinkEase = (0.77, 0.0, 0.175, 1.0) }
-    enum Activate { static let ms = 1_150.0, dotMs = 280.0 }
-    enum Print {
-        static let feeds = 3, confetti = 72
-        static let feedShare = 0.22, feedMs = 260.0, feedGap = 90.0, feedEaseBack = 1.6, startScale = 0.44
-        static let rollMs = 900.0, detailsDelay = 280.0, stagger = 60.0, confettiLife = 1.6, gravity = 820.0
+    enum Sequence {
+        static let sink = 380.0
+        static let read = 1_000.0
+        static let rise = 700.0
+        static let pause = 140.0
+        static let flip = 560.0
+        static let stagger = 60.0
+        static let detailsIn = 260.0
     }
-    enum Ambient {
-        static let floatPt: CGFloat = 3, floatMs = 3_000.0, rollPerPt = 0.08, rollMax: CGFloat = 7
-        static let band = 0.4, bandMs = 6_000.0, slotBreathMs = 2_400.0
-    }
-    enum Chevron { static let bobPt: CGFloat = 4, bobMs = 1_400.0, gap: CGFloat = 18 }
-    enum Close { static let ms = 260.0, returnMs = 420.0; static let ease = (0.23, 1.0, 0.32, 1.0) }
-    enum ButtonPress { static let scale = 0.965, inMs = 80.0, outMs = 120.0 }
+
+    enum Close { static let out = 220.0; static let back = 420.0 }
+    enum Title { static let out = 140.0; static let inMs = 220.0; static let rise: CGFloat = 6 }
+    enum ButtonPress { static let scale = 0.97; static let inMs = 100.0; static let outMs = 160.0 }
 
     static let reducedMs = 200.0
-    static let loop = 15.0
-    static let resumeAfterMs = 3_500.0
+    static let loop = 10.0
+    static let resumeAfterMs = 2_000.0
+
     enum Script {
-        static let swipes = [(at: 1_000.0, ms: 450.0, dx: 200.0), (at: 12_700.0, ms: 450.0, dx: -200.0)]
-        static let pullDown = 2_400.0
-        static let pullUp = 3_450.0
-        static let pullBy: CGFloat = 252
-        static let done = 11_000.0
-    }
-    static let replicaOnly = false
-    static let qaHideFinger = false
-    static let qaHoldAt: Double? = nil
-    static let qaTimelineStartMs = 0.0
-    enum Random {
-        static let multiplier = 127.1, saltMultiplier = 311.7, scale = 43_758.5453, confettiSaltRange = 1.9
-        static let speedMin = 380.0, speedRange = 520.0, spinRange = 18.0
+        static let swipes = [(at: 500.0, ms: 460.0, dx: -220.0), (at: 8_950.0, ms: 460.0, dx: 220.0)]
+        static let pullDown = 1_450.0
+        static let pullUp = 2_500.0
+        static let pullBy: CGFloat = 196
+        static let done = 7_900.0
     }
 
     static func color(_ source: String) -> Color {
+        Color(uiColor: uiColor(source))
+    }
+
+    static func uiColor(_ source: String) -> UIColor {
         if source.hasPrefix("#") {
             let value = UInt64(source.dropFirst(), radix: 16) ?? 0
-            return Color(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
+            return UIColor(
+                red: CGFloat((value >> 16) & 0xFF) / 255,
+                green: CGFloat((value >> 8) & 0xFF) / 255,
+                blue: CGFloat(value & 0xFF) / 255,
+                alpha: 1
+            )
         }
-        let values = source.replacingOccurrences(of: "rgba(", with: "").replacingOccurrences(of: ")", with: "")
-            .split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        let values = source
+            .replacingOccurrences(of: "rgba(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+            .split(separator: ",")
+            .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         guard values.count == 4 else { return .clear }
-        return Color(red: values[0] / 255, green: values[1] / 255, blue: values[2] / 255, opacity: values[3])
+        return UIColor(
+            red: values[0] / 255,
+            green: values[1] / 255,
+            blue: values[2] / 255,
+            alpha: values[3]
+        )
+    }
+}
+
+enum GiftSlotDropFonts {
+    static let regular = "Inter24pt-Regular"
+    static let medium = "Inter-Medium"
+    static let semibold = "Inter-SemiBold"
+    static let mono = "JetBrainsMono-Medium"
+
+    private static var registered = false
+
+    static func register() {
+        guard !registered else { return }
+        registered = true
+        for file in ["Inter-Regular", "Inter-Medium", "Inter-SemiBold", "JetBrainsMono-Medium"] {
+            guard let url = Bundle.main.url(forResource: "GiftSlotDrop-\(file)", withExtension: "ttf") else {
+                assertionFailure("Missing Gift Slot Drop font: \(file)")
+                continue
+            }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+    }
+
+    static func font(_ name: String, size: CGFloat) -> Font {
+        register()
+        return .custom(name, size: size)
     }
 }

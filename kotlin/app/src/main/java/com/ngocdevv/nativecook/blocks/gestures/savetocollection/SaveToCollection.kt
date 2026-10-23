@@ -1,6 +1,5 @@
 package com.ngocdevv.nativecook.blocks.gestures.savetocollection
 
-import android.graphics.BitmapFactory
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
@@ -8,15 +7,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -28,137 +34,142 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import com.ngocdevv.nativecook.shared.rememberReducedMotion
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
-import kotlin.math.min
 
-const val LOOP: Long = SaveToCollectionTokens.loopMs
+const val LOOP = 10.0
 
 @Composable
 fun SaveToCollection(
     modifier: Modifier = Modifier,
     autoPlay: Boolean = false,
 ) {
-    val density = LocalDensity.current.density
-    val resources = LocalContext.current.resources
+    val context = LocalContext.current
+    val density = LocalDensity.current
     val view = LocalView.current
     val reducedMotion = rememberReducedMotion()
-    val assets = remember(resources) {
-        val resourceIds = buildSet {
-            SaveToCollectionTokens.cards.forEach { card ->
-                add(card.art)
-                add(card.soft)
-            }
-            addAll(SaveToCollectionTokens.streaks)
-        }
-        resourceIds.associateWith { resource ->
-            requireNotNull(BitmapFactory.decodeResource(resources, resource)) {
-                "Missing SaveToCollection drawable $resource"
-            }
-        }
-    }
-    val renderer = remember(assets) {
-        SaveToCollectionRenderer(assets)
-    }
-    val engine = remember(autoPlay, reducedMotion, view) {
-        SaveToCollectionEngine(
-            autoPlay = autoPlay,
-            reducedMotion = reducedMotion,
-            onHaptic = { event ->
-                view.performHapticFeedback(saveFeedbackConstant(event))
-            },
-        )
-    }
-    var drawTick by remember { mutableLongStateOf(0L) }
-
-    LaunchedEffect(engine) {
-        var previousNanos = withFrameNanos { nanos -> nanos }
-        while (isActive) {
-            val nowNanos = withFrameNanos { nanos -> nanos }
-            val rawSeconds = (nowNanos - previousNanos).coerceAtLeast(0L) / 1_000_000_000f
-            previousNanos = nowNanos
-            engine.step(min(SaveToCollectionTokens.maxFrameSeconds, rawSeconds))
-            drawTick += 1L
-        }
-    }
+    val insets = WindowInsets.safeDrawing
+    val safeTop = insets.getTop(density) / density.density
+    val safeBottom = insets.getBottom(density) / density.density
+    val assets = remember(context) { SaveToCollectionAssets(context) }
+    val renderer = remember(assets) { SaveToCollectionRenderer(assets) }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(SaveToCollectionTokens.background),
+            .background(Color(SaveToCollectionTokens.Page)),
     ) {
-        val stageWidth = maxWidth.value
-        val stageHeight = maxHeight.value
-        engine.setSize(stageWidth, stageHeight)
+        val layout = remember(maxWidth.value, maxHeight.value, safeTop, safeBottom) {
+            SaveToCollectionLayout.create(maxWidth.value, maxHeight.value, safeTop, safeBottom)
+        }
+        val engine = remember(layout, autoPlay, reducedMotion, view) {
+            SaveToCollectionEngine(
+                layout = layout,
+                autoPlay = autoPlay && !reducedMotion,
+                reducedMotion = reducedMotion,
+                onHaptic = { event -> view.performHapticFeedback(event.feedbackConstant()) },
+            )
+        }
+        val page = remember(renderer, layout, density.density) {
+            renderer.renderStaticPage(layout, density.density).asImageBitmap()
+        }
+        val sheetBefore = remember(renderer, layout, density.density) {
+            renderer.renderSheet(layout, density.density, fresh = false)
+        }
+        val sheetFresh = remember(renderer, layout, density.density) {
+            renderer.renderSheet(layout, density.density, fresh = true)
+        }
+        val wake = remember(engine) { Channel<Unit>(Channel.CONFLATED) }
+        var drawTick by remember(engine) { mutableLongStateOf(0L) }
+
+        DisposableEffect(wake) {
+            onDispose { wake.close() }
+        }
+        LaunchedEffect(engine, wake) {
+            while (isActive) {
+                if (!engine.needsFrames) wake.receive()
+                withFrameNanos { frameNanos -> engine.frame(frameNanos) }
+                drawTick += 1L
+            }
+        }
+
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .semantics {
-                    contentDescription = "Art cards that can be carried or tapped into a bookmark"
+                    contentDescription = "Atlas photo browser. Hold a place and carry it to Saved."
                     customActions = listOf(
-                        CustomAccessibilityAction("Save every card") {
-                            val now = System.nanoTime() / 1_000_000_000.0
-                            engine.touchDown(engine.bookmarkX, engine.bookmarkY, now)
-                            engine.touchUp(0f, 0f)
-                            true
+                        CustomAccessibilityAction("Save Still water, early") {
+                            val handled = engine.accessibilitySaveLake()
+                            wake.trySend(Unit)
+                            handled
+                        },
+                        CustomAccessibilityAction("Open Slow coast collection") {
+                            val handled = engine.accessibilityOpenCollection()
+                            wake.trySend(Unit)
+                            handled
                         },
                     )
                 }
-                .pointerInput(engine, density) {
+                .pointerInput(engine, density.density, wake) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val tracker = VelocityTracker()
                         tracker.addPosition(down.uptimeMillis, down.position)
-                        engine.touchDown(
-                            x = down.position.x / density,
-                            y = down.position.y / density,
-                            eventSeconds = down.uptimeMillis / 1000.0,
-                        )
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { pointer -> pointer.id == down.id }
-                            if (change == null) {
-                                engine.touchUp(0f, 0f)
-                                break
+                        engine.pointerDown(down.position.x / density.density, down.position.y / density.density)
+                        wake.trySend(Unit)
+                        var finished = false
+                        try {
+                            while (!finished) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { pointer -> pointer.id == down.id }
+                                if (change == null) {
+                                    engine.cancelPointer()
+                                    finished = true
+                                    continue
+                                }
+                                tracker.addPosition(change.uptimeMillis, change.position)
+                                val velocity = tracker.calculateVelocity()
+                                if (change.pressed) {
+                                    engine.pointerMove(
+                                        change.position.x / density.density,
+                                        change.position.y / density.density,
+                                        velocity.x / density.density,
+                                    )
+                                    change.consume()
+                                } else {
+                                    engine.pointerUp(
+                                        change.position.x / density.density,
+                                        change.position.y / density.density,
+                                    )
+                                    finished = true
+                                }
+                                wake.trySend(Unit)
                             }
-                            tracker.addPosition(change.uptimeMillis, change.position)
-                            val velocity = tracker.calculateVelocity()
-                            if (!change.pressed) {
-                                engine.touchUp(
-                                    velocityX = velocity.x / density,
-                                    velocityY = velocity.y / density,
-                                )
-                                break
+                        } finally {
+                            if (!finished) {
+                                engine.cancelPointer()
+                                wake.trySend(Unit)
                             }
-                            engine.touchMove(
-                                x = change.position.x / density,
-                                y = change.position.y / density,
-                                eventSeconds = change.uptimeMillis / 1000.0,
-                                velocityX = velocity.x / density,
-                                velocityY = velocity.y / density,
-                            )
-                            change.consume()
                         }
                     }
                 },
         ) {
+            drawImage(page)
             drawTick
-            val canvas = drawContext.canvas.nativeCanvas
-            val saveCount = canvas.save()
-            canvas.scale(density, density)
-            renderer.draw(canvas, engine)
-            canvas.restoreToCount(saveCount)
+            scale(density.density, density.density, pivot = Offset.Zero) {
+                renderer.draw(drawContext.canvas.nativeCanvas, engine, sheetBefore, sheetFresh)
+            }
         }
     }
 }
 
-private fun saveFeedbackConstant(event: SaveHaptic): Int {
-    return when (event) {
-        SaveHaptic.Lift -> HapticFeedbackConstants.LONG_PRESS
-        SaveHaptic.Magnet -> HapticFeedbackConstants.VIRTUAL_KEY
-        SaveHaptic.Land -> HapticFeedbackConstants.VIRTUAL_KEY
-        SaveHaptic.Select -> HapticFeedbackConstants.CLOCK_TICK
-        SaveHaptic.Commit -> HapticFeedbackConstants.CONTEXT_CLICK
-        SaveHaptic.Success -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+private fun SaveToCollectionHaptic.feedbackConstant(): Int {
+    return when (this) {
+        SaveToCollectionHaptic.Lift -> HapticFeedbackConstants.LONG_PRESS
+        SaveToCollectionHaptic.Magnet -> HapticFeedbackConstants.VIRTUAL_KEY
+        SaveToCollectionHaptic.Select -> HapticFeedbackConstants.CLOCK_TICK
+        SaveToCollectionHaptic.Success -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             HapticFeedbackConstants.CONFIRM
         } else {
             HapticFeedbackConstants.CONTEXT_CLICK

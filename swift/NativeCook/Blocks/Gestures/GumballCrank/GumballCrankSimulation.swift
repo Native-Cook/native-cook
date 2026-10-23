@@ -1,497 +1,227 @@
 import Foundation
 
-struct GumballCrankGeometry: Equatable, Sendable {
-    let scale: Double
-    let knobX: Double
-    let knobY: Double
-    let doorX: Double
-    let doorY: Double
+enum GumballCrankPhase { case ready, dispensing, reward, collecting }
+enum GumballCrankHaptic { case tick, strain, drop, open, collect }
+
+struct GumballCrankCapsulePose {
+    let x: Double, y: Double, scale: Double, rotation: Double, split: Double, alpha: Double
 }
 
-enum GumballCrankPhase {
-    static let ready = 0
-    static let dispensing = 1
-    static let reward = 2
-    static let collecting = 3
+final class GumballCrankSimulation {
+    private(set) var reduced: Bool
+    private(set) var angle = 0.0, wobble = 0.0, phaseTime = 0.0, card = 0.0, scrim = 0.0, press = 0.0
+    private(set) var wallet = 1240.0, walletPrevious = 1240.0, walletMix = 1.0, walletBump = 0.0
+    private(set) var ghostX = 0.0, ghostY = 0.0, ghostAlpha = 0.0, ghostPress = 0.0
+    private(set) var phase = GumballCrankPhase.ready
+    private(set) var hint = 0, hintFrom = 0, detent = 0
+    private(set) var hintMix = 1.0, moving = true
+    private(set) var ballX: [Double], ballY: [Double], ballR: [Double], ballColor: [Int]
+
+    private let homeX: [Double], homeY: [Double]
+    private var ballVX: [Double], ballVY: [Double]
+    private var base = 0.0, goal = 0.0, lastPointerAngle = 0.0, wobbleVelocity = 0.0, cardVelocity = 0.0, walletVelocity = 0.0
+    private var walletMixDuration = 0.15, demoTime = 0.0, quietTime = 0.0
+    private var grabbed = false, pressing = false, scriptDown = false
+    private(set) var demoRunning = false
+    private var events: [GumballCrankHaptic] = []
+
+    init(reduced: Bool) {
+        self.reduced = reduced
+        let pile = Self.settlePile()
+        ballX = pile.x; ballY = pile.y; ballR = pile.r; ballColor = pile.color
+        homeX = pile.x; homeY = pile.y
+        ballVX = .init(repeating: 0, count: pile.x.count); ballVY = ballVX
+    }
+
+    var accessibilityDescription: String {
+        switch phase {
+        case .reward: "Day 7 reward, 50 coins. Collect reward."
+        case .collecting: "Collecting 50 coins."
+        default: hint == 2 ? GumballCrankCopy.done : GumballCrankCopy.hint
+        }
+    }
+    var accessibilityAction: String { phase == .reward ? "Collect reward" : "Turn the handle one quarter" }
+
+    func start(autoPlay: Bool, reduceMotion: Bool) {
+        reduced = reduceMotion; demoRunning = autoPlay && !reduceMotion; demoTime = 0; quietTime = 0; toRest()
+    }
+
+    func step(dt: Double, autoPlay: Bool) {
+        if !demoRunning, autoPlay, !reduced {
+            quietTime += dt
+            if quietTime >= GumballCrankMotion.resume { toRest(); demoTime = 0; demoRunning = true }
+        }
+        if demoRunning, autoPlay, !reduced {
+            let old = demoTime
+            demoTime += dt
+            if demoTime >= GumballCrankMotion.loop { toRest(); demoTime.formTruncatingRemainder(dividingBy: GumballCrankMotion.loop) }
+            script(old: demoTime < old ? 0 : old, now: demoTime)
+        }
+
+        var busy = stepPile(dt: dt)
+        if !grabbed, phase == .ready, angle != base {
+            angle += (base - angle) * min(1, dt * (reduced ? 30 : 14))
+            if abs(angle - base) < 0.002 { angle = base }
+            busy = true
+        }
+        (wobble, wobbleVelocity) = gumballCrankSpring(wobble, wobbleVelocity, target: 0, dt: dt, duration: 0.18, damping: 0.45)
+        if wobbleVelocity != 0 { busy = true }
+        if phase != .ready { phaseTime += dt; busy = true }
+        if phase == .dispensing {
+            if crossed(0.25, dt) { events.append(.drop) }
+            if crossed(1.32, dt) { events.append(.open) }
+            if phaseTime >= 1.95 { phase = .reward; phaseTime = 0; angle = 0; base = 0; goal = 0; detent = 0 }
+        } else if phase == .collecting {
+            for i in 0 ..< 8 where crossed(Double(i) * 0.05 + 0.5, dt) {
+                setWallet(min(1290, wallet + 6.25), 0.15)
+                if !reduced { walletVelocity += 1.6 }
+            }
+            if phaseTime >= 0.95 { phase = .ready; phaseTime = 0; setHint(2) }
+        }
+
+        let cardGoal = phase == .reward || (phase == .dispensing && phaseTime >= 1.45) ? 1.0 : 0.0
+        if phase != .collecting { (card, cardVelocity) = gumballCrankSpring(card, cardVelocity, target: cardGoal, dt: dt, duration: reduced ? 0.2 : 0.48, damping: reduced ? 1 : 0.82) }
+        let scrimGoal = cardGoal > 0 || (phase == .collecting && phaseTime < 0.75) ? 1.0 : 0.0
+        scrim = gumballCrankToward(scrim, scrimGoal, dt: dt, duration: scrimGoal > 0 ? 0.3 : 0.25)
+        press = gumballCrankToward(press, pressing ? 1 : 0, dt: dt, duration: 0.12)
+        (walletBump, walletVelocity) = gumballCrankSpring(walletBump, walletVelocity, target: 0, dt: dt, duration: 0.26, damping: 0.5)
+        hintMix = min(1, hintMix + dt / 0.25); walletMix = min(1, walletMix + dt / walletMixDuration)
+        ghostAlpha = gumballCrankToward(ghostAlpha, scriptDown ? 1 : 0, dt: dt, duration: scriptDown ? 0.15 : 0.12)
+        ghostPress = gumballCrankToward(ghostPress, scriptDown || pressing ? 1 : 0, dt: dt, duration: 0.15)
+        moving = busy || demoRunning || grabbed || cardVelocity != 0 || walletVelocity != 0 || hintMix < 1 || walletMix < 1
+    }
+
+    func pointerDown(x: Double, y: Double) {
+        takeOver()
+        if phase == .reward, insideButton(x, y) { pressing = true; moving = true } else { _ = grabAt(x, y) }
+    }
+    func pointerMove(x: Double, y: Double) { if grabbed { turnTo(x, y) }; if pressing, !insideButton(x, y) { pressing = false } }
+    func pointerUp(x: Double, y: Double) { if pressing, insideButton(x, y) { collect() }; pressing = false; grabbed = false; goal = base; moving = true }
+    func accessibilityActivate() {
+        takeOver()
+        if phase == .reward { collect() }
+        else if phase == .ready {
+            angle = min(GumballCrankMotion.tau, Double(detent + 1) * GumballCrankMotion.quarter + 0.02)
+            while detent < 4, angle >= Double(detent + 1) * GumballCrankMotion.quarter { hitDetent() }
+        }
+    }
+    func drainHaptics() -> [GumballCrankHaptic] { defer { events.removeAll(keepingCapacity: true) }; return events }
+
+    func capsulePose() -> GumballCrankCapsulePose {
+        let doorY = 561.0
+        if phase == .ready { return .init(x: 201, y: 690, scale: 1, rotation: 0, split: 0, alpha: 0) }
+        let t = phase == .dispensing ? phaseTime : 99
+        let fade = phase == .collecting ? 1 - gumballCrankSpan(phaseTime, 0.45, 0.85) : 1
+        if reduced { return .init(x: 201, y: 690, scale: 1, rotation: 0, split: gumballCrankSpan(t, 1.32, 1.7), alpha: gumballCrankSpan(t, 0.3, 0.95) * fade) }
+        if t < 0.3 { return .init(x: 201, y: doorY, scale: 0.6, rotation: 0, split: 0, alpha: 0) }
+        let u = gumballCrankSpan(t, 0.3, 0.95), eased = gumballCrankEaseOut(u)
+        var rotation = -2.6 * (1 - eased)
+        if t >= 0.95 { let wave = gumballCrankSpan(t, 0.95, 1.7); rotation = 0.16 * sin(wave * .pi * 3) * (1 - wave) }
+        return .init(x: 201, y: doorY + 129 * eased, scale: 0.6 + 0.4 * eased, rotation: rotation, split: gumballCrankEaseOut(gumballCrankSpan(t, 1.32, 1.7)), alpha: min(1, u * 6) * fade)
+    }
+
+    private func takeOver() { demoRunning = false; quietTime = 0; scriptDown = false; ghostAlpha = 0; ghostPress = 0 }
+    private func crossed(_ value: Double, _ dt: Double) -> Bool { phaseTime >= value && phaseTime - dt < value }
+    private func insideButton(_ x: Double, _ y: Double) -> Bool { (66 ... 336).contains(x) && (580 ... 632).contains(y) }
+    @discardableResult private func grabAt(_ x: Double, _ y: Double) -> Bool {
+        let dx = x - 201, dy = y - 462
+        guard dx * dx + dy * dy <= 4900, phase == .ready else { return false }
+        grabbed = true; lastPointerAngle = atan2(dx, -dy); goal = angle; moving = true; return true
+    }
+    private func turnTo(_ x: Double, _ y: Double) {
+        let pointer = atan2(x - 201, -(y - 462)); var delta = pointer - lastPointerAngle
+        if delta > .pi { delta -= GumballCrankMotion.tau }; if delta < -.pi { delta += GumballCrankMotion.tau }
+        lastPointerAngle = pointer; goal += delta
+        let backwards = goal - base
+        if backwards < 0 {
+            let before = angle; angle = base - GumballCrankMotion.back * (1 - exp(backwards / GumballCrankMotion.back))
+            if before >= base, angle < base - 0.05 { events.append(.strain) }
+        } else { angle = min(goal, GumballCrankMotion.tau) }
+        while detent < 4, angle >= Double(detent + 1) * GumballCrankMotion.quarter { hitDetent() }
+        moving = true
+    }
+    private func hitDetent() {
+        detent += 1; base = Double(detent) * GumballCrankMotion.quarter; wobbleVelocity += reduced ? 0 : 4; kickPile(detent); events.append(.tick)
+        if detent == 4 { phase = .dispensing; phaseTime = 0; grabbed = false; setHint(1) }
+    }
+    private func collect() { guard phase == .reward else { return }; pressing = false; phase = .collecting; phaseTime = 0; events.append(.collect) }
+    private func toRest() {
+        grabbed = false; pressing = false; phase = .ready; phaseTime = 0; angle = 0; base = 0; goal = 0; detent = 0; card = 0; cardVelocity = 0; scrim = 0
+        if wallet != 1240 { setWallet(1240, 0.5) }; setHint(0); moving = true
+    }
+    private func setHint(_ value: Int) { if hint != value { hintFrom = hint; hint = value; hintMix = 0 } }
+    private func setWallet(_ value: Double, _ duration: Double) { walletPrevious = wallet; wallet = value; walletMix = 0; walletMixDuration = duration }
+    private func script(old: Double, now: Double) {
+        func crosses(_ value: Double) -> Bool { old < value && now >= value }
+        if crosses(0.5) { (ghostX, ghostY) = gripAt(angle); scriptDown = true; _ = grabAt(ghostX, ghostY) }
+        if scriptDown, now > 0.7, now <= 2.55 {
+            let u = gumballCrankSpan(now, 0.7, 2.5) * 4, q = floor(min(u, 3.9999)), scripted = (q + gumballCrankEaseInOut(u - q)) * GumballCrankMotion.quarter + 0.02
+            (ghostX, ghostY) = gripAt(scripted); turnTo(ghostX, ghostY)
+        }
+        if crosses(2.65) { scriptDown = false; grabbed = false; goal = base }
+        if crosses(5.25) { ghostX = 228; ghostY = 606; scriptDown = true }
+        if crosses(5.45) { pressing = true }
+        if crosses(5.7) { collect(); pressing = false; scriptDown = false }
+        if crosses(9) { setWallet(1240, 0.5); setHint(0) }
+    }
+    private func gripAt(_ value: Double) -> (Double, Double) { (201 + 34 * sin(value), 462 - 34 * cos(value)) }
+    private func kickPile(_ kickNumber: Int) {
+        guard !reduced else { return }
+        for i in ballX.indices {
+            let low = gumballCrankClamp((homeY[i] - 254) / 117), kick = GumballCrankMotion.kick * (0.3 + 0.7 * low), value = gumballCrankHash(i * 13 + kickNumber * 7) * GumballCrankMotion.tau
+            ballVX[i] += cos(value) * kick * 0.6; ballVY[i] -= (0.5 + gumballCrankHash(i + kickNumber * 3) * 0.6) * kick
+        }
+    }
+    private func stepPile(dt: Double) -> Bool {
+        let frequency = GumballCrankMotion.tau / 0.52, stiffness = frequency * frequency, damping = 2 * 0.55 * frequency
+        let steps = max(1, Int(ceil(dt / (1 / 240)))), h = dt / Double(steps)
+        for _ in 0 ..< steps {
+            for i in ballX.indices { ballVX[i] += (-stiffness * (ballX[i] - homeX[i]) - damping * ballVX[i]) * h; ballVY[i] += (-stiffness * (ballY[i] - homeY[i]) - damping * ballVY[i]) * h; ballX[i] += ballVX[i] * h; ballY[i] += ballVY[i] * h }
+            Self.collide(&ballX, &ballY, ballR, &ballVX, &ballVY)
+        }
+        var busy = false
+        for i in ballX.indices {
+            if abs(ballX[i] - homeX[i]) > 0.05 || abs(ballY[i] - homeY[i]) > 0.05 || abs(ballVX[i]) > 0.5 || abs(ballVY[i]) > 0.5 { busy = true }
+            else { ballX[i] = homeX[i]; ballY[i] = homeY[i]; ballVX[i] = 0; ballVY[i] = 0 }
+        }
+        return busy
+    }
+
+    private struct Pile { let x: [Double], y: [Double], r: [Double]; let color: [Int] }
+    private static func settlePile() -> Pile {
+        let count = 23; var x = [Double](repeating: 0, count: count), y = x, r = x, vx = x, vy = x; var color = [Int](repeating: 0, count: count)
+        for i in 0 ..< count { r[i] = 15.5 + gumballCrankHash(i + 1) * 4; color[i] = Int(floor(gumballCrankHash(i * 7 + 3) * 9)); x[i] = 121 + Double(i % 7) * 27 + gumballCrankHash(i + 9) * 4; y[i] = 264 + floor(Double(i) / 7) * 26 }
+        let h = 1 / 240.0
+        for _ in 0 ..< 1600 { for i in 0 ..< count { vy[i] += GumballCrankMotion.gravity * h; vx[i] *= 0.985; vy[i] *= 0.985; x[i] += vx[i] * h; y[i] += vy[i] * h }; for _ in 0 ..< 3 { collide(&x, &y, r, &vx, &vy) } }
+        return .init(x: x, y: y, r: r, color: color)
+    }
+    private static func collide(_ x: inout [Double], _ y: inout [Double], _ r: [Double], _ vx: inout [Double], _ vy: inout [Double]) {
+        for i in x.indices where i + 1 < x.count { for j in (i + 1) ..< x.count { let dx = x[j] - x[i], dy = y[j] - y[i], distance = max(hypot(dx, dy), 1e-6), limit = r[i] + r[j]; if distance < limit { let push = (limit - distance) / distance / 2; x[i] -= dx * push; y[i] -= dy * push; x[j] += dx * push; y[j] += dy * push } } }
+        for i in x.indices {
+            let dx = x[i] - 201, dy = y[i] - 254, distance = max(hypot(dx, dy), 1e-6), limit = 117 - r[i]
+            if distance > limit { x[i] = 201 + dx / distance * limit; y[i] = 254 + dy / distance * limit; let nx = dx / distance, ny = dy / distance, normal = vx[i] * nx + vy[i] * ny; if normal > 0 { vx[i] -= 1.4 * normal * nx; vy[i] -= 1.4 * normal * ny } }
+            if y[i] > 364 - r[i] { y[i] = 364 - r[i]; if vy[i] > 0 { vy[i] *= -0.3 } }
+        }
+    }
 }
 
-enum GumballCrankInput: Equatable, Sendable {
-    enum Action: Equatable, Sendable {
-        case turn
-        case collect
-    }
-
-    case down(x: Double, y: Double, scripted: Bool = false)
-    case move(x: Double, y: Double)
-    case up
-    case command(Action)
+private func gumballCrankClamp(_ value: Double, _ low: Double = 0, _ high: Double = 1) -> Double { min(high, max(low, value)) }
+private func gumballCrankSpan(_ value: Double, _ start: Double, _ end: Double) -> Double { gumballCrankClamp((value - start) / (end - start)) }
+private func gumballCrankHash(_ n: Int) -> Double { let value = sin(Double(n) * 127.1 + 311.7) * 43758.5453; return value - floor(value) }
+private func gumballCrankToward(_ value: Double, _ goal: Double, dt: Double, duration: Double) -> Double { let amount = dt / duration; return goal > value ? min(goal, value + amount) : max(goal, value - amount) }
+private func gumballCrankBezier(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double, _ u: Double) -> Double {
+    let k = gumballCrankClamp(u), cx = 3 * x1, bx = 3 * (x2 - x1) - 3 * x1, ax = 1 - 3 * x1 - bx, cy = 3 * y1, by = 3 * (y2 - y1) - 3 * y1, ay = 1 - 3 * y1 - by
+    var t = k
+    for _ in 0 ..< 8 { let x = ((ax * t + bx) * t + cx) * t - k, dx = (3 * ax * t + 2 * bx) * t + cx; if abs(x) > 1e-5, abs(dx) > 1e-6 { t -= x / dx } }
+    t = gumballCrankClamp(t); return ((ay * t + by) * t + cy) * t
+}
+private func gumballCrankEaseOut(_ u: Double) -> Double { gumballCrankBezier(0.23, 1, 0.32, 1, u) }
+private func gumballCrankEaseInOut(_ u: Double) -> Double { gumballCrankBezier(0.77, 0, 0.175, 1, u) }
+private func gumballCrankSpring(_ value: Double, _ velocity: Double, target: Double, dt: Double, duration: Double, damping: Double) -> (Double, Double) {
+    let frequency = Double.pi * 2 / duration, stiffness = frequency * frequency, drag = 2 * damping * frequency, count = max(1, Int(ceil(dt / 0.004))), h = dt / Double(count); var x = value, v = velocity
+    for _ in 0 ..< count { v += (-stiffness * (x - target) - drag * v) * h; x += v * h }
+    return abs(x - target) < 0.0005 && abs(v) < 0.005 ? (target, 0) : (x, v)
 }
 
-/// A direct value-type port of `crank-sim.ts`. JavaScript number fields stay
-/// `Double`; discrete counters and event identifiers use `Int`.
-struct GumballCrankState: Equatable, Sendable {
-    var acc: Double
-    var clock: Double
-    var phase: Int
-    var phaseT: Double
-    var angle: Double
-    var turned: Double
-    var detent: Int
-    var w: Double
-    var wob: Double
-    var wobV: Double
-    var back: Double
-    var strain: Double
-    var press: Double
-    var grab: Bool
-    var scripted: Bool
-    var prevA: Double
-    var lastT: Double
-    var jx: Double
-    var jxv: Double
-    var jy: Double
-    var jyv: Double
-    var coins: Double
-    var bump: Double
-    var px: [Double]
-    var py: [Double]
-    var pvx: [Double]
-    var pvy: [Double]
-    var prot: [Double]
-    var pcol: [Int]
-    var demoOn: Bool
-    var demoT: Double
-    var quiet: Double
-    var autoTurn: Double
-    /// Swift-only bridge for the native gallery's return-to-rest transition.
-    var resumeT: Double
-    var resumeFromAngle: Double
-    var reduced: Bool
-    var events: [Int]
-
-    var resumeProgress: Double {
-        min(1, resumeT / GumballCrankSimulation.resumeEase)
-    }
-}
-
-enum GumballCrankSimulation {
-    private static var resumeDelay: Double { GumballCrankMotion.resumeMS / 1_000 }
-    static var resumeEase: Double { GumballCrankMotion.dynamics.resumeEase }
-
-    static func initialState(reduced: Bool, autoPlay: Bool) -> GumballCrankState {
-        GumballCrankState(
-            acc: 0,
-            clock: 0,
-            phase: GumballCrankPhase.ready,
-            phaseT: 0,
-            angle: 0,
-            turned: 0,
-            detent: 0,
-            w: 0,
-            wob: 0,
-            wobV: 0,
-            back: 0,
-            strain: 0,
-            press: 0,
-            grab: false,
-            scripted: false,
-            prevA: 0,
-            lastT: 0,
-            jx: 0,
-            jxv: 0,
-            jy: 0,
-            jyv: 0,
-            coins: GumballCrankMotion.coins.from,
-            bump: 0,
-            px: [],
-            py: [],
-            pvx: [],
-            pvy: [],
-            prot: [],
-            pcol: [],
-            demoOn: autoPlay && !reduced,
-            demoT: 0,
-            quiet: 0,
-            autoTurn: -1,
-            resumeT: 0,
-            resumeFromAngle: 0,
-            reduced: reduced,
-            events: []
-        )
-    }
-
-    static func geometry(width: Double) -> GumballCrankGeometry {
-        let scale = width / GumballCrankTheme.stageWidth
-        let knob = GumballCrankTheme.replicaArt.knob
-        let centre = knob.size / 2
-        let exit = GumballCrankTheme.replicaArt.exit
-        return GumballCrankGeometry(
-            scale: scale,
-            knobX: (knob.x + centre) * scale,
-            knobY: (knob.y + centre) * scale,
-            doorX: exit.x * scale,
-            doorY: exit.y * scale
-        )
-    }
-
-    static func input(
-        _ state: inout GumballCrankState,
-        geometry: GumballCrankGeometry,
-        event: GumballCrankInput
-    ) {
-        switch event {
-        case let .command(action):
-            state.demoOn = false
-            state.quiet = 0
-            state.resumeT = 0
-            switch action {
-            case .turn where state.phase == GumballCrankPhase.ready:
-                if state.reduced {
-                    setPhase(&state, GumballCrankPhase.dispensing)
-                } else {
-                    state.autoTurn = 0
-                }
-            case .collect where state.phase == GumballCrankPhase.reward:
-                setPhase(&state, GumballCrankPhase.collecting)
-                emit(&state, GumballCrankMotion.haptic.collect)
-            default:
-                break
-            }
-
-        case let .down(x, y, scripted):
-            state.scripted = scripted
-            if !scripted {
-                state.demoOn = false
-                state.autoTurn = -1
-                state.quiet = 0
-                state.resumeT = 0
-            }
-            guard state.phase == GumballCrankPhase.ready else { return }
-            let distance = hypot(x - geometry.knobX, y - geometry.knobY)
-            guard distance < GumballCrankMotion.knob.grab * geometry.scale else { return }
-            state.grab = true
-            state.w = 0
-            state.prevA = atan2(y - geometry.knobY, x - geometry.knobX)
-            state.lastT = state.clock
-            emit(&state, GumballCrankMotion.haptic.grab)
-
-        case let .move(x, y):
-            guard state.grab else { return }
-            if !state.scripted { state.quiet = 0 }
-            let angle = atan2(y - geometry.knobY, x - geometry.knobX)
-            var delta = angle - state.prevA
-            if delta > .pi { delta -= 2 * .pi }
-            if delta < -.pi { delta += 2 * .pi }
-            state.prevA = angle
-            let deltaTime = max(GumballCrankMotion.dynamics.velocitySampleFloor, state.clock - state.lastT)
-            state.lastT = state.clock
-
-            if delta > 0, state.strain >= 0 {
-                state.w = state.w * GumballCrankMotion.dynamics.velocityOldWeight
-                    + delta / deltaTime * GumballCrankMotion.dynamics.velocityNewWeight
-                advance(&state, by: delta)
-            } else if delta > 0 {
-                state.strain = min(0, state.strain + delta)
-                state.back = rubberBand(state.strain)
-            } else {
-                let previousBack = state.back
-                state.strain = min(0, state.strain + delta)
-                state.back = rubberBand(state.strain)
-                if previousBack > GumballCrankMotion.dynamics.ratchetHapticThreshold,
-                   state.back <= GumballCrankMotion.dynamics.ratchetHapticThreshold {
-                    emit(&state, GumballCrankMotion.haptic.ratchet)
-                }
-            }
-
-        case .up:
-            let wasScripted = state.scripted
-            if state.grab {
-                state.grab = false
-                state.w = min(GumballCrankMotion.knob.maxSpin, max(0, state.w))
-                if state.turned > .pi, state.w > GumballCrankMotion.knob.commitSpin {
-                    let remaining = GumballCrankMotion.crank.turn - state.turned
-                    state.w = max(
-                        state.w,
-                        remaining / GumballCrankMotion.knob.finish + GumballCrankMotion.knob.friction
-                    )
-                }
-            }
-            state.back = 0
-            state.strain = 0
-            state.scripted = false
-            if !wasScripted { state.quiet = 0 }
-        }
-    }
-
-    static func step(
-        _ state: inout GumballCrankState,
-        geometry: GumballCrankGeometry,
-        frameDelta: Double,
-        autoPlay: Bool
-    ) {
-        var accumulator = min(
-            state.acc + min(GumballCrankMotion.dynamics.maximumFrameDelta, max(0, frameDelta)),
-            GumballCrankMotion.step * Double(GumballCrankMotion.maxSteps)
-        )
-        while accumulator >= GumballCrankMotion.step {
-            fixedStep(&state, geometry: geometry, autoPlay: autoPlay)
-            accumulator -= GumballCrankMotion.step
-        }
-        state.acc = accumulator
-    }
-
-    private static func emit(_ state: inout GumballCrankState, _ event: Int) {
-        if !state.scripted, !state.demoOn, state.autoTurn < 0 {
-            state.events.append(event)
-        }
-    }
-
-    private static func setPhase(_ state: inout GumballCrankState, _ phase: Int) {
-        state.phase = phase
-        state.phaseT = 0
-    }
-
-    private static func rubberBand(_ strain: Double) -> Double {
-        let maximum = GumballCrankMotion.knob.backMax
-        return -maximum * (1 - exp(strain / maximum))
-    }
-
-    private static func burst(_ state: inout GumballCrankState, geometry: GumballCrankGeometry) {
-        state.px.removeAll(keepingCapacity: true)
-        state.py.removeAll(keepingCapacity: true)
-        state.pvx.removeAll(keepingCapacity: true)
-        state.pvy.removeAll(keepingCapacity: true)
-        state.prot.removeAll(keepingCapacity: true)
-        state.pcol.removeAll(keepingCapacity: true)
-
-        for index in 0..<GumballCrankMotion.confetti.count {
-            let dynamics = GumballCrankMotion.dynamics
-            let r1 = sin(Double(index) * dynamics.confettiSeedA) * dynamics.confettiSeedAMultiplier
-            let r2 = sin(Double(index) * dynamics.confettiSeedB) * dynamics.confettiSeedBMultiplier
-            let u1 = r1 - floor(r1)
-            let u2 = r2 - floor(r2)
-            let angle = -.pi / 2 + (u1 - 0.5) * GumballCrankMotion.confetti.spread * 2
-            let velocity = GumballCrankMotion.confetti.speed
-                * (dynamics.confettiMinimumSpeed + dynamics.confettiSpeedRange * u2)
-                * geometry.scale
-            state.px.append(geometry.doorX)
-            state.py.append(geometry.doorY)
-            state.pvx.append(cos(angle) * velocity)
-            state.pvy.append(sin(angle) * velocity)
-            state.prot.append(u2 * dynamics.confettiInitialRotation)
-            state.pcol.append(index % 5)
-        }
-    }
-
-    private static func advance(_ state: inout GumballCrankState, by delta: Double) {
-        state.angle += delta
-        state.turned += delta
-        let detent = Int(floor(
-            state.turned / GumballCrankMotion.crank.detent + GumballCrankMotion.dynamics.detentEpsilon
-        ))
-        if detent > state.detent {
-            state.detent = detent
-            if !state.reduced {
-                state.wobV += GumballCrankMotion.crank.overshoot.kick
-                state.jxv += (detent.isMultiple(of: 2) ? 1 : -1)
-                    * GumballCrankMotion.dynamics.jostleKickX
-                state.jyv -= GumballCrankMotion.dynamics.jostleKickY
-            }
-            emit(&state, GumballCrankMotion.haptic.detent)
-        }
-        if state.turned >= GumballCrankMotion.crank.turn - GumballCrankMotion.dynamics.detentEpsilon {
-            state.turned = 0
-            state.detent = 0
-            state.w = 0
-            state.grab = false
-            state.angle = (state.angle / GumballCrankMotion.crank.turn).rounded()
-                * GumballCrankMotion.crank.turn
-            setPhase(&state, GumballCrankPhase.dispensing)
-            emit(&state, GumballCrankMotion.haptic.dispense)
-        }
-    }
-
-    private static func scriptedTurn(
-        _ state: inout GumballCrankState,
-        geometry: GumballCrankGeometry,
-        from time0: Double,
-        to time1: Double,
-        startingAt start: Double
-    ) {
-        let end = start + GumballCrankMotion.upScript.turn[1] - GumballCrankMotion.upScript.turn[0]
-        func point(at time: Double) -> (x: Double, y: Double) {
-            let unit = min(1, max(0, (time - start) / (end - start)))
-            let eased = (1 - cos(.pi * unit)) / 2
-            let angle = -.pi / 2 + GumballCrankMotion.upScript.angle * eased
-            return (
-                geometry.knobX + cos(angle) * GumballCrankMotion.upScript.radius * geometry.scale,
-                geometry.knobY + sin(angle) * GumballCrankMotion.upScript.radius * geometry.scale
-            )
-        }
-
-        if time0 <= start, start < time1 {
-            let position = point(at: start)
-            input(
-                &state,
-                geometry: geometry,
-                event: .down(x: position.x, y: position.y, scripted: true)
-            )
-        }
-        if time1 > start, time0 < end, state.grab {
-            let position = point(at: min(time1, end))
-            input(&state, geometry: geometry, event: .move(x: position.x, y: position.y))
-        }
-        if time0 < end, end <= time1 {
-            input(&state, geometry: geometry, event: .up)
-        }
-    }
-
-    private static func fixedStep(
-        _ state: inout GumballCrankState,
-        geometry: GumballCrankGeometry,
-        autoPlay: Bool
-    ) {
-        let delta = GumballCrankMotion.step
-        if state.demoOn {
-            let time0 = state.demoT
-            let time1 = time0 + delta
-            scriptedTurn(
-                &state,
-                geometry: geometry,
-                from: time0,
-                to: time1,
-                startingAt: GumballCrankMotion.upScript.turn[0]
-            )
-            let collectAt = GumballCrankMotion.upScript.collectAt
-            if time0 <= collectAt, collectAt < time1 {
-                input(&state, geometry: geometry, event: .command(.collect))
-            }
-            state.demoOn = true
-            let loopSeconds = GumballCrankMotion.upLoopMS / 1_000
-            if time1 >= loopSeconds - GumballCrankMotion.dynamics.loopEpsilon {
-                let reduced = state.reduced
-                state = initialState(reduced: reduced, autoPlay: autoPlay)
-                return
-            }
-            state.demoT = time1
-        } else if state.autoTurn >= 0 {
-            scriptedTurn(
-                &state,
-                geometry: geometry,
-                from: state.autoTurn,
-                to: state.autoTurn + delta,
-                startingAt: 0
-            )
-            state.autoTurn += delta
-            let turnDuration = GumballCrankMotion.upScript.turn[1] - GumballCrankMotion.upScript.turn[0]
-            if state.autoTurn > turnDuration + GumballCrankMotion.dynamics.autoTurnTail {
-                state.autoTurn = -1
-            }
-        }
-
-        if !state.grab, state.w > 0, state.phase == GumballCrankPhase.ready {
-            advance(&state, by: state.w * delta)
-            state.w = max(0, state.w - GumballCrankMotion.knob.friction * state.w * delta)
-            if state.w < GumballCrankMotion.knob.catchSpin {
-                state.w = 0
-            }
-        }
-
-        let overshoot = GumballCrankMotion.crank.overshoot
-        state.wobV += (-overshoot.stiffness * state.wob - overshoot.damping * state.wobV) * delta
-        state.wob += state.wobV * delta
-        if !state.grab { state.back *= exp(-GumballCrankMotion.dynamics.backDecay * delta) }
-        state.press += ((state.grab ? 1 : 0) - state.press)
-            * (1 - exp(-GumballCrankMotion.dynamics.pressResponse * delta))
-
-        state.jxv += (-GumballCrankMotion.dynamics.jostleStiffness * state.jx
-            - GumballCrankMotion.dynamics.jostleDamping * state.jxv) * delta
-        state.jx += state.jxv * delta
-        state.jyv += (-GumballCrankMotion.dynamics.jostleStiffness * state.jy
-            - GumballCrankMotion.dynamics.jostleDamping * state.jyv) * delta
-        state.jy += state.jyv * delta
-
-        let phaseBeforeStep = state.phaseT
-        state.phaseT += delta
-        if state.phase == GumballCrankPhase.dispensing {
-            if phaseBeforeStep < GumballCrankMotion.upT.confetti,
-               state.phaseT >= GumballCrankMotion.upT.confetti,
-               !state.reduced {
-                burst(&state, geometry: geometry)
-            }
-            if state.phaseT >= GumballCrankMotion.upT.done {
-                setPhase(&state, GumballCrankPhase.reward)
-                state.coins -= GumballCrankMotion.coins.add
-                emit(&state, GumballCrankMotion.haptic.open)
-            }
-        } else if state.phase == GumballCrankPhase.collecting,
-                  state.phaseT >= GumballCrankMotion.upT.collect + GumballCrankMotion.upT.back {
-            setPhase(&state, GumballCrankPhase.ready)
-        }
-
-        if state.phase == GumballCrankPhase.collecting,
-           phaseBeforeStep < GumballCrankMotion.upT.collect,
-           state.phaseT >= GumballCrankMotion.upT.collect {
-            state.coins += GumballCrankMotion.coins.add
-            state.bump = 1
-        }
-        state.bump = max(0, state.bump - delta * GumballCrankMotion.dynamics.bumpDecay)
-
-        for index in state.px.indices {
-            state.pvy[index] += GumballCrankMotion.confetti.gravity * geometry.scale * delta
-            state.px[index] += state.pvx[index] * delta
-            state.py[index] += state.pvy[index] * delta
-            state.prot[index] += (index.isMultiple(of: 2) ? 1 : -1)
-                * GumballCrankMotion.confetti.spin * delta
-        }
-        if !state.px.isEmpty,
-           state.phase != GumballCrankPhase.dispensing,
-           state.phaseT > GumballCrankMotion.dynamics.confettiClearDelay {
-            state.px.removeAll(keepingCapacity: true)
-            state.py.removeAll(keepingCapacity: true)
-            state.pvx.removeAll(keepingCapacity: true)
-            state.pvy.removeAll(keepingCapacity: true)
-            state.prot.removeAll(keepingCapacity: true)
-            state.pcol.removeAll(keepingCapacity: true)
-        }
-        state.clock += delta
-        if autoPlay, !state.demoOn, !state.reduced {
-            resumeAutoplayIfNeeded(&state)
-        }
-    }
-
-    /// After two seconds without manual input, ease the active presentation
-    /// back to rest for 350 ms, then restart the deterministic autoplay loop.
-    private static func resumeAutoplayIfNeeded(_ state: inout GumballCrankState) {
-        guard !state.grab else {
-            state.resumeT = 0
-            return
-        }
-        state.quiet += GumballCrankMotion.step
-        guard state.quiet >= resumeDelay else { return }
-        if state.resumeT == 0 {
-            state.resumeFromAngle = state.angle
-        }
-        state.resumeT += GumballCrankMotion.step
-        let unit = min(1, state.resumeT / resumeEase)
-        let eased = 1 - pow(1 - unit, 3)
-        state.angle = state.resumeFromAngle * (1 - eased)
-        state.turned = max(0, state.angle.truncatingRemainder(dividingBy: GumballCrankMotion.crank.turn))
-        state.detent = Int(floor(
-            state.turned / GumballCrankMotion.crank.detent + GumballCrankMotion.dynamics.detentEpsilon
-        ))
-        state.wob *= 1 - eased
-        state.wobV *= 1 - eased
-        state.back *= 1 - eased
-        state.strain *= 1 - eased
-        state.press *= 1 - eased
-        state.jx *= 1 - eased
-        state.jxv *= 1 - eased
-        state.jy *= 1 - eased
-        state.jyv *= 1 - eased
-        guard unit >= 1 else { return }
-
-        let reduced = state.reduced
-        state = initialState(reduced: reduced, autoPlay: true)
-    }
-}
+func gumballCrankEase(_ u: Double) -> Double { gumballCrankEaseOut(u) }
+func gumballCrankUnitSpan(_ value: Double, _ start: Double, _ end: Double) -> Double { gumballCrankSpan(value, start, end) }

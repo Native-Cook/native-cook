@@ -2,171 +2,122 @@ package com.ngocdevv.nativecook.blocks.gestures.slidetoanswercord
 
 import androidx.compose.ui.graphics.Color
 
-internal fun slideToAnswerCordRgba(
-    red: Int,
-    green: Int,
-    blue: Int,
-    alpha: Double,
-): Color = Color(
+internal fun slideToAnswerCordRgba(red: Int, green: Int, blue: Int, alpha: Double): Color = Color(
     red = red / 255f,
     green = green / 255f,
     blue = blue / 255f,
     alpha = alpha.toFloat(),
 )
 
-/** Exact values mirrored from the approved React Native theme.ts and motion.ts. */
+/** Values mirrored from the approved React Native theme.ts and motion.ts. */
 internal object Tokens {
     const val STAGE_WIDTH = 402.0
 
     object COLORS {
-        val sky = listOf(
-            Color(0xFF050409),
-            Color(0xFF050409),
-            Color(0xFF111226),
-            Color(0xFF1C1C3E),
-            Color(0xFF2A2B6C),
-            Color(0xFF262767),
-        )
-        val skyStops = listOf(0.0, 0.39, 0.47, 0.55, 0.78, 1.0)
-        val skyTop = Color(0xFF050409)
-        val skyMid = Color(0xFF050409)
-        val horizon = Color(0xFF1C1D42)
-        val ground = Color(0xFF2A2B6C)
-        val groundConnected = Color(0xFF0E3D3A)
-        val groundEnded = Color(0xFF3A1328)
-        const val grain = 0.07
-        val ring = Color(0xFFFF1F8E)
-        val ringDeep = Color(0xFFC40F6A)
-        val connected = Color(0xFF2BE36A)
-        val connectedDeep = Color(0xFF12A548)
-        val off = Color(0xFF5B2348)
-        val offDeep = Color(0xFF3A1630)
-        val shell = slideToAnswerCordRgba(92, 52, 178, 0.78)
-        val shellEdge = slideToAnswerCordRgba(164, 128, 255, 0.55)
-        val grille = slideToAnswerCordRgba(60, 0, 40, 0.55)
-        val bloom = Color.White
-        val cordBack = Color(0xFF2C2178)
-        val cordFront = Color(0xFF7448E6)
-        val cordEdge = Color(0xFFFF4FAE)
-        val replicaCord = Color(0xFF302A88)
-        val replicaRim = Color(0xFFA5237D)
-        val replicaRimLeft = Color(0xFF4C40B4)
-        val ink = Color(0xFFF4F2FF)
-        val mute = slideToAnswerCordRgba(244, 242, 255, 0.58)
-        val decline = Color(0xFFFF1450)
-        val accept = Color(0xFF22E04A)
+        val page = Color(0xFF0C0A09)
+        val pageTop = Color(0xFF120F0D)
+        val pageBottom = Color(0xFF070606)
+        val ivoryHi = Color(0xFFFFF9EE)
+        val ivory = Color(0xFFEDE2CC)
+        val ivoryMid = Color(0xFFD8CAAE)
+        val ivoryLo = Color(0xFFB6A584)
+        val ivoryEdge = slideToAnswerCordRgba(92, 72, 44, 0.45)
+        val cupLo = Color(0xFFB9A889)
+        val cupHi = Color(0xFFF6EEDC)
+        val hole = Color(0xFF4A3D2B)
+        val specular = slideToAnswerCordRgba(255, 255, 255, 0.85)
+        val shadow = slideToAnswerCordRgba(0, 0, 0, 0.55)
+        val cordFront = Color(0xFFE2D6BE)
+        val cordBack = Color(0xFF7E7058)
+        val cordHi = slideToAnswerCordRgba(255, 250, 238, 0.75)
+        val cordEdge = slideToAnswerCordRgba(60, 46, 28, 0.55)
+        val ink = Color(0xFFF5F3F0)
+        val mute = slideToAnswerCordRgba(245, 243, 240, 0.60)
+        val faint = slideToAnswerCordRgba(245, 243, 240, 0.40)
+        val decline = Color(0xFFFF3B30)
+        val accept = Color(0xFF34C759)
         val glyph = Color.White
-        val label = slideToAnswerCordRgba(244, 242, 255, 0.62)
+        val glass = slideToAnswerCordRgba(255, 255, 255, 0.14)
+        val glassEdge = slideToAnswerCordRgba(255, 255, 255, 0.20)
+        val controlOn = slideToAnswerCordRgba(255, 255, 255, 0.92)
+        val controlOnInk = Color(0xFF16120F)
     }
 
     object HANDSET {
-        const val imageX = -69.6
-        const val imageY = -6.96
-        const val imageW = 167.04
-        const val imageH = 208.8
-        const val earX = 12.0
-        const val earY = 23.0
-        const val mouthX = 12.0
-        const val mouthY = 172.0
-        const val comX = 2.0
+        const val cupR = 30.0
+        const val topCupY = 30.0
+        const val bottomCupY = 166.0
+        const val waist = 13.0
+        const val inner = 21.0
+        const val comX = 0.0
         const val comY = 98.0
-        const val bloom = 20.0
-        const val bloomX = 14.0
-        const val bloomY = -14.0
-        const val hit = 190.0
+        const val hit = 200.0
         const val restTilt = -0.33
-        const val offOpacity = 0.42
     }
 
     object CORD {
         const val anchorY = -12.0
         const val replicaAnchorDx = -26.0
-        const val replicaTurns = 9.7
-        const val replicaWave = 7.0
-        const val replicaPhase = -3.98
-        val replicaRoll = listOf(
-            doubleArrayOf(0.0, 0.0),
-            doubleArrayOf(1.0, -0.39),
-            doubleArrayOf(1.875, -0.22),
-            doubleArrayOf(2.9, -0.39),
-            doubleArrayOf(4.0, 0.0),
-        )
-        const val replicaWidth = 7.0
-        const val replicaRimDx = 2.7
         const val restRatio = 0.335
         const val links = 14
-        const val turns = 20
-        const val wire = 90.0
-        const val width = 2.6
-        const val edge = 1.1
-        const val maxRadius = 9.0
-        const val samples = 8
+        const val turns = 26.0
+        const val wire = 46.0
+        const val tube = 4.2
+        const val maxRadius = 6.5
+        const val samples = 7
     }
 
     object SPACE {
         const val xs = 4.0
         const val sm = 8.0
-        const val md = 12.0
-        const val lg = 16.0
-        const val xl = 24.0
-        const val xxl = 32.0
-        const val xxxl = 40.0
     }
 
     object LAYOUT {
         const val side = 32.0
-        const val nameTopRatio = 0.655
-        const val copyTopRatio = 0.645
+        const val copyTopRatio = 0.64
         const val nameSize = 34.0
-        const val nameLine = 40.0
-        const val statusSize = 17.0
-        const val statusLine = 22.0
-        const val gap = 8.0
+        const val nameLine = 41.0
+        const val metaSize = 15.0
+        const val metaLine = 20.0
+        const val metaGap = 2.0
+        const val statusSize = 15.0
+        const val statusLine = 20.0
+        const val gap = 12.0
+        const val copyToPill = 24.0
         const val buttonsBottom = 40.0
-        const val button = 64.0
-        const val buttonGap = 96.0
+        const val button = 72.0
+        const val buttonGap = 104.0
         const val labelSize = 13.0
-        const val labelGap = 8.0
-        const val glyph = 26.0
+        const val labelGap = 10.0
+        const val glyph = 30.0
     }
 
-    data class Control(
-        val name: String,
-        val label: String,
-        val symbol: String,
-    )
+    data class Control(val name: String, val label: String)
 
     object COPY {
-        const val meta = "mobile · Stockholm"
-        val controls = listOf(
-            Control("mute", "Mute", "mic.slash.fill"),
-            Control("keypad", "Keypad", "circle.grid.3x3.fill"),
-            Control("speaker", "Speaker", "speaker.wave.2.fill"),
-        )
         const val name = "Mara Lindqvist"
-        const val ringing = "Incoming call · lift to answer"
+        const val meta = "mobile"
+        const val ringing = "Lift the receiver to answer"
         const val declined = "Call declined"
         const val ended = "Call ended"
         const val decline = "Decline"
         const val accept = "Accept"
         const val end = "End"
-        const val a11yHandset = "Handset"
+        val controls = listOf(
+            Control("mute", "Mute"),
+            Control("keypad", "Keypad"),
+            Control("speaker", "Speaker"),
+        )
+        const val a11yHandset = "Receiver"
         const val a11yHint = "Swipe up to answer, swipe down to decline"
     }
 
     const val REPLICA = false
 
     object GLASS {
-        const val blur = 18.0
-        val decline = slideToAnswerCordRgba(255, 20, 80, 0.55)
-        val accept = slideToAnswerCordRgba(34, 224, 74, 0.5)
-        val neutral = slideToAnswerCordRgba(255, 255, 255, 0.12)
-        val edgeTop = slideToAnswerCordRgba(255, 255, 255, 0.75)
-        val edgeBottom = slideToAnswerCordRgba(255, 255, 255, 0.08)
-        const val pillY = -96.0
-        const val pillH = 64.0
-        const val field = 300.0
-        const val fieldAlpha = 0.35
+        const val pillY = -82.0
+        const val pillH = 60.0
+        const val controlH = 52.0
     }
 
     const val STEP = 1.0 / 120.0
@@ -203,7 +154,7 @@ internal object Tokens {
         const val drop = 24.0
         const val lengthEase = 7.0
         const val colorEase = 14.0
-        const val resetAfter = 2.0
+        const val resetAfter = 1.4
     }
 
     object RING {
@@ -214,8 +165,6 @@ internal object Tokens {
         const val buzzAngle = 0.05
         const val buzzHz = 38.0
         const val pulse = 1.3
-        const val pulseFrom = 44.0
-        const val pulseTo = 170.0
     }
 
     object HAPTIC {
@@ -225,18 +174,18 @@ internal object Tokens {
         const val tick = 4
     }
 
-    const val LOOP_MS = 12_000
+    const val LOOP_MS = 8_000
     const val LOOP = LOOP_MS / 1000.0
-    const val RESUME_MS = 3_500
-    const val TOUCH_RESUME_MS = 2_000
+    const val RESUME_MS = 2_000
+    const val RESUME_IN_CALL = 3.9
     const val PREROLL_LOOPS = 3
     val SCRIPT = listOf(
-        doubleArrayOf(2.6, 3.0, 0.0, 0.0, 0.0, -10.0, 1.0, 0.0),
-        doubleArrayOf(3.0, 3.55, 0.0, -10.0, 6.0, -84.0, 0.0, 0.0),
-        doubleArrayOf(3.55, 3.7, 6.0, -84.0, 6.0, -84.0, 0.0, 1.0),
-        doubleArrayOf(7.4, 7.75, 0.0, 0.0, 0.0, 14.0, 1.0, 0.0),
-        doubleArrayOf(7.75, 8.25, 0.0, 14.0, -4.0, 92.0, 0.0, 0.0),
-        doubleArrayOf(8.25, 8.4, -4.0, 92.0, -4.0, 92.0, 0.0, 1.0),
+        doubleArrayOf(1.6, 2.0, 0.0, 0.0, 0.0, -10.0, 1.0, 0.0),
+        doubleArrayOf(2.0, 2.55, 0.0, -10.0, 6.0, -84.0, 0.0, 0.0),
+        doubleArrayOf(2.55, 2.7, 6.0, -84.0, 6.0, -84.0, 0.0, 1.0),
+        doubleArrayOf(4.4, 4.75, 0.0, 0.0, 0.0, 14.0, 1.0, 0.0),
+        doubleArrayOf(4.75, 5.25, 0.0, 14.0, -4.0, 92.0, 0.0, 0.0),
+        doubleArrayOf(5.25, 5.4, -4.0, 92.0, -4.0, 92.0, 0.0, 1.0),
     )
 
     object REPLICA_SWING {
@@ -270,9 +219,6 @@ internal object Tokens {
         doubleArrayOf(450.9, 443.0, 431.1, 416.4, 400.0, 383.2, 367.2, 353.2, 342.3),
     )
 
-    const val REPLICA_HOLD = -1.0
-    const val QA_SPEED = 1.0
-
     object FLICK {
         const val speed = 900.0
         const val min = 24.0
@@ -280,24 +226,9 @@ internal object Tokens {
 
     const val TICK = 22.0
 
-    object WASH {
-        const val duration = 0.7
-    }
-
-    object MORPH {
-        const val duration = 0.5
-    }
-
     object PRESS {
         const val scale = 0.95
         const val inMs = 120
         const val outMs = 160
     }
-
-    object CHEVRON {
-        const val period = 1.5
-        const val rise = 18.0
-    }
-
-    const val RESUME_EASE = 0.5
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The resting run list. Its coordinates are measured against the unscaled 402 pt
 /// stage used by the React Native source.
@@ -131,9 +132,12 @@ private struct ReceiptPrinterGridCard: View {
                 .frame(width: t.GRID.cardW)
                 .offset(x: -t.GRID.dateInset)
 
-                ReceiptPrinterTreadmill()
-                    .frame(width: t.GRID.iconW, height: t.GRID.iconH)
-                    .offset(x: (t.GRID.cardW - t.GRID.iconW) / 2, y: t.GRID.iconTop)
+                ReceiptPrinterRoute(seed: card.seed)
+                    .frame(width: ReceiptPrinterRouteArtwork.width, height: ReceiptPrinterRouteArtwork.height)
+                    .offset(
+                        x: (t.GRID.cardW - ReceiptPrinterRouteArtwork.width) / 2,
+                        y: t.GRID.iconTop - 8
+                    )
 
                 ReceiptPrinterGridCapText(
                     card.km,
@@ -216,36 +220,95 @@ private struct ReceiptPrinterGridCapText: View {
     }
 }
 
-/// The source's white, ink-outlined three-quarter treadmill, kept as vector art.
-private struct ReceiptPrinterTreadmill: View {
-    private let t = ReceiptPrinterTokens.self
+private struct ReceiptPrinterRoute: View {
+    let seed: Int
 
     var body: some View {
-        Canvas { context, _ in
-            context.fill(Path(ellipseIn: CGRect(x: 6, y: 30.6, width: 4.2, height: 2)), with: .color(t.COLOR.icon))
+        Image(uiImage: ReceiptPrinterRouteArtwork.image(seed: seed))
+            .resizable()
+            .interpolation(.high)
+    }
+}
 
-            let bars: [(CGPoint, CGPoint, CGFloat)] = [
-                (CGPoint(x: 2.8, y: 28.4), CGPoint(x: 42.6, y: 25.6), 5.4),
-                (CGPoint(x: 34.6, y: 21.8), CGPoint(x: 43.4, y: 21.2), 5),
-                (CGPoint(x: 30.6, y: 30.4), CGPoint(x: 28.2, y: 9.8), 4),
-                (CGPoint(x: 7.6, y: 9.8), CGPoint(x: 39.2, y: 7.4), 4.2),
-            ]
-            for (from, to, width) in bars {
-                var path = Path()
-                path.move(to: from)
-                path.addLine(to: to)
-                context.stroke(path, with: .color(t.COLOR.icon), style: StrokeStyle(lineWidth: width + 1.3, lineCap: .round, lineJoin: .round))
-                context.stroke(path, with: .color(t.COLOR.paper), style: StrokeStyle(lineWidth: width - 1.3, lineCap: .round, lineJoin: .round))
-            }
+/// The grid is static while visible. Render its fifteen route traces once rather
+/// than rebuilding sixty-four-point paths during the grid fade and card morph.
+@MainActor
+private enum ReceiptPrinterRouteArtwork {
+    static let width = 78.0
+    static let height = 44.0
 
-            var console = Path()
-            console.move(to: CGPoint(x: 33.8, y: 0.6))
-            console.addLine(to: CGPoint(x: 38.6, y: 6.2))
-            console.addLine(to: CGPoint(x: 30.4, y: 6.8))
-            console.closeSubpath()
-            context.fill(console, with: .color(t.COLOR.paper))
-            context.stroke(console, with: .color(t.COLOR.icon), lineWidth: 1.3)
+    private struct Geometry {
+        let points: [CGPoint]
+        let start: CGPoint
+    }
+
+    private static let images: [Int: UIImage] = Dictionary(
+        uniqueKeysWithValues: Set(ReceiptPrinterTokens.CARDS.map(\.seed)).map { seed in
+            (seed, render(seed: seed))
         }
-        .drawingGroup()
+    )
+
+    static func image(seed: Int) -> UIImage {
+        images[seed] ?? render(seed: seed)
+    }
+
+    private static func render(seed: Int) -> UIImage {
+        let route = geometry(seed: seed)
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = 3
+        return UIGraphicsImageRenderer(
+            size: CGSize(width: width, height: height),
+            format: format
+        ).image { renderer in
+            let context = renderer.cgContext
+            context.setStrokeColor(UIColor(red: 60 / 255, green: 60 / 255, blue: 60 / 255, alpha: 1).cgColor)
+            context.setLineWidth(1.6)
+            context.setLineJoin(.round)
+            context.setLineCap(.round)
+            context.beginPath()
+            guard let first = route.points.first else { return }
+            context.move(to: first)
+            route.points.dropFirst().forEach(context.addLine(to:))
+            context.closePath()
+            context.strokePath()
+
+            context.setFillColor(UIColor(red: 126 / 255, green: 224 / 255, blue: 110 / 255, alpha: 1).cgColor)
+            context.setStrokeColor(UIColor(red: 60 / 255, green: 60 / 255, blue: 60 / 255, alpha: 1).cgColor)
+            context.setLineWidth(1)
+            context.addEllipse(in: CGRect(x: route.start.x - 2.6, y: route.start.y - 2.6, width: 5.2, height: 5.2))
+            context.drawPath(using: .fillStroke)
+        }
+    }
+
+    private static func geometry(seed: Int) -> Geometry {
+        func random(_ index: Int) -> Double {
+            let value = sin(Double(seed) * 91.7 + Double(index) * 12.9898) * 43_758.5453
+            return value - floor(value)
+        }
+
+        let a2 = 0.1 + random(1) * 0.18
+        let a3 = random(2) * 0.12
+        let b2 = 0.08 + random(3) * 0.22
+        let p2 = random(4) * 6.28
+        let p3 = random(5) * 6.28
+        let q2 = random(6) * 6.28
+        let raw = (0..<64).map { index -> CGPoint in
+            let angle = Double(index) / 64 * .pi * 2
+            return CGPoint(
+                x: cos(angle) + a2 * cos(2 * angle + p2) + a3 * cos(3 * angle + p3),
+                y: sin(angle) + b2 * sin(2 * angle + q2) + a3 * 0.6 * sin(3 * angle + p3)
+            )
+        }
+        let minX = raw.map(\.x).min() ?? 0
+        let maxX = raw.map(\.x).max() ?? 1
+        let minY = raw.map(\.y).min() ?? 0
+        let maxY = raw.map(\.y).max() ?? 1
+        let scale = min((width - 6) / (maxX - minX), (height - 6) / (maxY - minY))
+        let offsetX = (width - (maxX - minX) * scale) / 2 - minX * scale
+        let offsetY = (height - (maxY - minY) * scale) / 2 - minY * scale
+        let points = raw.map { CGPoint(x: offsetX + $0.x * scale, y: offsetY + $0.y * scale) }
+        let startIndex = min(63, Int(floor(random(7) * 64)))
+        return Geometry(points: points, start: points[startIndex])
     }
 }

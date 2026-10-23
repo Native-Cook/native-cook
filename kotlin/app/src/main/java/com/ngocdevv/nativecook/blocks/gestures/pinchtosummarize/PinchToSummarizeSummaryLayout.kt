@@ -11,8 +11,13 @@ import androidx.compose.ui.unit.Constraints
 import kotlin.math.roundToInt
 
 /** One native measurement shared by the motion clock and the streamed rows. */
-internal data class PtsSummaryLayout(val rows: List<Row>) {
-    val revealTotal: Float = rows.size * PtsTiming.lineStagger.toFloat() + PtsTiming.lineMs
+internal data class PtsSummaryLayout(
+    val rows: List<Row>,
+    val entities: List<PtsCopy.Entity>,
+    val entityY: Float?,
+    val height: Float,
+) {
+    val revealTotal: Float = PtsFlight.landMs + rows.size * PtsTiming.lineStagger.toFloat() + PtsTiming.lineMs
 
     enum class Kind { Lead, Title, Body }
 
@@ -24,19 +29,21 @@ internal data class PtsSummaryLayout(val rows: List<Row>) {
         val kind: Kind,
         val layout: TextLayoutResult,
         val icon: String? = null,
+        val source: Int = 0,
     )
 }
 
 @Composable
-internal fun rememberPtsSummaryLayout(width: Float): PtsSummaryLayout {
+internal fun rememberPtsSummaryLayout(width: Float, levelIndex: Int): PtsSummaryLayout {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    return remember(width, density, measurer) {
+    return remember(width, levelIndex, density, measurer) {
+        val level = PtsCopy.levels[levelIndex.coerceIn(PtsCopy.levels.indices)]
         val rows = mutableListOf<PtsSummaryLayout.Row>()
         val left = PtsLayout.textInset
         val full = width - left * 2f
         var y = 0f
-        fun add(text: String, style: TextStyle, x: Float, available: Float, kind: PtsSummaryLayout.Kind, icon: String? = null) {
+        fun add(text: String, style: TextStyle, x: Float, available: Float, kind: PtsSummaryLayout.Kind, icon: String? = null, source: Int = 0) {
             val wrapped = measurer.measure(
                 AnnotatedString(text), style,
                 constraints = Constraints(maxWidth = (available * density.density).roundToInt().coerceAtLeast(1)),
@@ -47,19 +54,31 @@ internal fun rememberPtsSummaryLayout(width: Float): PtsSummaryLayout {
                     AnnotatedString(line), style, maxLines = 1,
                     constraints = Constraints(maxWidth = ((available + 8f) * density.density).roundToInt().coerceAtLeast(1)),
                 )
-                rows += PtsSummaryLayout.Row(line, x, y, available, kind, layout, if (index == 0) icon else null)
+                rows += PtsSummaryLayout.Row(line, x, y, available, kind, layout, if (index == 0) icon else null, source)
                 y += style.lineHeight.value
             }
         }
-        add(PtsCopy.lead, PtsType.lead, left, full, PtsSummaryLayout.Kind.Lead)
-        y += PtsLayout.leadGap
-        PtsCopy.items.forEach { item ->
+        add(level.lead, if (level.tldr) PtsType.tldr else PtsType.lead, left, full, PtsSummaryLayout.Kind.Lead)
+        val said = buildString {
+            append(level.lead)
+            level.points.forEach { append(' ').append(PtsCopy.items[it].body) }
+        }
+        val entities = PtsCopy.entities.filter { said.contains(it.term) }
+        val entityY = if (entities.isNotEmpty()) {
+            y += PtsLayout.entityGap
+            val top = y
+            y += PtsLayout.entityHeight
+            top
+        } else {
+            null
+        }
+        level.points.map(PtsCopy.items::get).forEachIndexed { index, item ->
+            y += if (index == 0 && entityY == null) PtsLayout.leadGap else PtsLayout.itemGap
             val x = left + PtsLayout.itemIndent
             val available = full - PtsLayout.itemIndent
-            add(item.title, PtsType.itemTitle, x, available, PtsSummaryLayout.Kind.Title, item.icon)
-            add(item.body, PtsType.itemBody, x, available, PtsSummaryLayout.Kind.Body)
-            y += PtsLayout.itemGap
+            add(item.title, PtsType.itemTitle, x, available, PtsSummaryLayout.Kind.Title, item.icon, item.source)
+            add(item.body, PtsType.itemBody, x, available, PtsSummaryLayout.Kind.Body, source = item.source)
         }
-        PtsSummaryLayout(rows)
+        PtsSummaryLayout(rows, entities, entityY, y)
     }
 }

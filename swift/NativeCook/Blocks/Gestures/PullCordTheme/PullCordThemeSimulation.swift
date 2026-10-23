@@ -1,699 +1,606 @@
-import Foundation
+import CoreGraphics
 
-/// Fixed-step pull-cord physics ported directly from `cord-sim.ts`.
-///
-/// The kernel has no UI or device dependencies, so the same input stream can be
-/// run through the TypeScript and Swift versions for numeric comparison.
 enum PullCordThemeSimulation {
-    struct Point: Equatable, Sendable {
-        var x: Double
-        var y: Double
-    }
+    static let balls = PullCordThemeTokens.Chain.links + 1
 
-    struct Geometry: Equatable, Sendable {
+    struct Geometry: Equatable {
         let width: Double
         let height: Double
         let scale: Double
         let pivotX: Double
         let pivotY: Double
-        let socketTop: Double
-        let anchorX: Double
-        let anchorY: Double
-        let restY: Double
+        let arm: Double
+        let segment: Double
         let length: Double
-        let segmentLength: Double
     }
 
-    enum Input: Equatable, Sendable {
-        case down(x: Double, y: Double, scripted: Bool = false)
-        case move(x: Double, y: Double, velocityX: Double, velocityY: Double)
-        case up(velocityX: Double, velocityY: Double, cancelled: Bool = false)
+    enum Input {
+        case down(x: Double, y: Double, script: Bool = false)
+        case move(x: Double, y: Double, velocityX: Double, velocityY: Double, script: Bool = false)
+        case up(velocityX: Double, velocityY: Double, cancelled: Bool = false, script: Bool = false)
+        case tap(x: Double, y: Double)
         case toggle
     }
 
-    enum HapticEvent: Int, Equatable, Sendable {
-        case grab = 1
-        case detent = 2
-        case home = 3
-        case tick = 4
+    enum Event {
+        case click
     }
 
-    struct State: Equatable, Sendable {
+    final class State {
         var accumulator = 0.0
         var clock = 0.0
-
-        var positionX: [Double]
-        var positionY: [Double]
-        var oldPositionX: [Double]
-        var oldPositionY: [Double]
-
-        var extensionAmount = 0.0
-        var extensionVelocity = 0.0
-        var isArmed = true
-
-        /// 0 = none, 1 = bead, 2 = bulb.
+        var x: [Double]
+        var y: [Double]
+        var oldX: [Double]
+        var oldY: [Double]
+        var travel = 0.0
+        var travelVelocity = 0.0
+        var armed = true
         var grab = 0
-        var isScripted = false
+        var grabbedIndex = balls - 1
+        var scripted = false
         var fingerX = 0.0
         var fingerY = 0.0
-        var grabDeltaX = 0.0
-        var grabDeltaY = 0.0
-        var velocityX = 0.0
-        var velocityY = 0.0
-
-        var downX = 0.0
-        var downY = 0.0
-        var downTime = 0.0
-        var movedDistance = 0.0
-
-        /// 0 = dark, 1 = light.
-        var light = 0
-        var revealValue = 0.0
-        var revealFrom = 0.0
-        var revealTo = 0.0
-        var revealTime = 1.0
-        var revealDuration = 1.0
-
-        var level = 0.0
-        var ignitionTime = -1.0
-        var commitTime = 99.0
-        var tickIndex = 0
-
-        var bulbDisplacement = 0.0
-        var bulbVelocity = 0.0
+        var grabDX = 0.0
+        var grabDY = 0.0
+        var lean = 0.0
+        var pitch: Double
+        var light = 1.0
+        var heat = 1.0
+        var adaptation = 1.0
+        var onTime = 99.0
+        var front = 1.0
+        var frontFrom = 1.0
+        var frontTo = 1.0
+        var frontTime = 1.0
+        var frontDuration = 1.0
+        var frontTurnsOn = true
+        var angle = 0.0
+        var angularVelocity = 0.0
         var grabAngle = 0.0
-
-        var isDemoRunning: Bool
+        var demoOn: Bool
         var demoTime = 0.0
-        var quietTime = 0.0
-
-        var isTapRunning = false
+        var quiet = 0.0
+        var tapOn = false
         var tapTime = 0.0
-
-        var reducedMotion: Bool
-        var events: [HapticEvent] = []
+        var tapX = 0.0
+        var tapY = 0.0
+        let reduced: Bool
+        var events: [Event] = []
         var restX: [Double] = []
         var restY: [Double] = []
+
+        init(geometry: Geometry, reduced: Bool, autoPlay: Bool) {
+            let foot = switchFoot(geometry, angle: 0)
+            x = (0..<Self.count).map { _ in foot.x }
+            y = (0..<Self.count).map { foot.y + geometry.segment * Double($0) }
+            oldX = x
+            oldY = y
+            pitch = geometry.segment
+            demoOn = autoPlay
+            self.reduced = reduced
+            for _ in 0..<PullCordThemeTokens.Motion.Rope.settleSteps {
+                chainStep(self, geometry)
+            }
+            restX = x
+            restY = y
+            oldX = x
+            oldY = y
+        }
+
+        private static let count = PullCordThemeSimulation.balls
     }
 
     static func makeGeometry(width: Double, height: Double) -> Geometry {
         let scale = width / PullCordThemeTokens.stageWidth
-        let fit = PullCordThemeTokens.Fit.k * scale
-        let socketTop = PullCordThemeTokens.ReplicaArt.socketTopSrc * fit
-        let anchorY = PullCordThemeTokens.Cord.top * scale
-        let restY = height * PullCordThemeTokens.Cord.restYRatio
-        let length = restY - anchorY
-        let pointCount = Int(PullCordThemeTokens.Cord.points)
-
+        let arm = PullCordThemeTokens.Lamp.cord * scale
         return Geometry(
             width: width,
             height: height,
             scale: scale,
-            pivotX: PullCordThemeTokens.ReplicaArt.centreSrc * fit + PullCordThemeTokens.Fit.cropX * scale,
-            pivotY: socketTop - PullCordThemeTokens.ReplicaArt.wire * scale,
-            socketTop: socketTop,
-            anchorX: width * PullCordThemeTokens.Cord.xRatio,
-            anchorY: anchorY,
-            restY: restY,
-            length: length,
-            segmentLength: length / Double(pointCount - 1)
+            pivotX: PullCordThemeTokens.Lamp.x * scale,
+            pivotY: PullCordThemeTokens.Lamp.capTop * scale - arm,
+            arm: arm,
+            segment: PullCordThemeTokens.Chain.pitch * scale,
+            length: Double(PullCordThemeTokens.Chain.links) * PullCordThemeTokens.Chain.pitch * scale
         )
     }
 
-    static func initialState(
-        geometry: Geometry,
-        reducedMotion: Bool,
-        autoPlay: Bool
-    ) -> State {
-        let pointCount = Int(PullCordThemeTokens.Cord.points)
-        var positionX: [Double] = []
-        var positionY: [Double] = []
-        positionX.reserveCapacity(pointCount)
-        positionY.reserveCapacity(pointCount)
-
-        for index in 0..<pointCount {
-            positionX.append(geometry.anchorX)
-            positionY.append(geometry.anchorY + geometry.segmentLength * Double(index))
-        }
-
-        var state = State(
-            positionX: positionX,
-            positionY: positionY,
-            oldPositionX: positionX,
-            oldPositionY: positionY,
-            isDemoRunning: autoPlay,
-            reducedMotion: reducedMotion
+    static func lampPoint(_ geometry: Geometry, angle: Double, localX: Double, localY: Double) -> CGPoint {
+        let cosine = cos(angle)
+        let sine = sin(angle)
+        let y = geometry.arm + localY * geometry.scale
+        let x = localX * geometry.scale
+        return CGPoint(
+            x: geometry.pivotX + x * cosine + y * sine,
+            y: geometry.pivotY - x * sine + y * cosine
         )
-
-        // Settle under gravity once and preserve the exact loop-rest pose.
-        for _ in 0..<Int(PullCordThemeMotion.Rope.settleSteps) {
-            ropeStep(state: &state, geometry: geometry)
-        }
-        state.restX = state.positionX
-        state.restY = state.positionY
-        state.oldPositionX = state.positionX
-        state.oldPositionY = state.positionY
-        return state
     }
 
-    static func input(state: inout State, geometry: Geometry, input: Input) {
-        switch input {
+    static func switchFoot(_ geometry: Geometry, angle: Double) -> CGPoint {
+        lampPoint(
+            geometry,
+            angle: angle,
+            localX: PullCordThemeTokens.SwitchBody.x,
+            localY: PullCordThemeTokens.SwitchBody.top + PullCordThemeTokens.SwitchBody.height
+        )
+    }
+
+    static func pullCentre(_ state: State, _ geometry: Geometry) -> CGPoint {
+        let index = balls - 1
+        return CGPoint(
+            x: state.x[index],
+            y: state.y[index] + PullCordThemeTokens.Chain.pullHeight * geometry.scale / 2
+        )
+    }
+
+    static func input(_ state: State, _ geometry: Geometry, _ event: Input) {
+        switch event {
         case .toggle:
-            state.isDemoRunning = false
-            state.quietTime = 0
-            state.isTapRunning = true
-            state.tapTime = 0
+            state.demoOn = false
+            state.quiet = 0
+            startTap(state, geometry)
 
-        case let .down(x, y, scripted):
-            state.isScripted = scripted
-            if !scripted {
-                state.isDemoRunning = false
-                state.isTapRunning = false
-                state.quietTime = 0
+        case let .tap(x, y):
+            let centre = pullCentre(state, geometry)
+            let hit = PullCordThemeTokens.Chain.hit * geometry.scale / 2
+            if abs(x - centre.x) < hit, abs(y - centre.y) < hit {
+                state.demoOn = false
+                state.quiet = 0
+                startTap(state, geometry)
             }
 
-            let lastIndex = Int(PullCordThemeTokens.Cord.points) - 1
-            let beadX = state.positionX[lastIndex]
-            let beadY = state.positionY[lastIndex]
-                + PullCordThemeTokens.Cord.beadHeight * geometry.scale / 2
-            let hit = PullCordThemeTokens.Cord.hit * geometry.scale / 2 + 8
-            let center = glassCenter(state: state, geometry: geometry)
-
-            if abs(x - beadX) < hit,
-               abs(y - beadY) < hit + PullCordThemeTokens.Cord.beadHeight * geometry.scale / 2 {
+        case let .down(x, y, script):
+            state.scripted = script
+            if !script {
+                state.demoOn = false
+                state.tapOn = false
+                state.quiet = 0
+            }
+            let last = balls - 1
+            let centre = pullCentre(state, geometry)
+            let hit = PullCordThemeTokens.Chain.hit * geometry.scale / 2
+            let bulb = lampPoint(geometry, angle: state.angle, localX: 0, localY: PullCordThemeTokens.Lamp.bulbY)
+            state.grab = 0
+            if abs(x - centre.x) < hit, abs(y - centre.y) < hit {
                 state.grab = 1
-                state.grabDeltaX = state.positionX[lastIndex] - x
-                state.grabDeltaY = state.positionY[lastIndex] - y
-                if !scripted {
-                    state.events.append(.grab)
-                }
-            } else if hypot(x - center.x, y - center.y)
-                        < PullCordThemeTokens.ReplicaArt.grabRadius * geometry.scale {
-                state.grab = 2
-                state.grabAngle = atan2(x - geometry.pivotX, y - geometry.pivotY)
-                    - bulbAngle(state: state, geometry: geometry)
+                state.grabbedIndex = last
             } else {
-                state.grab = 0
-            }
-
-            state.fingerX = x + state.grabDeltaX
-            state.fingerY = y + state.grabDeltaY
-            state.downX = x
-            state.downY = y
-            state.downTime = state.clock
-            state.movedDistance = 0
-            state.velocityX = 0
-            state.velocityY = 0
-
-        case let .move(x, y, velocityX, velocityY):
-            guard state.grab != 0 else { return }
-            state.movedDistance = max(state.movedDistance, hypot(x - state.downX, y - state.downY))
-            state.fingerX = x + state.grabDeltaX
-            state.fingerY = y + state.grabDeltaY
-            state.velocityX = velocityX
-            state.velocityY = velocityY
-
-        case let .up(velocityX, velocityY, cancelled):
-            if state.grab == 1 {
-                let lastIndex = Int(PullCordThemeTokens.Cord.points) - 1
-                let isTap = !state.isScripted
-                    && !cancelled
-                    && state.movedDistance < PullCordThemeMotion.Tap.slop
-                    && state.clock - state.downTime < PullCordThemeMotion.Tap.time
-                let limit = PullCordThemeMotion.Rope.releaseSpeed
-                let clampedVelocityX = clamp(velocityX, lower: -limit, upper: limit)
-                let clampedVelocityY = clamp(velocityY, lower: -limit, upper: limit)
-                state.oldPositionX[lastIndex] = state.positionX[lastIndex]
-                    - clampedVelocityX * PullCordThemeMotion.step
-                state.oldPositionY[lastIndex] = state.positionY[lastIndex]
-                    - clampedVelocityY * PullCordThemeMotion.step
-                state.grab = 0
-
-                if state.isArmed,
-                   velocityY > PullCordThemeMotion.Feel.flickSpeed * geometry.scale,
-                   state.extensionAmount > PullCordThemeMotion.Feel.flickMin * geometry.scale {
-                    toggle(state: &state)
+                var best = hit * 0.8
+                if last > 2 {
+                    for index in 2..<last {
+                        let distance = hypot(x - state.x[index], y - state.y[index])
+                        if distance < best {
+                            best = distance
+                            state.grab = 1
+                            state.grabbedIndex = index
+                        }
+                    }
                 }
-                if isTap {
-                    state.isTapRunning = true
-                    state.tapTime = 0
+            }
+            if state.grab == 1 {
+                state.grabDX = state.x[state.grabbedIndex] - x
+                state.grabDY = state.y[state.grabbedIndex] - y
+            } else if hypot(x - bulb.x, y - bulb.y) < PullCordThemeTokens.Motion.Swing.grabRadius * geometry.scale {
+                state.grab = 2
+                state.grabDX = 0
+                state.grabDY = 0
+                state.grabAngle = atan2(x - geometry.pivotX, y - geometry.pivotY) - state.angle
+            }
+            state.fingerX = x + state.grabDX
+            state.fingerY = y + state.grabDY
+
+        case let .move(x, y, _, _, script):
+            if state.scripted, !script { return }
+            guard state.grab != 0 else { return }
+            state.fingerX = x + state.grabDX
+            state.fingerY = y + state.grabDY
+
+        case let .up(velocityX, velocityY, cancelled, script):
+            if state.scripted, !script { return }
+            if state.grab == 1 {
+                let index = state.grabbedIndex
+                let limit = PullCordThemeTokens.Motion.Rope.releaseSpeed * geometry.scale
+                let vx = clamp(velocityX, -limit, limit)
+                let vy = clamp(velocityY, -limit, limit)
+                state.grab = 0
+                state.oldX[index] = state.x[index] - vx * PullCordThemeTokens.Motion.step
+                state.oldY[index] = state.y[index] - vy * PullCordThemeTokens.Motion.step
+                if state.armed,
+                   !cancelled,
+                   vy > PullCordThemeTokens.Motion.Switch.flickSpeed * geometry.scale,
+                   state.travel > PullCordThemeTokens.Motion.Switch.flickMinimum * geometry.scale {
+                    click(state, geometry)
                 }
             } else if state.grab == 2 {
-                let arm = glassArm(geometry: geometry)
-                state.bulbVelocity = clamp(
-                    velocityX / arm,
-                    lower: -PullCordThemeMotion.BulbMotion.maxThrow,
-                    upper: PullCordThemeMotion.BulbMotion.maxThrow
+                let divisor = geometry.arm + PullCordThemeTokens.Lamp.bulbY * geometry.scale
+                state.angularVelocity = clamp(
+                    velocityX / divisor,
+                    -PullCordThemeTokens.Motion.Swing.maximumThrow,
+                    PullCordThemeTokens.Motion.Swing.maximumThrow
                 )
                 state.grab = 0
             }
-            state.isScripted = false
+            state.scripted = false
         }
     }
 
-    static func step(
-        state: inout State,
-        geometry: Geometry,
-        frameDelta: Double,
-        scriptDelta: Double,
-        autoPlay: Bool
-    ) {
-        let wallDelta = max(0, scriptDelta)
-        stepAutoplay(state: &state, geometry: geometry, autoPlay: autoPlay, delta: wallDelta)
-        state.clock += wallDelta
-        let maximumAccumulation = PullCordThemeMotion.step
-            * Double(Int(PullCordThemeMotion.maxSteps))
-        state.accumulator = min(state.accumulator + frameDelta, maximumAccumulation)
-        while state.accumulator >= PullCordThemeMotion.step {
-            fixedStep(state: &state, geometry: geometry)
-            state.accumulator -= PullCordThemeMotion.step
+    static func step(_ state: State, _ geometry: Geometry, frameDelta: Double, autoPlay: Bool) {
+        let motion = PullCordThemeTokens.Motion.self
+        state.accumulator = min(state.accumulator + frameDelta, motion.step * Double(motion.maximumSteps))
+        while state.accumulator >= motion.step {
+            fixedStep(state, geometry, autoPlay: autoPlay)
+            state.accumulator -= motion.step
         }
     }
 
-    static func glassArm(geometry: Geometry) -> Double {
-        geometry.socketTop - geometry.pivotY
-            + PullCordThemeTokens.ReplicaArt.glassCenterSrc
-            * PullCordThemeTokens.Fit.k
-            * geometry.scale
+    static func flicker(_ state: State) -> Double {
+        let filament = PullCordThemeTokens.Motion.Filament.self
+        guard !state.reduced, state.onTime < filament.flicker else { return 1 }
+        let t = state.onTime
+        let noise = 0.5 + 0.5 * sin(t * 97) * sin(t * 41 + 1.3)
+        return 1 - filament.flickerDepth * noise * (1 - t / filament.flicker)
     }
 
-    static func bulbAngle(state: State, geometry: Geometry) -> Double {
-        let amplitude = state.reducedMotion
-            ? 0
-            : PullCordThemeTokens.ReplicaArt.swingSrc
-                * PullCordThemeTokens.Fit.k
-                * geometry.scale
-        return amplitude / glassArm(geometry: geometry)
-            * sin(
-                2 * Double.pi * state.clock / PullCordThemeMotion.BulbMotion.period
-                    + PullCordThemeMotion.replicaSwingPhase
-            )
-            + state.bulbDisplacement
+    private static func clamp(_ value: Double, _ low: Double = 0, _ high: Double = 1) -> Double {
+        min(max(value, low), high)
     }
 
-    static func glassCenter(state: State, geometry: Geometry) -> Point {
-        let angle = bulbAngle(state: state, geometry: geometry)
-        let arm = glassArm(geometry: geometry)
-        return Point(
-            x: geometry.pivotX + sin(angle) * arm,
-            y: geometry.pivotY + cos(angle) * arm
-        )
+    private static func bezier(_ curve: [Double], _ progress: Double) -> Double {
+        if progress <= 0 { return 0 }
+        if progress >= 1 { return 1 }
+        let cx = 3 * curve[0]
+        let bx = 3 * (curve[2] - curve[0]) - cx
+        let ax = 1 - cx - bx
+        let cy = 3 * curve[1]
+        let by = 3 * (curve[3] - curve[1]) - cy
+        let ay = 1 - cy - by
+        var t = progress
+        for _ in 0..<8 {
+            let x = ((ax * t + bx) * t + cx) * t - progress
+            let dx = (3 * ax * t + 2 * bx) * t + cx
+            if abs(x) < 0.00001 || abs(dx) < 0.000001 { break }
+            t = clamp(t - x / dx)
+        }
+        return ((ay * t + by) * t + cy) * t
     }
 
-    static func ignitionValue(state: State) -> Double {
-        guard state.ignitionTime >= 0 else { return 1 }
-        let times = PullCordThemeMotion.Ignite.times
-        let values = PullCordThemeMotion.Ignite.values
-        for index in 0..<(times.count - 1) where state.ignitionTime <= times[index + 1] {
-            let progress = (state.ignitionTime - times[index]) / (times[index + 1] - times[index])
-            return values[index] + (values[index + 1] - values[index]) * progress
-        }
-        return 1
-    }
-
-    static func revealReach(center: Point, geometry: Geometry) -> Double {
-        let deltaX = max(center.x, geometry.width - center.x)
-        let deltaY = max(center.y, geometry.height - center.y)
-        return hypot(deltaX, deltaY) + PullCordThemeMotion.Reveal.margin * geometry.scale
-    }
-
-    static func revealEase(_ progress: Double, toLight: Bool) -> Double {
-        if toLight {
-            return 1 - pow(1 - progress, 5)
-        }
-        return progress < 0.5
-            ? 4 * progress * progress * progress
-            : 1 - pow(-2 * progress + 2, 3) / 2
-    }
-
-    private static func solveRope(state: inout State, geometry: Geometry) {
-        let pointCount = Int(PullCordThemeTokens.Cord.points)
-        for _ in 0..<Int(PullCordThemeMotion.Rope.passes) {
-            for index in 0..<(pointCount - 1) {
-                let next = index + 1
-                let deltaX = state.positionX[next] - state.positionX[index]
-                let deltaY = state.positionY[next] - state.positionY[index]
-                let distance = max(hypot(deltaX, deltaY), 1e-6)
-                guard distance > geometry.segmentLength else { continue }
-                let firstWeight = index == 0 ? 0.0 : 1.0
-                let nextWeight = next == pointCount - 1
-                    ? (state.grab == 1 ? 0 : PullCordThemeMotion.Rope.beadWeight)
-                    : 1
-                let weightSum = firstWeight + nextWeight
-                guard weightSum != 0 else { continue }
-                let correction = (distance - geometry.segmentLength) / distance / weightSum
-                state.positionX[index] += deltaX * correction * firstWeight
-                state.positionY[index] += deltaY * correction * firstWeight
-                state.positionX[next] -= deltaX * correction * nextWeight
-                state.positionY[next] -= deltaY * correction * nextWeight
-            }
-
-            // Two links apart stay at least 1.6 links apart to prevent kinks.
-            for index in 1..<(pointCount - 2) {
-                let next = index + 2
-                let deltaX = state.positionX[next] - state.positionX[index]
-                let deltaY = state.positionY[next] - state.positionY[index]
-                let distance = max(hypot(deltaX, deltaY), 1e-6)
-                let minimumDistance = 1.6 * geometry.segmentLength
-                guard distance < minimumDistance else { continue }
-                let nextWeight = next == pointCount - 1
-                    ? (state.grab == 1 ? 0 : PullCordThemeMotion.Rope.beadWeight)
-                    : 1
-                let correction = ((distance - minimumDistance) / distance / (1 + nextWeight)) * 0.5
-                state.positionX[index] += deltaX * correction
-                state.positionY[index] += deltaY * correction
-                state.positionX[next] -= deltaX * correction * nextWeight
-                state.positionY[next] -= deltaY * correction * nextWeight
-            }
-        }
-    }
-
-    private static func ropeStep(state: inout State, geometry: Geometry) {
-        let pointCount = Int(PullCordThemeTokens.Cord.points)
-        state.positionX[0] = geometry.anchorX
-        state.positionY[0] = geometry.anchorY + state.extensionAmount
-        state.oldPositionX[0] = state.positionX[0]
-        state.oldPositionY[0] = state.positionY[0]
-
-        let gravityDelta = PullCordThemeMotion.Rope.gravity
-            * geometry.scale
-            * PullCordThemeMotion.step
-            * PullCordThemeMotion.step
-        let end = state.grab == 1 ? pointCount - 1 : pointCount
-        if end > 1 {
-            for index in 1..<end {
-                let velocityX = (state.positionX[index] - state.oldPositionX[index])
-                    * PullCordThemeMotion.Rope.damping
-                let velocityY = (state.positionY[index] - state.oldPositionY[index])
-                    * PullCordThemeMotion.Rope.damping
-                state.oldPositionX[index] = state.positionX[index]
-                state.oldPositionY[index] = state.positionY[index]
-                state.positionX[index] += velocityX
-                state.positionY[index] += velocityY + gravityDelta
-            }
-        }
-        solveRope(state: &state, geometry: geometry)
-    }
-
-    private static func startReveal(state: inout State, target: Int) {
-        state.revealFrom = state.revealValue
-        state.revealTo = Double(target)
-        state.revealTime = 0
-        let fullDuration: Double
-        if state.reducedMotion {
-            fullDuration = PullCordThemeMotion.Reveal.reducedFade
-        } else if target == 1 {
-            fullDuration = PullCordThemeMotion.Reveal.toLight
-        } else {
-            fullDuration = PullCordThemeMotion.Reveal.toDark
-        }
-        state.revealDuration = max(0.05, fullDuration * abs(Double(target) - state.revealValue))
-    }
-
-    private static func toggle(state: inout State) {
-        state.light = 1 - state.light
-        state.isArmed = false
-        if !state.reducedMotion {
-            if state.light == 1 {
-                state.revealValue = max(state.revealValue, PullCordThemeMotion.Feel.preview)
-            } else {
-                state.revealValue = min(state.revealValue, 1 - PullCordThemeMotion.Feel.preview)
-            }
-        }
-        startReveal(state: &state, target: state.light)
-        if state.light == 0, !state.reducedMotion {
-            state.ignitionTime = 0
-        }
-        state.commitTime = 0
-        if !state.reducedMotion {
-            state.bulbVelocity += PullCordThemeMotion.Feel.kick
-        }
-        if !state.isScripted {
-            state.events.append(.detent)
-        }
-    }
-
-    private static func runScript(
-        state: inout State,
-        geometry: Geometry,
-        track: [[Double]],
-        startTime: Double,
-        endTime: Double
-    ) {
-        let beadX = geometry.anchorX
-        let beadY = geometry.restY
-        for segment in track {
-            let start = segment[0]
-            let end = segment[1]
-            if segment[6] == 1, startTime <= start, start < endTime {
-                input(
-                    state: &state,
-                    geometry: geometry,
-                    input: .down(
-                        x: beadX + segment[2] * geometry.scale,
-                        y: beadY + segment[3] * geometry.scale,
-                        scripted: true
-                    )
-                )
-            }
-            if endTime > start, startTime < end {
-                let progress = easeInOutSine(
-                    clamp((min(endTime, end) - start) / (end - start))
-                )
-                let x = beadX + (segment[2] + (segment[4] - segment[2]) * progress) * geometry.scale
-                let y = beadY + (segment[3] + (segment[5] - segment[3]) * progress) * geometry.scale
-                if state.isScripted, state.grab != 0 {
-                    input(
-                        state: &state,
-                        geometry: geometry,
-                        input: .move(x: x, y: y, velocityX: 0, velocityY: 0)
-                    )
-                }
-            }
-            if segment[7] == 1, startTime < end, end <= endTime, state.isScripted {
-                input(
-                    state: &state,
-                    geometry: geometry,
-                    input: .up(velocityX: 0, velocityY: 0)
-                )
-            }
-        }
-    }
-
-    private static func snapRestIfStill(state: inout State, geometry: Geometry) {
-        var worst = abs(state.extensionAmount)
-        for index in 0..<Int(PullCordThemeTokens.Cord.points) {
-            worst = max(
-                worst,
-                abs(state.positionX[index] - state.restX[index]),
-                abs(state.positionY[index] - state.restY[index])
-            )
-        }
-        guard worst <= PullCordThemeMotion.Rope.snapRest * geometry.scale, state.grab == 0 else {
-            return
-        }
-
-        for index in 0..<Int(PullCordThemeTokens.Cord.points) {
-            state.positionX[index] = state.restX[index]
-            state.positionY[index] = state.restY[index]
-            state.oldPositionX[index] = state.positionX[index]
-            state.oldPositionY[index] = state.positionY[index]
-        }
-        state.extensionAmount = 0
-        state.extensionVelocity = 0
-        state.bulbDisplacement = 0
-        state.bulbVelocity = 0
-        state.level = Double(state.light)
-    }
-
-    private static func fixedStep(state: inout State, geometry: Geometry) {
-        let delta = PullCordThemeMotion.step
-        let pointCount = Int(PullCordThemeTokens.Cord.points)
-
-        let previousExtension = state.extensionAmount
-        var pullTarget = 0.0
-        if state.grab == 1 {
-            var deltaX = state.fingerX - geometry.anchorX
-            let sideReach = PullCordThemeMotion.Rope.sideReach * geometry.scale
-            if abs(deltaX) > sideReach {
-                deltaX = sign(deltaX)
-                    * (sideReach + rubber(abs(deltaX) - sideReach, limit: sideReach * 0.5))
-            }
-            var deltaY = state.fingerY - geometry.anchorY
-            let lift = geometry.length - PullCordThemeMotion.Rope.liftReach * geometry.scale
-            if deltaY < lift {
-                deltaY = lift - rubber(lift - deltaY, limit: 24 * geometry.scale)
-            }
-            let distance = max(hypot(deltaX, deltaY), 1e-6)
-            let over = distance - geometry.length
-            var reach = distance
-            if over > 0 {
-                let linear = PullCordThemeMotion.Switch.linear * geometry.scale
-                pullTarget = over < linear
-                    ? over
-                    : linear + rubber(
-                        over - linear,
-                        limit: (PullCordThemeMotion.Switch.travel - PullCordThemeMotion.Switch.linear)
-                            * geometry.scale
-                    )
-                reach = geometry.length + pullTarget
-            }
-            state.oldPositionX[pointCount - 1] = state.positionX[pointCount - 1]
-            state.oldPositionY[pointCount - 1] = state.positionY[pointCount - 1]
-            state.positionX[pointCount - 1] = geometry.anchorX + deltaX / distance * reach
-            state.positionY[pointCount - 1] = geometry.anchorY + deltaY / distance * reach
-        }
-
-        if state.grab == 1, pullTarget >= state.extensionAmount {
-            state.extensionAmount = pullTarget
-            state.extensionVelocity = (state.extensionAmount - previousExtension) / delta
-        } else {
-            let damping = state.reducedMotion
-                ? PullCordThemeMotion.Switch.reducedDamping
-                : PullCordThemeMotion.Switch.damping
-            state.extensionVelocity += (
-                -PullCordThemeMotion.Switch.stiffness * state.extensionAmount
-                    - damping * state.extensionVelocity
-            ) * delta
-            state.extensionAmount += state.extensionVelocity * delta
-            if state.extensionAmount < pullTarget {
-                state.extensionAmount = pullTarget
-                state.extensionVelocity = 0
-            }
-            if state.extensionAmount < 0 {
-                if state.extensionVelocity < -260,
-                   !state.isScripted,
-                   state.grab == 0,
-                   !state.isDemoRunning,
-                   !state.isTapRunning {
-                    state.events.append(.home)
-                }
-                state.extensionAmount = 0
-                state.extensionVelocity = 0
-            }
-        }
-
-        ropeStep(state: &state, geometry: geometry)
-
-        if state.extensionAmount < PullCordThemeMotion.Switch.rearm * geometry.scale {
-            state.isArmed = true
-        }
-        if state.isArmed,
-           state.extensionAmount >= PullCordThemeMotion.Switch.detent * geometry.scale {
-            toggle(state: &state)
-        }
-
-        if state.grab == 1 {
-            let tick = Int(floor(
-                state.extensionAmount / (PullCordThemeMotion.Feel.tick * geometry.scale)
-            ))
-            if tick != state.tickIndex {
-                if tick > state.tickIndex, !state.isScripted {
-                    state.events.append(.tick)
-                }
-                state.tickIndex = tick
-            }
-        } else {
-            state.tickIndex = 0
-        }
-        state.commitTime += delta
-
-        if state.revealTime < state.revealDuration {
-            state.revealTime = min(state.revealDuration, state.revealTime + delta)
-            let progress = state.revealTime / state.revealDuration
-            let eased = state.reducedMotion
-                ? progress
-                : revealEase(progress, toLight: state.revealTo == 1)
-            state.revealValue = state.revealFrom
-                + (state.revealTo - state.revealFrom) * eased
-        }
-
-        let pull = clamp(
-            state.extensionAmount / (PullCordThemeMotion.Switch.detent * geometry.scale)
-        )
-        let target = state.isArmed
-            ? (state.light == 1 ? 1 - pull : pull)
-            : Double(state.light)
-        let rate = state.isArmed
-            ? PullCordThemeMotion.Level.follow
-            : PullCordThemeMotion.Level.fill
-        state.level += (target - state.level) * (1 - exp(-rate * delta))
-
-        if state.ignitionTime >= 0 {
-            state.ignitionTime += delta
-            if let lastTime = PullCordThemeMotion.Ignite.times.last,
-               state.ignitionTime > lastTime {
-                state.ignitionTime = -1
-            }
-        }
-
-        let angularFrequency = 2 * Double.pi / PullCordThemeMotion.BulbMotion.period
-        if state.grab == 2 {
-            let desired = atan2(
-                state.fingerX - state.grabDeltaX - geometry.pivotX,
-                state.fingerY - state.grabDeltaY - geometry.pivotY
-            ) - state.grabAngle
-            let idle = bulbAngle(state: state, geometry: geometry) - state.bulbDisplacement
-            var displacement = desired - idle
-            let maximum = PullCordThemeMotion.BulbMotion.maxAngle
-            if abs(displacement) > maximum {
-                displacement = sign(displacement)
-                    * (maximum + rubber(abs(displacement) - maximum, limit: maximum * 0.4))
-            }
-            state.bulbVelocity = (displacement - state.bulbDisplacement) / delta
-            state.bulbDisplacement = displacement
-        } else {
-            state.bulbVelocity += (
-                -angularFrequency * angularFrequency * state.bulbDisplacement
-                    - 2 * PullCordThemeMotion.BulbMotion.damping
-                    * angularFrequency
-                    * state.bulbVelocity
-            ) * delta
-            state.bulbDisplacement += state.bulbVelocity * delta
-        }
-    }
-
-    private static func stepAutoplay(state: inout State, geometry: Geometry, autoPlay: Bool, delta: Double) {
-        let loopDuration = PullCordThemeMotion.loopMS / 1_000
-        if state.isDemoRunning {
-            let startTime = state.demoTime
-            var endTime = startTime + delta
-            runScript(state: &state, geometry: geometry, track: PullCordThemeMotion.script, startTime: startTime, endTime: endTime)
-            if endTime >= loopDuration {
-                endTime -= loopDuration
-                snapRestIfStill(state: &state, geometry: geometry)
-            }
-            state.demoTime = endTime
-        } else if state.isTapRunning {
-            let startTime = state.tapTime
-            let endTime = startTime + delta
-            runScript(state: &state, geometry: geometry, track: PullCordThemeMotion.tapPull, startTime: startTime, endTime: endTime)
-            state.tapTime = endTime
-            if let lastEnd = PullCordThemeMotion.tapPull.last?[1], endTime > lastEnd + PullCordThemeMotion.step {
-                state.isTapRunning = false
-            }
-        } else if autoPlay, state.grab == 0 {
-            state.quietTime += delta
-            if state.quietTime * 1_000 >= PullCordThemeMotion.resumeMS {
-                state.isDemoRunning = true
-                state.demoTime = state.light == 1 ? PullCordThemeMotion.lightRestAt : 0
-            }
-        }
-    }
-
-    private static func clamp(_ value: Double, lower: Double = 0, upper: Double = 1) -> Double {
-        value < lower ? lower : value > upper ? upper : value
-    }
-
-    private static func rubber(_ over: Double, limit: Double) -> Double {
+    private static func rubber(_ over: Double, _ limit: Double) -> Double {
         limit * (1 - exp(-over / limit))
     }
 
     private static func easeInOutSine(_ progress: Double) -> Double {
-        (1 - cos(Double.pi * progress)) / 2
+        (1 - cos(.pi * progress)) / 2
     }
 
-    private static func sign(_ value: Double) -> Double {
-        value < 0 ? -1 : value > 0 ? 1 : 0
+    private static func inverseMass(_ state: State, _ index: Int) -> Double {
+        if index == 0 { return 0 }
+        if state.grab == 1, index == state.grabbedIndex { return 0 }
+        return index == balls - 1 ? PullCordThemeTokens.Motion.Rope.pullWeight : 1
+    }
+
+    private static func tether(_ state: State, _ geometry: Geometry, from: Int) {
+        let fixedX = state.x[from]
+        let fixedY = state.y[from]
+        for index in 0..<balls where index != from && inverseMass(state, index) != 0 {
+            let maximum = Double(abs(index - from)) * state.pitch
+            let dx = state.x[index] - fixedX
+            let dy = state.y[index] - fixedY
+            let distance = hypot(dx, dy)
+            if distance <= maximum { continue }
+            state.x[index] = fixedX + dx / distance * maximum
+            state.y[index] = fixedY + dy / distance * maximum
+        }
+    }
+
+    private static func solveChain(_ state: State, _ geometry: Geometry) {
+        let segment = state.pitch
+        let short = geometry.segment * PullCordThemeTokens.Motion.Rope.slack
+        let bend = geometry.segment * PullCordThemeTokens.Motion.Rope.bend
+        for _ in 0..<PullCordThemeTokens.Motion.Rope.passes {
+            for index in 0..<(balls - 1) {
+                let next = index + 1
+                let dx = state.x[next] - state.x[index]
+                let dy = state.y[next] - state.y[index]
+                let distance = max(hypot(dx, dy), 0.000001)
+                let wanted: Double
+                if distance > segment { wanted = segment }
+                else if distance < short { wanted = short }
+                else { continue }
+                let first = inverseMass(state, index)
+                let second = inverseMass(state, next)
+                let sum = first + second
+                if sum == 0 { continue }
+                let correction = (distance - wanted) / distance / sum
+                state.x[index] += dx * correction * first
+                state.y[index] += dy * correction * first
+                state.x[next] -= dx * correction * second
+                state.y[next] -= dy * correction * second
+            }
+            for index in 0..<(balls - 2) {
+                let next = index + 2
+                let dx = state.x[next] - state.x[index]
+                let dy = state.y[next] - state.y[index]
+                let distance = max(hypot(dx, dy), 0.000001)
+                if distance >= bend { continue }
+                let first = inverseMass(state, index)
+                let second = inverseMass(state, next)
+                let sum = first + second
+                if sum == 0 { continue }
+                let correction = (distance - bend) / distance / sum * 0.5
+                state.x[index] += dx * correction * first
+                state.y[index] += dy * correction * first
+                state.x[next] -= dx * correction * second
+                state.y[next] -= dy * correction * second
+            }
+            tether(state, geometry, from: 0)
+            if state.grab == 1 { tether(state, geometry, from: state.grabbedIndex) }
+        }
+    }
+
+    private static func chainStep(_ state: State, _ geometry: Geometry) {
+        let foot = switchFoot(geometry, angle: state.angle)
+        let anchorX = foot.x + sin(state.angle) * state.travel
+        let anchorY = foot.y + cos(state.angle) * state.travel
+        state.oldX[0] = state.x[0]
+        state.oldY[0] = state.y[0]
+        state.x[0] = anchorX
+        state.y[0] = anchorY
+        let gravity = PullCordThemeTokens.Motion.Rope.gravity * geometry.scale
+            * PullCordThemeTokens.Motion.step * PullCordThemeTokens.Motion.step
+        for index in 1..<balls where inverseMass(state, index) != 0 {
+            let vx = (state.x[index] - state.oldX[index]) * PullCordThemeTokens.Motion.Rope.damping
+            let vy = (state.y[index] - state.oldY[index]) * PullCordThemeTokens.Motion.Rope.damping
+            state.oldX[index] = state.x[index]
+            state.oldY[index] = state.y[index]
+            state.x[index] += vx
+            state.y[index] += vy + gravity
+        }
+        solveChain(state, geometry)
+    }
+
+    private static func startFront(_ state: State, to target: Double) {
+        state.frontFrom = state.front
+        state.frontTo = target
+        state.frontTurnsOn = target == 1
+        let span = abs(target - state.front)
+        if state.reduced {
+            state.frontDuration = max(0.05, PullCordThemeTokens.Motion.Front.reduced * span)
+            state.frontTime = 0
+        } else {
+            state.frontDuration = max(0.05, (target == 1 ? PullCordThemeTokens.Motion.Front.on : PullCordThemeTokens.Motion.Front.off) * span)
+            state.frontTime = target == 1 ? -PullCordThemeTokens.Motion.Front.onDelay : 0
+        }
+    }
+
+    private static func click(_ state: State, _ geometry: Geometry) {
+        state.light = 1 - state.light
+        state.armed = false
+        if state.light == 1 { state.onTime = 0 }
+        startFront(state, to: state.light)
+        if !state.reduced {
+            state.angularVelocity += PullCordThemeTokens.Motion.Swing.kick
+            let last = balls - 1
+            for index in 1...last where inverseMass(state, index) != 0 {
+                let kick = sin(.pi * Double(index) / Double(last))
+                    * PullCordThemeTokens.Motion.Switch.kick * geometry.scale
+                state.oldX[index] -= kick
+                state.oldY[index] += kick * 0.3
+            }
+        }
+        if !state.scripted || state.tapOn { state.events.append(.click) }
+    }
+
+    private static func restCentre(_ state: State, _ geometry: Geometry) -> CGPoint {
+        let index = balls - 1
+        return CGPoint(
+            x: state.restX[index],
+            y: state.restY[index] + PullCordThemeTokens.Chain.pullHeight * geometry.scale / 2
+        )
+    }
+
+    private static func startTap(_ state: State, _ geometry: Geometry) {
+        let current = pullCentre(state, geometry)
+        let rest = restCentre(state, geometry)
+        state.tapOn = true
+        state.tapTime = 0
+        state.tapX = (current.x - rest.x) / geometry.scale
+        state.tapY = (current.y - rest.y) / geometry.scale
+    }
+
+    private static func runScript(
+        _ state: State,
+        _ geometry: Geometry,
+        track: [PullCordThemeTokens.ScriptSegment],
+        from startTime: Double,
+        to endTime: Double,
+        startX: Double,
+        startY: Double
+    ) {
+        let rest = restCentre(state, geometry)
+        for (index, segment) in track.enumerated() {
+            let sx = index == 0 ? startX : segment.fromX
+            let sy = index == 0 ? startY : segment.fromY
+            if segment.begins, startTime <= segment.start, segment.start < endTime {
+                input(state, geometry, .down(
+                    x: rest.x + sx * geometry.scale,
+                    y: rest.y + sy * geometry.scale,
+                    script: true
+                ))
+            }
+            if endTime > segment.start, startTime < segment.end {
+                let progress = easeInOutSine(clamp((min(endTime, segment.end) - segment.start) / (segment.end - segment.start)))
+                let x = rest.x + (sx + (segment.toX - sx) * progress) * geometry.scale
+                let y = rest.y + (sy + (segment.toY - sy) * progress) * geometry.scale
+                if state.scripted, state.grab != 0 {
+                    input(state, geometry, .move(x: x, y: y, velocityX: 0, velocityY: 0, script: true))
+                }
+            }
+            if segment.ends, startTime < segment.end, segment.end <= endTime, state.scripted {
+                input(state, geometry, .up(velocityX: 0, velocityY: 0, script: true))
+            }
+        }
+    }
+
+    private static func snapRestIfStill(_ state: State, _ geometry: Geometry) {
+        var worst = abs(state.travel)
+        for index in 0..<balls {
+            worst = max(worst, abs(state.x[index] - state.restX[index]), abs(state.y[index] - state.restY[index]))
+        }
+        if worst > PullCordThemeTokens.Motion.Rope.snapRest * geometry.scale || state.grab != 0 { return }
+        for index in 0..<balls {
+            state.x[index] = state.restX[index]
+            state.y[index] = state.restY[index]
+            state.oldX[index] = state.x[index]
+            state.oldY[index] = state.y[index]
+        }
+        state.travel = 0
+        state.travelVelocity = 0
+        state.angle = 0
+        state.angularVelocity = 0
+        state.lean = 0
+        state.heat = state.light
+        state.adaptation = state.light
+        state.front = state.light
+        state.frontTime = state.frontDuration
+    }
+
+    private static func hangStraight(_ state: State, _ geometry: Geometry) {
+        let foot = switchFoot(geometry, angle: 0)
+        for index in 0..<balls {
+            state.x[index] = foot.x
+            state.y[index] = foot.y + state.travel + geometry.segment * Double(index)
+            state.oldX[index] = state.x[index]
+            state.oldY[index] = state.y[index]
+        }
+    }
+
+    private static func follow(_ state: State, _ geometry: Geometry) -> Double {
+        let foot = switchFoot(geometry, angle: state.angle)
+        let reach = Double(state.grabbedIndex) * geometry.segment
+        let dx = state.fingerX - foot.x
+        var dy = state.fingerY - foot.y
+        let top = reach * (1 - PullCordThemeTokens.Motion.Rope.lift)
+        if dy < top { dy = top - rubber(top - dy, 16 * geometry.scale) }
+        let distance = max(hypot(dx, dy), 0.000001)
+        let over = distance - reach
+        var hold = 0.0
+        var give = 0.0
+        if over > 0 {
+            let travel = PullCordThemeTokens.Motion.Switch.travel * geometry.scale
+            hold = min(over, travel)
+            if over > travel {
+                give = rubber(over - travel, PullCordThemeTokens.Motion.Switch.stretch * geometry.scale)
+            }
+            if !state.armed { hold = max(0, hold - PullCordThemeTokens.Motion.Switch.give * geometry.scale) }
+            state.lean = dx / distance
+        } else {
+            state.lean = 0
+        }
+        let radius = over > 0 ? reach + hold + give : distance
+        state.pitch = geometry.segment + give / Double(max(1, state.grabbedIndex))
+        let index = state.grabbedIndex
+        state.oldX[index] = state.x[index]
+        state.oldY[index] = state.y[index]
+        state.x[index] = foot.x + dx / distance * radius
+        state.y[index] = foot.y + dy / distance * radius
+        return hold
+    }
+
+    private static func fixedStep(_ state: State, _ geometry: Geometry, autoPlay: Bool) {
+        let delta = PullCordThemeTokens.Motion.step
+        if state.demoOn {
+            let start = state.demoTime
+            var end = start + delta
+            let first = PullCordThemeTokens.autoplayScript[0]
+            runScript(
+                state, geometry, track: PullCordThemeTokens.autoplayScript,
+                from: start, to: end, startX: first.fromX, startY: first.fromY
+            )
+            if end >= PullCordThemeTokens.Motion.loop {
+                end -= PullCordThemeTokens.Motion.loop
+                snapRestIfStill(state, geometry)
+            }
+            state.demoTime = end
+        } else if state.tapOn {
+            let start = state.tapTime
+            let end = start + delta
+            runScript(
+                state, geometry, track: PullCordThemeTokens.tapScript,
+                from: start, to: end, startX: state.tapX, startY: state.tapY
+            )
+            state.tapTime = end
+            if let last = PullCordThemeTokens.tapScript.last, end > last.end + delta { state.tapOn = false }
+        } else if autoPlay, state.grab == 0 {
+            state.quiet += delta
+            if state.quiet >= PullCordThemeTokens.Motion.resume {
+                state.demoOn = true
+                state.demoTime = state.light == 0 ? PullCordThemeTokens.Motion.nightRestAt : 0
+            }
+        }
+
+        if state.grab == 1 {
+            let previous = state.travel
+            state.travel = follow(state, geometry)
+            state.travelVelocity = (state.travel - previous) / delta
+        } else {
+            state.lean = 0
+            state.pitch = geometry.segment
+            let frequency = 2 * Double.pi / PullCordThemeTokens.Motion.Switch.springDuration
+            state.travelVelocity += (
+                -frequency * frequency * state.travel
+                    - 2 * PullCordThemeTokens.Motion.Switch.springDampingRatio * frequency * state.travelVelocity
+            ) * delta
+            state.travel += state.travelVelocity * delta
+            if state.travel < 0 || state.reduced {
+                state.travel = 0
+                state.travelVelocity = 0
+            }
+        }
+        if state.travel < PullCordThemeTokens.Motion.Switch.rearm * geometry.scale { state.armed = true }
+        if state.armed, state.travel >= PullCordThemeTokens.Motion.Switch.detent * geometry.scale { click(state, geometry) }
+
+        if state.reduced, state.grab != 1 { hangStraight(state, geometry) }
+        else { chainStep(state, geometry) }
+
+        let filament = PullCordThemeTokens.Motion.Filament.self
+        let heatTime = state.reduced ? filament.reduced : (state.light == 1 ? filament.warmUp : filament.coolDown)
+        state.heat += (state.light - state.heat) * (1 - exp(-delta / heatTime))
+        let adaptationTime = state.reduced ? filament.reduced : PullCordThemeTokens.Light.adaptTime
+        state.adaptation += (state.light - state.adaptation) * (1 - exp(-delta / adaptationTime))
+        state.onTime += delta
+        if state.frontTime < state.frontDuration {
+            state.frontTime = min(state.frontDuration, state.frontTime + delta)
+            let progress = clamp(state.frontTime / state.frontDuration)
+            let curve = state.frontTurnsOn || state.reduced
+                ? PullCordThemeTokens.Motion.Front.easeOut
+                : PullCordThemeTokens.Motion.Front.easeInOut
+            let eased = bezier(curve, progress)
+            state.front = state.frontFrom + (state.frontTo - state.frontFrom) * eased
+        }
+
+        if state.reduced {
+            state.angle = 0
+            state.angularVelocity = 0
+        } else if state.grab == 2 {
+            let wanted = atan2(state.fingerX - geometry.pivotX, state.fingerY - geometry.pivotY) - state.grabAngle
+            var angle = wanted
+            let maximum = PullCordThemeTokens.Motion.Swing.maximumAngle
+            if abs(angle) > maximum {
+                angle = angle.sign == .minus ? -(maximum + rubber(abs(angle) - maximum, maximum * 0.4))
+                    : maximum + rubber(abs(angle) - maximum, maximum * 0.4)
+            }
+            state.angularVelocity = (angle - state.angle) / delta
+            state.angle = angle
+        } else {
+            let frequency = 2 * Double.pi / PullCordThemeTokens.Motion.Swing.period
+            let rest = PullCordThemeTokens.Motion.Swing.couple * state.lean
+            state.angularVelocity += (
+                -frequency * frequency * (state.angle - rest)
+                    - 2 * PullCordThemeTokens.Motion.Swing.dampingRatio * frequency * state.angularVelocity
+            ) * delta
+            state.angle += state.angularVelocity * delta
+        }
+        state.clock += delta
     }
 }

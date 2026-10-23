@@ -1,38 +1,37 @@
 package com.ngocdevv.nativecook.blocks.gestures.glassdisconboarding
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 
-/** The glass onboarding loop, with dark system-bar icons on its light blush field. */
 @Composable
 fun GlassDiscOnboardingDemo() {
-    GlassDiscOnboardingStatusBar()
+    GlassDiscOnboardingSystemBars()
     GlassDiscOnboarding(autoPlay = true)
 }
 
 @Composable
-private fun GlassDiscOnboardingStatusBar() {
+private fun GlassDiscOnboardingSystemBars() {
     val window = LocalActivity.current?.window ?: return
     val view = LocalView.current
     DisposableEffect(window, view) {
         val controller = WindowCompat.getInsetsController(window, view)
-        val wasLightStatus = controller.isAppearanceLightStatusBars
-        val wasLightNavigation = controller.isAppearanceLightNavigationBars
+        val oldStatus = controller.isAppearanceLightStatusBars
+        val oldNavigation = controller.isAppearanceLightNavigationBars
         controller.isAppearanceLightStatusBars = true
         controller.isAppearanceLightNavigationBars = true
         onDispose {
-            controller.isAppearanceLightStatusBars = wasLightStatus
-            controller.isAppearanceLightNavigationBars = wasLightNavigation
+            controller.isAppearanceLightStatusBars = oldStatus
+            controller.isAppearanceLightNavigationBars = oldNavigation
         }
     }
 }
 
-@Preview
+@Preview(widthDp = 393, heightDp = 852)
 @Composable
 private fun GlassDiscOnboardingDemoPreview() {
-    GlassDiscOnboardingDemo()
+    GlassDiscOnboarding(autoPlay = false)
 }

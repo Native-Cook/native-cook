@@ -9,11 +9,11 @@ import { Gesture } from 'react-native-gesture-handler';
 import { useFrameCallback, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
-import { closeFocus, COUNT, doneCount, ENTITIES, EVENT, initialSim, openFocus, setDone, setTab, stepSim, touchDown, touchMove, touchUp } from './bubble-sim';
-import { AUTOPLAY, DETAIL, LOOP_MS, QA_HOLD, QA_HOLD_AT } from './motion';
+import { COUNT, doneCount, ENTITIES, EVENT, initialSim, resetDay, setDone, setTab, stepSim, touchDown, touchMove, touchUp } from './bubble-sim';
+import { AUTOPLAY, LOOP_MS, QA_HOLD } from './motion';
 
 type Point = { x: number; y: number };
-type Options = { originX: number; originY: number; width: number; height: number; points: { back: Point; social: Point; personal: Point }; ready: boolean; autoPlay: boolean; reduceMotion: boolean };
+type Options = { originX: number; originY: number; points: { social: Point; personal: Point }; ready: boolean; autoPlay: boolean; reduceMotion: boolean };
 
 function index(id: string): number {
   'worklet';
@@ -27,14 +27,15 @@ function haptic(kind: number) {
   else if (kind === EVENT.undo) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
-export function useBubbleCluster({ originX, originY, width, height, points, ready, autoPlay, reduceMotion }: Options) {
+export function useBubbleCluster({ originX, originY, points, ready, autoPlay, reduceMotion }: Options) {
   const sim = useSharedValue(initialSim());
   const finger = useSharedValue({ x: 0, y: 0, alpha: 0 });
-  const script = useSharedValue({ time: 0, paused: false, realDown: false, quiet: 0, segment: 0, scriptedDown: false });
+  /** The name a tap shows: which bubble, and when (sim clock, ms). */
+  const label = useSharedValue({ i: -1, at: -1e6 });
+  const script = useSharedValue({ time: 0, paused: !autoPlay, realDown: false, quiet: 0, segment: 0, scriptedDown: false });
   const [count, setCount] = useState(() => ({ done: 0, total: ENTITIES.filter((e) => e.set === 0 && !e.quiet).length }));
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [tab, setTabState] = useState(0);
-  const [detail, setDetail] = useState(-1);
 
   const report = useCallback((done: number, total: number, ids: string[], announce: string) => {
     setCount({ done, total });
@@ -53,7 +54,7 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
       const kind = s.events[e];
       if (kind === EVENT.count) counted = true;
       else if (!scripted) scheduleOnRN(haptic, kind);
-      if (kind === EVENT.done) announce = 'Habit completed';
+      if (kind === EVENT.done) announce = 'Habit done';
       if (kind === EVENT.undo) announce = 'Habit reopened';
     }
     if (counted) {
@@ -77,26 +78,9 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
       return s;
     });
     flush(scripted);
-    if (tapped >= 0) {
-      // As in the source, a tap opens the habit: the bubble moves up and grows, the others leave.
-      sim.modify((s) => {
-        'worklet';
-        openFocus(s, tapped, width / 2 - originX, height * DETAIL.y - originY, DETAIL.radius);
-        return s;
-      });
-      scheduleOnRN(setDetail, tapped);
-    }
-  }, [flush, height, originX, originY, ready, reduceMotion, sim, width]);
-
-  const closeDetail = useCallback(() => {
-    'worklet';
-    sim.modify((s) => {
-      'worklet';
-      closeFocus(s);
-      return s;
-    });
-    scheduleOnRN(setDetail, -1);
-  }, [sim]);
+    // A short tap on an open habit shows its name above it.
+    if (tapped >= 0) label.set({ i: tapped, at: sim.get().clock });
+  }, [flush, label, ready, reduceMotion, sim]);
 
   const switchTab = useCallback((next: number) => {
     'worklet';
@@ -105,9 +89,10 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
       setTab(s, next);
       return s;
     });
+    label.set({ i: -1, at: -1e6 });
     scheduleOnRN(setTabState, next);
     flush(false);
-  }, [flush, sim]);
+  }, [flush, label, sim]);
 
   /** A real touch: stop the script now, lifting its finger if it is down. */
   const touch = useCallback((down: boolean) => {
@@ -125,7 +110,7 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
     const A = AUTOPLAY;
     const at = (start: number) => t >= start && t < start + A.tapMs;
     const holding = t >= A.holdStart && t < A.holdEnd;
-    const segment = holding ? 5 : at(A.tapAt) ? 6 : at(A.openAt) ? 1 : at(A.backAt) ? 2 : at(A.personalAt) ? 3 : at(A.socialAt) ? 4 : 0;
+    const segment = holding ? 5 : at(A.tapAt) ? 6 : at(A.nameAt) ? 1 : at(A.personalAt) ? 3 : at(A.socialAt) ? 4 : 0;
     let down = s.scriptedDown;
     const world = sim.get();
     if (segment !== s.segment) {
@@ -133,36 +118,32 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
         act(2, 0, 0, 0, 0, true);
         down = false;
       }
-      if (segment === 5 || segment === 6) {
-        // Hold the star until its glass fills (5), or tap it again to reopen it (6).
-        const i = index(A.holdId);
-        finger.set({ x: world.x[i], y: world.y[i], alpha: 1 });
-        act(0, world.x[i], world.y[i], 0, 0, true);
-        down = true;
-      } else if (segment === 1) {
-        const i = index(A.openId);
+      if (segment === 5 || segment === 6 || segment === 1) {
+        // Hold the star until its glass fills (5), tap it again to reopen it (6), or tap a bubble for its name (1).
+        const i = index(segment === 1 ? A.nameId : A.holdId);
         finger.set({ x: world.x[i], y: world.y[i], alpha: 1 });
         act(0, world.x[i], world.y[i], 0, 0, true);
         down = true;
       } else if (segment !== 0) {
-        const p = segment === 2 ? points.back : segment === 3 ? points.personal : points.social;
+        const p = segment === 3 ? points.personal : points.social;
         finger.set({ x: p.x - originX, y: p.y - originY, alpha: 1 });
-        if (segment === 2) closeDetail();
-        else switchTab(segment === 3 ? 1 : 0);
+        switchTab(segment === 3 ? 1 : 0);
       } else finger.set({ ...finger.get(), alpha: 0 });
     }
     let next = t + dt;
-    if (QA_HOLD !== null && t >= QA_HOLD_AT[QA_HOLD]) next = t;
+    if (QA_HOLD !== null && t >= QA_HOLD) next = t;
     if (next >= LOOP_MS) {
+      // The sim's clock restarts with the loop, so every bubble breathes the same way each time round.
       next -= LOOP_MS;
       sim.modify((w) => {
         'worklet';
         w.clock = next;
         return w;
       });
+      label.set({ i: -1, at: -1e6 });
     }
     script.set({ ...s, time: next, segment, scriptedDown: down });
-  }, [act, closeDetail, finger, originX, originY, points, script, sim, switchTab]);
+  }, [act, finger, label, originX, originY, points, script, sim, switchTab]);
 
   useFrameCallback((frame) => {
     'worklet';
@@ -172,10 +153,18 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
       const s = script.get();
       if (s.paused) {
         const quiet = s.realDown ? 0 : s.quiet + dt;
-        const w = sim.get();
-        const settled = w.held < 0 && w.focus < 0 && w.tab === 0 && doneCount(w).done === 0;
-        if (quiet >= AUTOPLAY.resumeDelayMs && settled) script.set({ ...s, paused: false, time: 0, quiet: 0, segment: 0, scriptedDown: false });
-        else script.set({ ...s, quiet });
+        if (quiet >= AUTOPLAY.resumeDelayMs && sim.get().held < 0) {
+          // Two seconds after the last touch: the day goes back to how it began, and the demo starts again.
+          sim.modify((w) => {
+            'worklet';
+            resetDay(w);
+            return w;
+          });
+          label.set({ i: -1, at: -1e6 });
+          scheduleOnRN(setTabState, 0);
+          flush(true);
+          script.set({ ...s, paused: false, time: 0, quiet: 0, segment: 0, scriptedDown: false });
+        } else script.set({ ...s, quiet });
       } else runScript(dt);
     }
     sim.modify((s) => {
@@ -204,14 +193,9 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
     scheduleOnUI(() => {
       'worklet';
       touch(false);
-      sim.modify((s) => {
-        'worklet';
-        setTab(s, next);
-        return s;
-      });
-      flush(false);
+      switchTab(next);
     });
-  }, [flush, sim, touch]);
+  }, [switchTab, touch]);
 
   /** Accessible path: complete or reopen a habit without holding. */
   const toggle = useCallback((id: string) => {
@@ -228,13 +212,5 @@ export function useBubbleCluster({ originX, originY, width, height, points, read
     });
   }, [flush, sim, touch]);
 
-  const back = useCallback(() => {
-    scheduleOnUI(() => {
-      'worklet';
-      touch(false);
-      closeDetail();
-    });
-  }, [closeDetail, touch]);
-
-  return { sim, finger, gesture, count, doneIds, tab, detail, selectTab, toggle, back };
+  return { sim, finger, label, gesture, count, doneIds, tab, selectTab, toggle };
 }

@@ -1,4 +1,4 @@
-import { Canvas, Group, Image as SkImage, useImage, type Transforms3d } from '@shopify/react-native-skia';
+import { Canvas, Group, type Transforms3d } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -13,9 +13,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { EVENT, ORB, POOL, aimArc, initialSim, input, makeGeometry, stepSim, type Input } from './jar-sim';
-import { MoodScene, type MoodImages, type MoodValues } from './MoodScene';
-import { GHOST, HAPTIC, LID, QA_SPEED, REPLICA_HOLD, RIPPLE, THROW, UNDO } from './motion';
-import { COLORS, COPY, LAYOUT, MOODS, REPLICA, SPACE } from './theme';
+import { Bead } from './bead';
+import { MoodScene, type MoodValues } from './MoodScene';
+import { GHOST, HAPTIC, LID, QA_SPEED, RIPPLE, THROW, UNDO } from './motion';
+import { COLORS, COPY, LAYOUT, MOODS, SPACE } from './theme';
 
 type Props = { autoPlay?: boolean };
 type Entry = { id: number; mood: number; tags: string; time: string; fresh: boolean };
@@ -29,16 +30,6 @@ function playHaptic(kind: number) {
   else if (kind === HAPTIC.undo) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 }
 
-// Orb artwork, generated from the reference (one per mood, awful to great).
-// The source's own orbs (traced from its mood picker), for the picker, new orbs and the avatars.
-const ORB_ART = [
-  require('./assets/orb-awful-r.png'),
-  require('./assets/orb-bad-r.png'),
-  require('./assets/orb-neutral-r.png'),
-  require('./assets/orb-good-r.png'),
-  require('./assets/orb-great-r.png'),
-];
-
 const START: Entry[] = COPY.entries.map((e, i) => ({ id: -1 - i, mood: e.mood, tags: e.tags, time: e.time, fresh: false }));
 
 export function MoodOrbJar({ autoPlay = false }: Props) {
@@ -47,23 +38,12 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
   const reduced = useReducedMotion();
   const g = useMemo(() => makeGeometry(width, height, insets.top), [width, height, insets.top]);
   const [entries, setEntries] = useState<Entry[]>(START);
-  const jar = useImage(require('./assets/jar.png'));
-  const front = useImage(require('./assets/jar-front.png'));
-  const lidImg = useImage(require('./assets/lid.png'));
-  const plate = useImage(require('./assets/pile-plate.png'));
-  const plateB = useImage(require('./assets/pile-plate-b.png'));
-  const jarPlate = useImage(require('./assets/jar-plate.png'));
-  const pileAtlas = useImage(require('./assets/pile-atlas.png'));
-  const o0 = useImage(ORB_ART[0]);
-  const o1 = useImage(ORB_ART[1]);
-  const o2 = useImage(ORB_ART[2]);
-  const o3 = useImage(ORB_ART[3]);
-  const o4 = useImage(ORB_ART[4]);
-  const images = useMemo<MoodImages>(() => ({ jar, front, lid: lidImg, orbs: [o0, o1, o2, o3, o4], plate, plateB, jarPlate, pileAtlas }), [jar, front, lidImg, o0, o1, o2, o3, o4, plate, plateB, jarPlate, pileAtlas]);
   const nextId = useRef(1);
 
   // Settling the pile takes a few hundred steps: once, not on every render.
-  const [initial] = useState(() => initialSim(g, reduced, autoPlay));
+  // Reduce Motion: no demo; the jar at rest, a finger still tosses.
+  const demo = autoPlay && !reduced;
+  const [initial] = useState(() => initialSim(g, reduced, demo));
   const sim = useSharedValue(initial);
   const orbs = useSharedValue<number[]>([]);
   const ghost = useSharedValue<number[]>([0, 0, 1, 0, 0]); // x, y, scale, mood, visible
@@ -75,10 +55,9 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
   const [count, setCount] = useState(0);
   const rotation = useAnimatedSensor(SensorType.ROTATION);
   // The new entry's avatar: the first card's orb, where the ghost lands.
-  const avatarX = LAYOUT.side * g.s + SPACE.cardPad + LAYOUT.entryOrb;
-  const avatarY = g.rowY + SPACE.avatarTop + LAYOUT.entryOrb;
+  const avatarX = LAYOUT.side * g.s + ROW_PAD + LAYOUT.entryOrb;
+  const avatarY = g.rowY + LAYOUT.entryHeight / 2;
   const slots = useSharedValue<number[]>([1, 1, 1, 1, 1]);
-  const cut = useSharedValue(0);
   const lidAngle = useSharedValue(0);
   const rowX = useSharedValue(0);
 
@@ -89,7 +68,7 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
       const mood = e - EVENT.added;
       const id = nextId.current++;
       setEntries((list) => [{
-        id, mood, tags: REPLICA ? COPY.replicaEntry.tags : MOODS[mood].tags, time: REPLICA ? COPY.replicaEntry.time : COPY.now, fresh: true,
+        id, mood, tags: MOODS[mood].tags, time: COPY.now, fresh: true,
       }, ...list.map((x) => ({ ...x, fresh: false }))]);
     } else {
       playHaptic(e);
@@ -107,7 +86,11 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
       if (st === ORB.held) scale = small * THROW.lift;
       else if (st === ORB.returning) scale = small;
       else if (st === ORB.leaving) scale = 1 - (1 - small) * Math.min(1, s.t[i] / (UNDO.rise + UNDO.fly));
-      out.push(s.x[i], s.y[i], s.spin[i], scale, st === ORB.off ? 0 : s.fade[i], s.mood[i], s.sq[i], s.vx[i], s.vy[i], st === ORB.flying ? 1 : 0);
+      // In front of the glass: in the hand, on its way back, leaving, or flying up past the jar; behind it once it
+      // falls through the mouth.
+      const front = st === ORB.held || st === ORB.returning || st === ORB.leaving
+        || (st === ORB.flying && (s.vy[i] < 0 || s.y[i] < g.mouthY + LAYOUT.orb * g.s)) ? 1 : 0;
+      out.push(s.x[i], s.y[i], s.spin[i], scale, st === ORB.off ? 0 : s.fade[i], s.mood[i], s.sq[i], s.vx[i], s.vy[i], st === ORB.flying ? 1 : 0, front);
     }
     orbs.set(out);
     // Shared element: the landed orb's copy flies to the new entry's avatar on an arc.
@@ -134,12 +117,11 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
       scheduleOnRN(setCount, n);
     }
     slots.set(s.slotScale.slice());
-    cut.set(s.cut);
     lidAngle.set(s.lid);
     rowX.set(s.rowX);
     for (let i = 0; i < s.events.length; i++) scheduleOnRN(onEvent, s.events[i]);
     s.events = [];
-  }, [sim, orbs, slots, lidAngle, rowX, onEvent, aim, avatarX, avatarY, countNow, g, ghost, ripple, tiltX, grow, cut]);
+  }, [sim, orbs, slots, lidAngle, rowX, onEvent, aim, avatarX, avatarY, countNow, g, ghost, ripple, tiltX, grow]);
 
   useFrameCallback((frame) => {
     'worklet';
@@ -147,10 +129,7 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
     const s = sim.get();
     s.reduced = reduced;
     s.tilt = reduced ? 0 : Math.max(-1, Math.min(1, rotation.sensor.value.roll));
-    if (REPLICA_HOLD >= 0) {
-      // QA only: run to the held time once, then freeze.
-      if (s.clock === 0) stepSim(s, g, REPLICA_HOLD, autoPlay, true);
-    } else stepSim(s, g, (frame.timeSincePreviousFrame / 1000) * QA_SPEED, autoPlay);
+    stepSim(s, g, (frame.timeSincePreviousFrame / 1000) * QA_SPEED, demo);
     sim.set(s);
     publish();
   });
@@ -199,28 +178,28 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
       { translateX: -cxl }, { translateY: -hy },
     ];
   });
-  const values: MoodValues = { orbs, slots, lid, ghost, ripple, aim, tilt: tiltX, cut };
-  const ghostD = LAYOUT.orb * 2 * g.s * (144 / 132);
+  const values: MoodValues = { orbs, slots, lid, ghost, ripple, aim, tilt: tiltX };
   const ghostT = useDerivedValue<Transforms3d>(() => [{ translateX: ghost.value[0] }, { translateY: ghost.value[1] }, { scale: ghost.value[2] }]);
   const ghostO = useDerivedValue(() => ghost.value[4]);
-  const ghostImg = useDerivedValue(() => images.orbs[ghost.value[3]] ?? null);
+  const ghostMood = useDerivedValue(() => ghost.value[3] ?? 0);
   const cardW = width - LAYOUT.side * g.s * 2;
 
   const listTop = g.rowY;
 
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" hidden={REPLICA} />
+      <StatusBar style="dark" />
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill} collapsable={false}>
           <Canvas style={StyleSheet.absoluteFill}>
-            <MoodScene g={g} v={values} images={images} />
+            <MoodScene g={g} v={values} />
           </Canvas>
 
           <View pointerEvents="box-none" style={[styles.header, { top: insets.top, height: LAYOUT.header * g.s }]}>
             <Pressable accessibilityRole="button" accessibilityLabel={COPY.back} style={styles.icon}>
               <View style={styles.chevron} />
             </Pressable>
+            <Text style={styles.title} accessibilityRole="header">{COPY.title}</Text>
             <View style={styles.headerRight}>
               <Pressable accessibilityRole="button" accessibilityLabel={COPY.calendar} style={styles.icon}>
                 <View style={styles.calendar}>
@@ -246,7 +225,7 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
             </Pressable>
           ))}
 
-          {REPLICA ? null : (
+          {(
             <View pointerEvents="none" style={[styles.label, { top: g.mouthY + LAYOUT.jarHeight * LAYOUT.labelY * g.s }]}>
               <Text style={styles.labelMonth}>{COPY.month}</Text>
               {/* The count rolls like an odometer when an orb joins or leaves. */}
@@ -258,7 +237,6 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
             </View>
           )}
           <View pointerEvents="box-none" style={[styles.list, { top: listTop, left: LAYOUT.side * g.s, right: LAYOUT.side * g.s }]}>
-            {/* The source's cards, one per entry. */}
             <View>
             {entries.slice(0, 3).map((e, i) => (
               <EntryRow key={e.id} entry={e} swipe={i === 0 && e.fresh ? rowX : null} grow={i === 0 && e.fresh ? grow : null} width={cardW} last={i === Math.min(entries.length, 3) - 1} onUndo={() => command('undo')} />
@@ -268,7 +246,7 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
           {/* The shared element flies above the list, so it lands on the new card's avatar. */}
           <Canvas pointerEvents="none" style={StyleSheet.absoluteFill}>
             <Group transform={ghostT} opacity={ghostO}>
-              <SkImage image={ghostImg} x={-ghostD / 2} y={-ghostD / 2} width={ghostD} height={ghostD} fit="fill" />
+              <Bead r={LAYOUT.orb * g.s} mood={ghostMood} />
             </Group>
           </Canvas>
         </View>
@@ -277,49 +255,56 @@ export function MoodOrbJar({ autoPlay = false }: Props) {
   );
 }
 
-function EntryRow({ entry, swipe, grow, width, last, onUndo }: {
+/** The row's inner padding: the avatar bead sits this far from the card's left edge. */
+const ROW_PAD = 12;
+
+function EntryRow({ entry, swipe, grow, width, onUndo }: {
   entry: Entry; swipe: SharedValue<number> | null; grow: SharedValue<number> | null; width: number; last: boolean; onUndo: () => void;
 }) {
   const mood = MOODS[entry.mood];
-  // Container morph: the card's surface grows out of the avatar (an absolute, childless view: width is allowed),
-  // then the text fades in.
-  const avatarBox = LAYOUT.entryOrb * 2 + 32;
+  // Container morph: the card's surface grows out of the avatar (transform only), tinted in the mood's light colour
+  // as it arrives, then the text fades in.
+  const avatarBox = LAYOUT.entryOrb * 2 + ROW_PAD * 2;
   const bg = useAnimatedStyle(() => {
     const k = grow ? grow.value : 1;
     const e = 1 - Math.pow(1 - k, 3);
-    // Transform only: the full-width surface scales out from its left edge (no layout per frame).
     return {
       transform: [{ scaleX: (avatarBox + (width - avatarBox) * e) / width }],
       opacity: grow ? Math.min(1, k * 4) : 1,
-      backgroundColor: REPLICA ? COLORS.card : interpolateColor(k, [0, 0.6, 1], [mood.light, mood.light, COLORS.card]), // the new card grows in the mood's tint
+      backgroundColor: interpolateColor(k, [0, 0.6, 1], [mood.light, mood.light, COLORS.card]),
     };
   });
   const content = useAnimatedStyle(() => ({ opacity: grow ? Math.max(0, (grow.value - 0.45) / 0.55) : 1 }));
   const avatar = useAnimatedStyle(() => ({ opacity: grow ? (grow.value > 0 ? 1 : 0) : 1 }));
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: swipe ? swipe.value : 0 }] }));
   const under = useAnimatedStyle(() => ({ opacity: swipe ? Math.min(1, -swipe.value / 60) : 0 }));
+  const d = LAYOUT.entryOrb * 2;
   return (
     <Animated.View entering={grow ? undefined : FadeInDown.duration(260)} exiting={FadeOut.duration(160)} layout={LinearTransition.duration(220)} style={styles.entryWrap}>
       <Animated.View style={[styles.under, under]}>
         <Text style={styles.underText}>{COPY.undo}</Text>
       </Animated.View>
       <Animated.View
-        style={[styles.entry, styles.rEntry, style]}
+        style={[styles.entry, style]}
         accessible
         accessibilityLabel={`${mood.name}, ${entry.tags}, ${entry.time}`}
         accessibilityActions={entry.fresh ? [{ name: 'delete', label: COPY.undo }] : undefined}
         onAccessibilityAction={entry.fresh ? onUndo : undefined}
       >
         <Animated.View style={[styles.entryBg, bg]} />
-        <Animated.Image source={ORB_ART[entry.mood]} style={[styles.entryOrb, styles.rEntryOrb, avatar]} />
-        {/* The source's card: name, tags and time on three lines. */}
-        <Animated.View style={[styles.entryText, styles.rEntryText, content]}>
-          <Text style={[styles.entryTitle, styles.rEntryTitle]}>{mood.name}</Text>
-          <Text style={[styles.entryTags, styles.rEntryLine]} numberOfLines={1}>{entry.tags}</Text>
-          <Text style={[styles.entryTags, styles.rEntryLine]}>{entry.time}</Text>
+        <Animated.View style={[{ width: d, height: d }, avatar]}>
+          <Canvas style={{ width: d + 4, height: d + 4, margin: -2 }}>
+            <Group transform={[{ translateX: d / 2 + 2 }, { translateY: d / 2 + 2 }]}>
+              <Bead r={LAYOUT.entryOrb} mood={entry.mood} />
+            </Group>
+          </Canvas>
         </Animated.View>
-        <Animated.View style={[styles.dots, styles.rDots, content]}>
-          {[0, 1, 2].map((d) => <View key={d} style={[styles.dot, styles.rDot]} />)}
+        <Animated.View style={[styles.entryText, content]}>
+          <Text style={styles.entryTitle}>{mood.name}</Text>
+          <Text style={styles.entryTags} numberOfLines={1}>{`${entry.tags}  ·  ${entry.time}`}</Text>
+        </Animated.View>
+        <Animated.View style={[styles.dots, content]}>
+          {[0, 1, 2].map((k) => <View key={k} style={styles.dot} />)}
         </Animated.View>
       </Animated.View>
     </Animated.View>
@@ -330,46 +315,36 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   header: { position: 'absolute', left: 8, right: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerRight: { flexDirection: 'row' },
+  title: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 17, fontWeight: '600', letterSpacing: -0.3, color: COLORS.ink },
   icon: { width: LAYOUT.icon, height: LAYOUT.icon, alignItems: 'center', justifyContent: 'center' },
-  chevron: { width: 12, height: 12, borderLeftWidth: 2.2, borderBottomWidth: 2.2, borderColor: COLORS.ink, transform: [{ rotate: '45deg' }], marginLeft: 4 },
-  calendar: { width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: COLORS.ink, alignItems: 'center', justifyContent: 'center' },
-  calendarText: { fontSize: 10, fontWeight: '700', color: COLORS.ink, marginTop: 1 },
-  more: { fontSize: 13, letterSpacing: 1, color: COLORS.ink, fontWeight: '700' },
+  chevron: { width: 11, height: 11, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: COLORS.ink, transform: [{ rotate: '45deg' }], marginLeft: 4 },
+  calendar: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.75, borderColor: COLORS.ink, alignItems: 'center', justifyContent: 'center' },
+  calendarText: { fontSize: 9, fontWeight: '700', color: COLORS.ink, marginTop: 1, fontVariant: ['tabular-nums'] },
+  more: { fontSize: 12, letterSpacing: 1, color: COLORS.ink, fontWeight: '700' },
   slot: { position: 'absolute', height: 72, justifyContent: 'flex-end', alignItems: 'center' },
-  slotLabel: { fontSize: LAYOUT.labelSize, color: COLORS.label },
+  slotLabel: { fontSize: 12, fontWeight: '500', color: COLORS.label },
   list: { position: 'absolute' },
   label: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  labelMonth: { fontSize: 11, letterSpacing: 2.2, fontWeight: '700', color: COLORS.mute },
-  countBox: { height: 30, marginTop: SPACE.xs, overflow: 'hidden', alignItems: 'center' },
-  count: { fontSize: 24, lineHeight: 30, fontWeight: '800', color: COLORS.ink, fontVariant: ['tabular-nums'] },
+  labelMonth: { fontSize: 11, letterSpacing: 2.4, fontWeight: '700', color: COLORS.mute },
+  countBox: { height: 32, marginTop: SPACE.xs, overflow: 'hidden', alignItems: 'center' },
+  count: { fontSize: 26, lineHeight: 32, fontWeight: '700', color: COLORS.ink, fontVariant: ['tabular-nums'] },
   entryWrap: { marginBottom: LAYOUT.entryGap, height: LAYOUT.entryHeight },
   under: {
     position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: LAYOUT.cardRadius, backgroundColor: COLORS.danger, alignItems: 'flex-end',
-    justifyContent: 'center', paddingRight: 24,
+    justifyContent: 'center', paddingRight: 20,
   },
   underText: { color: COLORS.dangerInk, fontWeight: '600', fontSize: 15 },
-  entry: {
-    flex: 1, borderRadius: LAYOUT.cardRadius, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
+  entry: { flex: 1, borderRadius: LAYOUT.cardRadius, flexDirection: 'row', alignItems: 'center', paddingHorizontal: ROW_PAD },
+  entryBg: {
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: LAYOUT.cardRadius, backgroundColor: COLORS.card, transformOrigin: 'left',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: COLORS.cardEdge,
   },
-  entryBg: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: LAYOUT.cardRadius, backgroundColor: COLORS.card, transformOrigin: 'left' },
-  entryOrb: { width: LAYOUT.entryOrb * 2, height: LAYOUT.entryOrb * 2, borderRadius: LAYOUT.entryOrb },
-  entryText: { marginLeft: 14, flex: 1 },
-  entryTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '600', letterSpacing: -0.2 },
-  entryTags: { color: COLORS.mute, fontSize: 13, marginTop: 3 },
+  entryText: { marginLeft: 12, flex: 1, paddingRight: 44 },
+  entryTitle: { color: COLORS.ink, fontSize: 16, lineHeight: 20, fontWeight: '600', letterSpacing: -0.2 },
+  entryTags: { color: COLORS.secondary, fontSize: 13, lineHeight: 18, marginTop: 2 },
   dots: {
-    position: 'absolute', right: 12, top: 12, width: 28, height: 24, borderRadius: 8, backgroundColor: COLORS.dotsBg,
+    position: 'absolute', right: 12, width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.dotsBg,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2.5,
   },
-  dot: { width: 3.5, height: 3.5, borderRadius: 1.75, backgroundColor: COLORS.dotsInk },
-  // Replica: the source's entry card, measured on the reference frame.
-  rEntry: { alignItems: 'flex-start', paddingHorizontal: SPACE.cardPad },
-  rEntryOrb: { marginTop: SPACE.avatarTop },
-  rEntryText: { marginLeft: 16.3, marginTop: 27.4 },
-  rEntryTitle: { fontWeight: '700', lineHeight: 20 },
-  rEntryLine: { fontSize: 14, lineHeight: 18, marginTop: 4.1, color: COLORS.secondary },
-  rDots: {
-    right: 11.3, top: 14.3, width: 27, height: 27, backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth * 2,
-    borderColor: 'rgba(22, 35, 58, 0.1)', gap: 3,
-  },
-  rDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#2A2A2E' },
+  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.dotsInk },
 });

@@ -28,7 +28,7 @@ export const THROW = {
 export const UNDO = { threshold: 96, rise: 0.35, fly: 0.55, rowSpring: { stiffness: 300, damping: 28 } };
 
 // The lid lifts straight up and floats (as in the source), tilting ~3° on the way: 0 closed … 1 lifted.
-export const LID = { open: 1, lift: 20, tilt: 0.09, stiffness: 120, damping: 9, hold: 2.4 }; // damping 9: overshoots, then floats
+export const LID = { open: 1, lift: 20, tilt: 0.09, stiffness: 120, damping: 9, hold: 1.1 }; // damping 9: overshoots, then floats
 
 export const HAPTIC = { grab: 1, throw: 2, land: 3, undo: 4, landSoft: 5, landHard: 6 } as const;
 
@@ -47,20 +47,21 @@ export const TILT = { slosh: 14, glass: 6 }; // pt of pile slosh and glass highl
 export const GHOST = { duration: 0.85, lift: 0.3, rise: 46, arc: 60, grow: 0.36 }; // shared element: the landed orb lifts out, arcs to the list, the card grows from it
 export const RIPPLE = { duration: 0.6, radius: 46 };
 export const JAR_KNOCK = { amp: 1.5, decay: 14, hz: 9 }; // pt: a landing rocks the jar sideways and it settles in about 0.3 s
-export const HOP = { every: 2, phase: 1, speed: 70 }; // ambient: one pile orb hops a little every 2 s of the 12 s loop, at 1, 3, … 11 s
+export const HOP = { every: 2, phase: 0.5, speed: 70, last: 6 }; // ambient: one pile orb hops a little at 1.5, 3.5 and 5.5 s; none later, so the pile is still at the seam
 export const AIM = { points: 14, step: 0.045 }; // dotted aim arc while holding an orb
 
 export const REDUCED = { fade: 0.2 };
 
-// Autoplay: 12 s.
-export const LOOP_MS = 12_000;
-export const RESUME_MS = 3_500;
+// Autoplay: 10 s. Toss a Great orb (1.0–1.35 s), it lands and joins the list, swipe the entry away (5.6–6.15 s),
+// the orb flies home, the lid closes by about 8.6 s, rest.
+export const LOOP_MS = 10_000;
+export const RESUME_MS = 2_000;
 export const SCRIPT = {
   mood: 4,
   pick: [1.0, 1.35] as const,
   pickBy: [-30, -80] as const,
   release: [-500, -1500] as const,
-  swipe: [7.0, 7.55] as const,
+  swipe: [5.6, 6.15] as const,
   swipeBy: -150,
 };
 // QA only: after mount, runs the demo to this time (seconds) and freezes it for reference screenshots; -1 off.

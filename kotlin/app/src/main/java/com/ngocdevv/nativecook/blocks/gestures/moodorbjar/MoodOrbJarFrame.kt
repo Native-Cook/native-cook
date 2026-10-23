@@ -9,8 +9,8 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 
-/** Floats per orb in [MoodOrbJarFrame.orbs]: x, y, spin, scale, opacity, mood, squash, vx, vy, flying. */
-internal const val ORB_STRIDE = 10
+/** Floats per orb: x, y, spin, scale, opacity, mood, squash, vx, vy, flying, in front of the glass. */
+internal const val ORB_STRIDE = 11
 
 /**
  * What the drawing reads each frame, copied out of the simulation (`publish` of the React Native block). The canvases
@@ -64,6 +64,10 @@ internal class MoodOrbJarFrame(initialCount: Int) {
             orbs[k + 7] = s.vx[i].toFloat()
             orbs[k + 8] = s.vy[i].toFloat()
             orbs[k + 9] = if (st == MoodOrbJarOrb.FLYING) 1f else 0f
+            orbs[k + 10] = if (
+                st == MoodOrbJarOrb.HELD || st == MoodOrbJarOrb.RETURNING || st == MoodOrbJarOrb.LEAVING ||
+                (st == MoodOrbJarOrb.FLYING && (s.vy[i] < 0 || s.y[i] < g.mouthY + MoodOrbJarLayout.ORB * g.s))
+            ) 1f else 0f
         }
         // Shared element: the landed orb's copy flies to the new entry's avatar on an arc.
         if (s.ghostT >= 0) {

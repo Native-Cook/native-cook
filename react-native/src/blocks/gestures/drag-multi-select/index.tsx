@@ -5,7 +5,7 @@ import { DragMultiSelect } from './DragMultiSelect';
 export default function DragMultiSelectDemo() {
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <DragMultiSelect autoPlay />
     </>
   );

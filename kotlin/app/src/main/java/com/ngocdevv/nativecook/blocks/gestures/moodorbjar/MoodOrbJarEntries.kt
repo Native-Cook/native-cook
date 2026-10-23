@@ -2,9 +2,8 @@ package com.ngocdevv.nativecook.blocks.gestures.moodorbjar
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,9 +35,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -209,10 +205,6 @@ private fun MoodOrbJarEntryRow(
 ) {
     val entry = row.entry
     val mood = MoodOrbJarMoods[entry.mood]
-    val localDensity = LocalDensity.current
-    val dotBorder = with(localDensity) {
-        (MoodOrbJarTokens.Style.dotsStroke.toFloat() / density).dp
-    }
     val growth = {
         if (row.bound) {
             frame.grow.floatValue
@@ -276,7 +268,7 @@ private fun MoodOrbJarEntryRow(
                 .drawBehind {
                     val progress = growth()
                     val eased = 1f - (1f - progress).pow(3)
-                    val avatarBox = (MoodOrbJarLayout.ENTRY_ORB * 2 + 32).dp.toPx()
+                    val avatarBox = (MoodOrbJarLayout.ENTRY_ORB * 2 + MoodOrbJarSpace.CARD_PAD * 2).dp.toPx()
                     val surface = if (row.bound) {
                         morphColor(progress, mood.light, MoodOrbJarColors.card)
                     } else {
@@ -291,36 +283,35 @@ private fun MoodOrbJarEntryRow(
                         cornerRadius = CornerRadius(MoodOrbJarLayout.CARD_RADIUS.dp.toPx()),
                         alpha = if (row.bound) min(1f, progress * 4) else 1f,
                     )
+                    drawRoundRect(
+                        color = MoodOrbJarColors.cardEdge,
+                        size = Size(
+                            width = avatarBox + (size.width - avatarBox) * eased,
+                            height = size.height,
+                        ),
+                        cornerRadius = CornerRadius(MoodOrbJarLayout.CARD_RADIUS.dp.toPx()),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f),
+                        alpha = if (row.bound) min(1f, progress * 4) else 1f,
+                    )
                 },
         ) {
-            Image(
-                painter = painterResource(mood.art),
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
+            Canvas(
                 modifier = Modifier
-                    .offset(
-                        x = MoodOrbJarSpace.CARD_PAD.dp,
-                        y = MoodOrbJarSpace.AVATAR_TOP.dp,
-                    )
+                    .align(Alignment.CenterStart)
+                    .offset(x = MoodOrbJarSpace.CARD_PAD.dp)
                     .size((MoodOrbJarLayout.ENTRY_ORB * 2).dp)
                     .graphicsLayer {
-                        alpha = if (row.bound && growth() <= 0f) {
-                            0f
-                        } else {
-                            1f
-                        }
-                    }
-                    .clip(CircleShape),
-            )
+                        alpha = if (row.bound && growth() <= 0f) 0f else 1f
+                    },
+            ) {
+                drawMoodOrbJarBead(null, entry.mood, center, size.minDimension / 2f)
+            }
             Column(
                 Modifier
-                    .offset(
-                        x = (
-                            MoodOrbJarSpace.CARD_PAD +
-                                MoodOrbJarLayout.ENTRY_ORB * 2 +
-                                MoodOrbJarTokens.Style.avatarTextGap
-                            ).dp,
-                        y = MoodOrbJarTokens.Style.entryTextTop.dp,
+                    .align(Alignment.CenterStart)
+                    .padding(
+                        start = (MoodOrbJarSpace.CARD_PAD + MoodOrbJarLayout.ENTRY_ORB * 2 + MoodOrbJarTokens.Style.avatarTextGap).dp,
+                        end = 44.dp,
                     )
                     .graphicsLayer {
                         alpha = contentAlpha(row, growth())
@@ -331,23 +322,16 @@ private fun MoodOrbJarEntryRow(
                     color = MoodOrbJarColors.ink,
                     fontSize = MoodOrbJarTokens.Style.entryTitleSize.sp,
                     lineHeight = MoodOrbJarTokens.Style.entryTitleLineHeight.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     letterSpacing = MoodOrbJarTokens.Style.entryTitleTracking.sp,
                 )
                 Text(
-                    text = entry.tags,
+                    text = "${entry.tags}  ·  ${entry.time}",
                     color = MoodOrbJarColors.secondary,
                     fontSize = MoodOrbJarTokens.Style.entryLineSize.sp,
                     lineHeight = MoodOrbJarTokens.Style.entryLineHeight.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = MoodOrbJarTokens.Style.entryLineGap.dp),
-                )
-                Text(
-                    text = entry.time,
-                    color = MoodOrbJarColors.secondary,
-                    fontSize = MoodOrbJarTokens.Style.entryLineSize.sp,
-                    lineHeight = MoodOrbJarTokens.Style.entryLineHeight.sp,
                     modifier = Modifier.padding(top = MoodOrbJarTokens.Style.entryLineGap.dp),
                 )
             }
@@ -362,13 +346,8 @@ private fun MoodOrbJarEntryRow(
                     .graphicsLayer {
                         alpha = contentAlpha(row, growth())
                     }
-                    .clip(RoundedCornerShape(MoodOrbJarTokens.Style.dotsRadius.dp))
-                    .background(Color.White)
-                    .border(
-                        width = dotBorder,
-                        color = MoodOrbJarColors.sheetLine,
-                        shape = RoundedCornerShape(MoodOrbJarTokens.Style.dotsRadius.dp),
-                    ),
+                    .clip(CircleShape)
+                    .background(MoodOrbJarColors.dotsBg),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(
@@ -378,7 +357,7 @@ private fun MoodOrbJarEntryRow(
                         Box(
                             Modifier
                                 .size(MoodOrbJarTokens.Style.dotSize.dp)
-                                .background(Color(0xFF2A2A2E), CircleShape),
+                                .background(MoodOrbJarColors.dotsInk, CircleShape),
                         )
                     }
                 }

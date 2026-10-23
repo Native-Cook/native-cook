@@ -3,7 +3,7 @@
  * its end, and the call's states. The finger and the autoplay's scripted finger share `input`.
  */
 import { CORD, HANDSET, REPLICA, STAGE_WIDTH } from './theme';
-import { CHAIN, DRAG, FLICK, HAPTIC, LOOP_MS, MAX_STEPS, PREROLL_LOOPS, REPLICA_CORD, REPLICA_SWING, RESUME_MS, RING, SCRIPT, STATE, STEP, TICK, TILT } from './motion';
+import { CHAIN, DRAG, FLICK, HAPTIC, LOOP_MS, MAX_STEPS, PREROLL_LOOPS, REPLICA_CORD, REPLICA_SWING, RESUME_IN_CALL, RESUME_MS, RING, SCRIPT, STATE, STEP, TICK, TILT } from './motion';
 
 export const PHASE = { ringing: 0, connected: 1, declined: 2, ended: 3 } as const;
 
@@ -288,7 +288,7 @@ function fixedStep(s: Sim, g: Geometry, autoPlay: boolean) {
     s.quiet += dt;
     if (s.quiet * 1000 >= RESUME_MS && (s.phase === PHASE.ringing || s.phase === PHASE.connected)) {
       s.demoOn = true;
-      s.demoT = s.phase === PHASE.connected ? 5 : 0;
+      s.demoT = s.phase === PHASE.connected ? RESUME_IN_CALL : 0;
     }
   }
 
@@ -425,7 +425,7 @@ export function ringState(s: Sim) {
   'worklet';
   if (REPLICA) return { buzz: 0, pulse: -1 };
   if (s.phase !== PHASE.ringing || s.grab || s.reduced) return { buzz: 0, pulse: -1 };
-  // On the clock, so every 12 s loop rings alike; offset so the swing's source poses (0–2 s of each 4) stay clear.
+  // On the clock, so every loop rings alike; offset so the swing's source poses (0–2 s of each 4) stay clear.
   const t = (((s.clock - RING.offset) % RING.every) + RING.every) % RING.every;
   let buzz = 0;
   for (let i = 0; i < RING.buzz.length; i++) {

@@ -3,6 +3,8 @@ package com.ngocdevv.nativecook.blocks.gestures.pinchtosummarize
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 
 internal data class PtsStage(
@@ -50,7 +52,8 @@ internal fun ptsPageFrame(
     val cardScale = ptsCardScale(stage, lift)
     val scale = ptsMix(1f, cardScale, p) * (1f + breath)
     val top = ptsMix(PtsLayout.thinkTop, PtsLayout.summaryTop, lift)
-    val clipHeight = max(1f, ptsMix(stage.height, ptsCardHeight(lift) / cardScale, p))
+    val cropProgress = if (p > 0f) min(p, 1.2f).pow(PtsPinch.cropPow) else p
+    val clipHeight = max(1f, ptsMix(stage.height, ptsCardHeight(lift) / cardScale, cropProgress))
     val grow = ptsMix(1f, cardScale, p) * breath
     val x = ptsMix(0f, (stage.width - ptsCardWidth(stage, lift)) / 2f, p) +
         driftX - stage.width * grow / 2f

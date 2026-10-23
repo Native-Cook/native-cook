@@ -2,769 +2,567 @@ package com.ngocdevv.nativecook.blocks.gestures.savetocollection
 
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
-class SaveToCollectionEngine(
+internal class SaveToCollectionEngine(
+    val layout: SaveToCollectionLayout,
     private val autoPlay: Boolean,
     val reducedMotion: Boolean,
-    private val onHaptic: (SaveHaptic) -> Unit,
+    private val onHaptic: (SaveToCollectionHaptic) -> Unit,
 ) {
-    private val tokens = SaveToCollectionTokens
-    private val gone = BooleanArray(tokens.cards.size)
-    private var flightSequence = 0
-    private var nextPileAt = -1.0
-    private var touchDownX = 0f
-    private var touchDownY = 0f
-    private var touchDownSeconds = 0.0
-    private var touchCard = -1
-    private var lastVelocityX = 0f
-    private var lastVelocityY = 0f
-    private var dragMode = DRAG_NONE
-    private var dragAnimationStart = 0.0
-    private var dragAnimationDuration = 0.0
-    private var dragFromX = 0f
-    private var dragFromY = 0f
-    private var dragFromScale = 1f
-    private var dragVelocityX = 0f
-    private var dragVelocityY = 0f
-    private var scaleVelocity = 0f
-    private var tiltVelocity = 0f
-    private var dragScaleTarget = 1f
-    private var dragTiltTarget = 0f
-    private var magnetWasOpen = false
+    private enum class PointerTarget { None, Tile, Save, Toast, Close }
 
-    var width = 0f
-        private set
-    var height = 0f
-        private set
-    var layoutScale = 1f
-        private set
-    var layoutOffsetY = 0f
-        private set
-    var clock = 0.0
-        private set
-    var scriptTime = 0.0
-        private set
-    var pile = 0
-        private set
-    var saved = 0
-        private set
-    var pileCount = 0
-        private set
-    var dealStart = -100.0
-        private set
-    var rushStart = -1.0
-        private set
-    var riseStart = -1.0
-        private set
-    var ringStart = -1.0
-        private set
-    var bounceStart = -1.0
-        private set
-    var pressTarget = -1
-        private set
-    var pressAmount = 0f
-        private set
-    var dragCard = -1
-        private set
-    var dragX = 0f
-        private set
-    var dragY = 0f
-        private set
-    var dragScale = 1f
-        private set
-    var dragTilt = 0f
-        private set
-    var dragOpen = 0f
-        private set
-    var ghostX = 0f
-        private set
-    var ghostY = 0f
-        private set
-    var ghostAlpha = 0f
-        private set
-    var ghostPress = 0f
-        private set
-    var touching = false
-        private set
-    var paused = !autoPlay
-        private set
-    var quiet = 0.0
-        private set
-    val flights = mutableListOf<SaveFlight>()
+    class AnimatedValue(initial: Float) {
+        private enum class Kind { Timing, Spring }
 
-    val bookmarkX: Float
-        get() = width / 2f
+        var value: Float = initial
+            private set
+        var running: Boolean = false
+            private set
+        private var from = initial
+        private var to = initial
+        private var startedAt = 0.0
+        private var duration = 0.0
+        private var damping = 1f
+        private var ease = SaveToCollectionEase.Linear
+        private var kind = Kind.Timing
 
-    val bookmarkY: Float
-        get() = tokens.bookmarkY * layoutScale + layoutOffsetY
+        fun snap(next: Float) {
+            value = next
+            running = false
+        }
 
-    val bookmarkRiseY: Float
-        get() = tokens.bookmarkRiseY * layoutScale + layoutOffsetY
+        fun timing(next: Float, seconds: Double, easing: SaveToCollectionEase, now: Double) {
+            from = value
+            to = next
+            startedAt = now
+            duration = max(seconds, 0.0001)
+            ease = easing
+            kind = Kind.Timing
+            running = true
+        }
 
-    fun setSize(newWidth: Float, newHeight: Float) {
-        if (newWidth == width && newHeight == height) {
-            return
+        fun spring(next: Float, seconds: Double, ratio: Float, now: Double) {
+            from = value
+            to = next
+            startedAt = now
+            duration = max(seconds, 0.0001)
+            damping = ratio
+            kind = Kind.Spring
+            running = true
         }
-        width = newWidth
-        height = newHeight
-        layoutScale = newWidth / tokens.designWidth
-        layoutOffsetY = (newHeight - tokens.designHeight * layoutScale) / 2f
-    }
 
-    fun cardRect(index: Int): SaveRect {
-        val card = tokens.cards[index]
-        return SaveRect(
-            x = card.x * layoutScale,
-            y = card.y * layoutScale + layoutOffsetY,
-            width = card.width * layoutScale,
-            height = card.height * layoutScale,
-        )
-    }
-
-    fun visibleIndices(): List<Int> {
-        return tokens.cards.indices.filter { index ->
-            tokens.cards[index].pile == pile && !gone[index]
-        }
-    }
-
-    fun isGone(index: Int): Boolean {
-        return gone[index]
-    }
-
-    fun step(deltaSeconds: Float) {
-        val delta = min(tokens.maxFrameSeconds, max(0f, deltaSeconds)).toDouble()
-        if (autoPlay && !paused) {
-            stepAutoplay(delta)
-        } else {
-            clock += delta
-            if (!touching) {
-                quiet += delta
-            }
-            stepManual(delta)
-        }
-        updateDragAnimation(delta)
-        updateFlights()
-        if (autoPlay && paused && canResume()) {
-            resetLoop()
-            paused = false
-        }
-    }
-
-    private fun stepAutoplay(delta: Double) {
-        val previous = scriptTime
-        val next = previous + delta
-        if (next >= LOOP / 1000.0) {
-            resetLoop()
-            return
-        }
-        scriptTime = next
-        clock = next
-        val dragIndex = tokens.cards.indexOfFirst { card -> card.id == tokens.demoDragCard }
-        if (crossed(previous, next, tokens.demoDragDown.toDouble())) {
-            val rect = cardRect(dragIndex)
-            ghostX = rect.x + rect.width / 2f
-            ghostY = rect.y + rect.height / 2f
-        }
-        if (crossed(previous, next, tokens.demoDragLifted.toDouble())) {
-            beginDrag(dragIndex, silent = true)
-        }
-        if (dragCard == dragIndex && dragMode == DRAG_ACTIVE && next < tokens.demoDragUp.toDouble()) {
-            val span = tokens.demoDragEnd - tokens.demoDragLifted
-            val progress = cosineEase(((next - tokens.demoDragLifted) / span).toFloat())
-            val base = cardRect(dragIndex)
-            val baseX = base.x + base.width / 2f
-            val baseY = base.y + base.height / 2f
-            val translationX = (bookmarkX - baseX) * progress + sin(PI * progress).toFloat() * tokens.demoDragArc
-            val translationY = (bookmarkY - baseY) * progress
-            val previousTranslation = dragX - baseX
-            val velocityX = ((translationX - previousTranslation) / max(delta.toFloat(), 0.001f))
-            updateDrag(translationX, translationY, velocityX, 0f, silent = true)
-            ghostX = baseX + translationX
-            ghostY = baseY + translationY
-        }
-        if (crossed(previous, next, tokens.demoDragUp.toDouble()) && dragCard >= 0) {
-            releaseDrag(silent = true, forceSave = true)
-        }
-        if (crossed(previous, next, tokens.demoSaveAll.toDouble())) {
-            saveAll(silent = true)
-        }
-        if (crossed(previous, next, tokens.demoSaveAllAgain.toDouble())) {
-            saveAll(silent = true)
-        }
-        if (crossed(previous, next, tokens.demoRise.toDouble())) {
-            pileCount = tokens.cards.count { card -> card.pile == 0 }
-            riseStart = clock
-        }
-        if (crossed(previous, next, tokens.demoRiseAgain.toDouble())) {
-            pileCount = tokens.cards.count { card -> card.pile == 1 }
-            riseStart = clock
-        }
-        val firstDeal = tokens.demoRise + (tokens.timingRise + tokens.timingRiseHold) / 1000f
-        val secondDeal = tokens.demoRiseAgain + (tokens.timingRise + tokens.timingRiseHold) / 1000f
-        if (crossed(previous, next, firstDeal.toDouble())) {
-            nextPile()
-        }
-        if (crossed(previous, next, secondDeal.toDouble())) {
-            nextPile()
-        }
-        updateDemoFinger(next.toFloat(), dragIndex)
-    }
-
-    private fun updateDemoFinger(time: Float, dragIndex: Int) {
-        ghostAlpha = 0f
-        ghostPress = 0f
-        pressTarget = -1
-        pressAmount = 0f
-        val drag = tokens
-        if (time >= drag.demoDragDown && time <= drag.demoDragUp + drag.demoFingerFade) {
-            val rect = cardRect(dragIndex)
-            if (time < drag.demoDragLifted) {
-                ghostX = rect.x + rect.width / 2f
-                ghostY = rect.y + rect.height / 2f
-            }
-            ghostAlpha = fadeWindow(time, drag.demoDragDown, drag.demoDragUp, drag.demoFingerFade)
-            ghostPress = if (time < drag.demoDragLifted) {
-                clamp01((time - drag.demoDragDown) / (drag.demoDragLifted - drag.demoDragDown))
-            } else {
-                clamp01(1f - (time - drag.demoDragUp) / (tokens.demoPressIn / 1000f))
-            }
-        }
-        updateTapFinger(time, tokens.demoSaveAll)
-        updateTapFinger(time, tokens.demoSaveAllAgain)
-    }
-
-    private fun updateTapFinger(time: Float, tapAt: Float) {
-        val down = tapAt - 0.25f
-        val end = tapAt + tokens.demoFingerFade
-        if (time < down || time > end) {
-            return
-        }
-        ghostX = bookmarkX
-        ghostY = bookmarkY
-        ghostAlpha = fadeWindow(time, down, tapAt, tokens.demoFingerFade)
-        ghostPress = when {
-            time < down + tokens.demoPressIn / 1000f -> clamp01((time - down) / (tokens.demoPressIn / 1000f))
-            else -> clamp01(1f - (time - down - tokens.demoPressIn / 1000f) / (tokens.demoPressOut / 1000f))
-        }
-        pressTarget = -2
-        pressAmount = ghostPress
-    }
-
-    private fun stepManual(delta: Double) {
-        if (nextPileAt >= 0.0 && clock >= nextPileAt) {
-            nextPileAt = -1.0
-            nextPile()
-        }
-        if (!touching && pressAmount > 0f) {
-            pressAmount = max(0f, pressAmount - delta.toFloat() / (tokens.timingPressOut / 1000f))
-            if (pressAmount == 0f) {
-                pressTarget = -1
-            }
-        }
-    }
-
-    private fun updateFlights() {
-        val iterator = flights.iterator()
-        var landed = false
-        while (iterator.hasNext()) {
-            val flight = iterator.next()
-            if (clock >= flight.start + flight.duration) {
-                iterator.remove()
-                land(silent = autoPlay && !paused)
-                landed = true
-            }
-        }
-        if (landed) {
-            maybeFinishPile()
-        }
-    }
-
-    fun touchDown(x: Float, y: Float, eventSeconds: Double) {
-        touching = true
-        quiet = 0.0
-        if (autoPlay && !paused) {
-            paused = true
-            ghostAlpha = 0f
-            if (dragCard >= 0) {
-                startBack()
-            }
-        }
-        touchDownX = x
-        touchDownY = y
-        touchDownSeconds = eventSeconds
-        touchCard = hit(x, y)
-        pressTarget = if (hypot(x - bookmarkX, y - bookmarkY) < 44f) -2 else touchCard
-        pressAmount = 1f
-    }
-
-    fun touchMove(x: Float, y: Float, eventSeconds: Double, velocityX: Float, velocityY: Float) {
-        quiet = 0.0
-        if (dragCard < 0 && touchCard >= 0 && eventSeconds - touchDownSeconds >= tokens.saveHoldMs / 1000.0) {
-            beginDrag(touchCard, silent = false)
-        }
-        if (dragCard < 0 || dragMode != DRAG_ACTIVE) {
-            return
-        }
-        lastVelocityX = velocityX
-        lastVelocityY = velocityY
-        updateDrag(x - touchDownX, y - touchDownY, velocityX, velocityY, silent = false)
-    }
-
-    fun touchUp(velocityX: Float, velocityY: Float) {
-        touching = false
-        quiet = 0.0
-        lastVelocityX = velocityX
-        lastVelocityY = velocityY
-        if (dragCard >= 0 && dragMode == DRAG_ACTIVE) {
-            releaseDrag(silent = false, forceSave = false)
-        } else if (pressTarget == -2) {
-            saveAll(silent = false)
-        } else if (touchCard >= 0 && !gone[touchCard]) {
-            fly(listOf(touchCard), silent = false)
-            onHaptic(SaveHaptic.Select)
-        }
-        pressAmount = 0f
-        pressTarget = -1
-        touchCard = -1
-    }
-
-    private fun beginDrag(card: Int, silent: Boolean) {
-        if (card < 0 || gone[card] || dragCard >= 0) {
-            return
-        }
-        val rect = cardRect(card)
-        dragCard = card
-        dragMode = DRAG_ACTIVE
-        dragX = rect.x + rect.width / 2f
-        dragY = rect.y + rect.height / 2f
-        dragScale = 1f
-        dragTilt = 0f
-        dragScaleTarget = tokens.saveLiftScale
-        dragTiltTarget = 0f
-        scaleVelocity = 0f
-        tiltVelocity = 0f
-        dragOpen = 0f
-        magnetWasOpen = false
-        if (!silent) {
-            onHaptic(SaveHaptic.Lift)
-        }
-    }
-
-    private fun updateDrag(
-        translationX: Float,
-        translationY: Float,
-        velocityX: Float,
-        velocityY: Float,
-        silent: Boolean,
-    ) {
-        val rect = cardRect(dragCard)
-        val freeX = rect.x + rect.width / 2f + translationX
-        val freeY = rect.y + rect.height / 2f + translationY
-        val distance = hypot(bookmarkX - freeX, bookmarkY - freeY)
-        val raw = clamp01(1f - distance / tokens.saveMagnetRadius)
-        val magnet = raw * raw * (3f - 2f * raw)
-        if (!magnetWasOpen && magnet > 0f && !silent) {
-            onHaptic(SaveHaptic.Magnet)
-        }
-        magnetWasOpen = magnet > 0f
-        dragOpen = magnet
-        dragX = freeX + (bookmarkX - freeX) * magnet * tokens.saveMagnetPull
-        dragY = freeY + (bookmarkY - freeY) * magnet * tokens.saveMagnetPull
-        dragScaleTarget = if (reducedMotion) {
-            1f
-        } else {
-            tokens.saveLiftScale * (1f - tokens.saveMagnetShrink * magnet)
-        }
-        dragTiltTarget = if (reducedMotion) {
-            0f
-        } else {
-            (velocityX * tokens.saveTiltPerVelocity).coerceIn(-tokens.saveTiltMax, tokens.saveTiltMax)
-        }
-        lastVelocityX = velocityX
-        lastVelocityY = velocityY
-    }
-
-    private fun releaseDrag(silent: Boolean, forceSave: Boolean) {
-        val speed = hypot(lastVelocityX, lastVelocityY)
-        val targetX = bookmarkX - dragX
-        val targetY = bookmarkY - dragY
-        val targetLength = hypot(targetX, targetY)
-        val aim = if (speed > 0f && targetLength > 0f) {
-            (lastVelocityX * targetX + lastVelocityY * targetY) / (speed * targetLength)
-        } else {
-            0f
-        }
-        val flicked = speed > tokens.saveFlickSpeed && aim > tokens.saveFlickAim
-        if (forceSave || dragOpen > 0.05f || flicked) {
-            if (!silent) {
-                onHaptic(SaveHaptic.Commit)
-            }
-            dragMode = DRAG_DROP
-            dragAnimationStart = clock
-            dragAnimationDuration = when {
-                reducedMotion -> tokens.timingReduced / 1000.0
-                flicked && dragOpen <= 0.05f -> tokens.timingFlickFlight / 1000.0
-                else -> tokens.timingDropFlight / 1000.0
-            }
-            dragFromX = dragX
-            dragFromY = dragY
-            dragFromScale = dragScale
-            dragOpen = 0f
-            return
-        }
-        startBack()
-    }
-
-    private fun startBack() {
-        dragMode = DRAG_BACK
-        dragVelocityX = lastVelocityX
-        dragVelocityY = lastVelocityY
-        scaleVelocity = 0f
-        tiltVelocity = 0f
-        dragOpen = 0f
-    }
-
-    private fun updateDragAnimation(delta: Double) {
-        if (dragCard < 0) {
-            return
-        }
-        if (dragMode == DRAG_ACTIVE) {
-            if (reducedMotion) {
-                dragScale = dragScaleTarget
-                dragTilt = 0f
+        fun update(now: Double) {
+            if (!running) return
+            val raw = ((now - startedAt) / duration).toFloat().coerceIn(0f, 1f)
+            if (raw >= 1f) {
+                value = to
+                running = false
                 return
             }
-            val seconds = delta.toFloat()
-            val scale = springStep(dragScale, scaleVelocity, dragScaleTarget, tokens.springLift, seconds)
-            dragScale = scale.first
-            scaleVelocity = scale.second
-            val tilt = springStep(dragTilt, tiltVelocity, dragTiltTarget, tokens.springTilt, seconds)
-            dragTilt = tilt.first
-            tiltVelocity = tilt.second
-            return
-        }
-        if (dragMode == DRAG_DROP) {
-            val progress = clamp01(((clock - dragAnimationStart) / dragAnimationDuration).toFloat())
-            val eased = cubicInOut(progress)
-            dragX = mix(dragFromX, bookmarkX, eased)
-            dragY = mix(dragFromY, bookmarkY, eased)
-            dragScale = mix(dragFromScale, tokens.saveEndScale, eased)
-            dragTilt = mix(dragTilt, 0f, eased)
-            if (progress >= 1f) {
-                val card = dragCard
-                gone[card] = true
-                dragCard = -1
-                dragMode = DRAG_NONE
-                land(silent = autoPlay && !paused)
-                maybeFinishPile()
+            val progress = when (kind) {
+                Kind.Timing -> saveToCollectionEase(raw, ease)
+                Kind.Spring -> saveToCollectionSpring(raw, damping)
             }
-            return
-        }
-        if (dragMode != DRAG_BACK) {
-            return
-        }
-        val rect = cardRect(dragCard)
-        val targetX = rect.x + rect.width / 2f
-        val targetY = rect.y + rect.height / 2f
-        val seconds = delta.toFloat()
-        val x = springStep(dragX, dragVelocityX, targetX, tokens.springBack, seconds)
-        dragX = x.first
-        dragVelocityX = x.second
-        val y = springStep(dragY, dragVelocityY, targetY, tokens.springBack, seconds)
-        dragY = y.first
-        dragVelocityY = y.second
-        val scale = springStep(dragScale, scaleVelocity, 1f, tokens.springBack, seconds)
-        dragScale = scale.first
-        scaleVelocity = scale.second
-        val tilt = springStep(dragTilt, tiltVelocity, 0f, tokens.springTilt, seconds)
-        dragTilt = tilt.first
-        tiltVelocity = tilt.second
-        if (hypot(dragX - targetX, dragY - targetY) < 0.2f && hypot(dragVelocityX, dragVelocityY) < 2f) {
-            dragCard = -1
-            dragMode = DRAG_NONE
-            dragScale = 1f
-            dragTilt = 0f
+            value = from + (to - from) * progress
         }
     }
 
-    private fun fly(cards: List<Int>, silent: Boolean) {
-        val available = cards.filter { card ->
-            !gone[card] && flights.none { flight -> flight.card == card } && card != dragCard
-        }
-        if (available.isEmpty()) {
+    val lift = AnimatedValue(0f)
+    val centerX = AnimatedValue(0f)
+    val centerY = AnimatedValue(0f)
+    val lean = AnimatedValue(0f)
+    val pull = AnimatedValue(0f)
+    val drop = AnimatedValue(0f)
+    val gulp = AnimatedValue(1f)
+    val roll = AnimatedValue(1f)
+    val mark = AnimatedValue(0f)
+    val toast = AnimatedValue(0f)
+    val sheet = AnimatedValue(0f)
+    val arrive = AnimatedValue(1f)
+    val press = AnimatedValue(0f)
+    val ghostOpacity = AnimatedValue(0f)
+    val ghostPress = AnimatedValue(0f)
+
+    var carriedIndex: Int = -1
+        private set
+    var markedIndex: Int = -1
+        private set
+    var count: Int = SaveToCollectionTokens.CountBefore
+        private set
+    var sheetOpen: Boolean = false
+        private set
+    var ghostX: Float = 0f
+        private set
+    var ghostY: Float = 0f
+        private set
+
+    private var now = 0.0
+    private var lastFrameNanos = 0L
+    private var demoClock = 0.0
+    private var paused = !autoPlay || reducedMotion
+    private var silent = autoPlay
+    private var touching = false
+    private var quietStartedAt = -1.0
+    private var resumeAt = -1.0
+    private var arriveAt = -1.0
+    private var returning = false
+    private var landing = false
+    private var closingSheet = false
+    private var gulpStage = 0
+    private var pointerTarget = PointerTarget.None
+    private var pointerTile = -1
+    private var pointerDownX = 0f
+    private var pointerDownY = 0f
+    private var pointerX = 0f
+    private var pointerY = 0f
+    private var pointerDownAt = 0.0
+    private var carryOffsetX = 0f
+    private var carryOffsetY = 0f
+    private var magnetNear = false
+    private var demoPreviousFingerX = 0f
+
+    val needsFrames: Boolean
+        get() = autoPlay || touching || hasAnimations() || arriveAt >= 0.0 || returning || landing || gulpStage != 0
+
+    fun frame(frameNanos: Long) {
+        if (lastFrameNanos == 0L) {
+            lastFrameNanos = frameNanos
             return
         }
-        if (reducedMotion) {
-            available.forEach { card ->
-                gone[card] = true
-                land(silent)
+        val delta = min((frameNanos - lastFrameNanos).coerceAtLeast(0L) / 1_000_000_000.0, 0.05)
+        lastFrameNanos = frameNanos
+        now += delta
+
+        updateAnimations()
+        updateCompletion()
+        updateHeldPhoto()
+
+        if (autoPlay && !reducedMotion) {
+            if (paused) updateResume()
+            else updateDemo(delta)
+        }
+    }
+
+    fun pointerDown(x: Float, y: Float) {
+        touching = true
+        quietStartedAt = -1.0
+        resumeAt = -1.0
+        pauseDemo()
+        pointerDownX = x
+        pointerDownY = y
+        pointerX = x
+        pointerY = y
+        pointerDownAt = now
+        pointerTile = -1
+        pointerTarget = when {
+            sheet.value > 0.01f && isSheetClose(x, y) -> PointerTarget.Close
+            sheet.value > 0.01f && y < currentSheetTop() -> PointerTarget.Close
+            sheet.value > 0.01f -> PointerTarget.None
+            toast.value > 0.1f && isToast(x, y) -> PointerTarget.Toast
+            distanceToSave(x, y) <= SaveToCollectionTokens.SaveSize / 2f + 8f -> {
+                press.timing(1f, 0.100, SaveToCollectionEase.EaseOut, now)
+                PointerTarget.Save
             }
-            maybeFinishPile()
+            else -> {
+                pointerTile = tileAt(x, y)
+                if (pointerTile >= 0) PointerTarget.Tile else PointerTarget.None
+            }
+        }
+    }
+
+    fun pointerMove(x: Float, y: Float, velocityX: Float) {
+        pointerX = x
+        pointerY = y
+        if (carriedIndex >= 0 && !landing) {
+            moveCarried(x, y, velocityX)
             return
         }
-        available.forEachIndexed { index, card ->
-            gone[card] = true
-            flights += SaveFlight(
-                id = flightSequence++,
-                card = card,
-                from = cardRect(card),
-                start = clock + index * tokens.timingFlockStagger / 1000.0,
-                duration = tokens.timingFlight / 1000.0,
+        if (pointerTarget == PointerTarget.Tile && hypot(x - pointerDownX, y - pointerDownY) > 12f) {
+            pointerTile = -1
+            pointerTarget = PointerTarget.None
+        }
+        if (pointerTarget == PointerTarget.Save && hypot(x - pointerDownX, y - pointerDownY) > 12f) {
+            press.timing(0f, SaveToCollectionTokens.PressOutDuration, SaveToCollectionEase.EaseOut, now)
+            pointerTarget = PointerTarget.None
+        }
+    }
+
+    fun pointerUp(x: Float, y: Float) {
+        pointerX = x
+        pointerY = y
+        val target = pointerTarget
+        pointerTarget = PointerTarget.None
+        pointerTile = -1
+        touching = false
+        press.timing(0f, SaveToCollectionTokens.PressOutDuration, SaveToCollectionEase.EaseOut, now)
+        if (carriedIndex >= 0 && !landing) {
+            releaseCarried()
+        } else if (hypot(x - pointerDownX, y - pointerDownY) <= 16f) {
+            when (target) {
+                PointerTarget.Save, PointerTarget.Toast -> toggleSheet()
+                PointerTarget.Close -> closeSheet()
+                else -> Unit
+            }
+        }
+        if (carriedIndex < 0) quietStartedAt = now
+    }
+
+    fun cancelPointer() {
+        pointerTarget = PointerTarget.None
+        pointerTile = -1
+        touching = false
+        press.timing(0f, SaveToCollectionTokens.PressOutDuration, SaveToCollectionEase.EaseOut, now)
+        if (carriedIndex >= 0 && !landing) releaseCarried()
+        if (carriedIndex < 0) quietStartedAt = now
+    }
+
+    fun accessibilitySaveLake(): Boolean {
+        pauseDemo()
+        if (count > SaveToCollectionTokens.CountBefore || carriedIndex >= 0) return false
+        val tile = layout.tiles[SaveToCollectionTokens.DemoTile]
+        pickUp(SaveToCollectionTokens.DemoTile, tile.centerX, tile.centerY)
+        centerX.snap(layout.saveX)
+        centerY.snap(layout.saveY)
+        pull.snap(1f)
+        releaseCarried()
+        return true
+    }
+
+    fun accessibilityOpenCollection(): Boolean {
+        pauseDemo()
+        toggleSheet()
+        return true
+    }
+
+    private fun updateAnimations() {
+        listOf(
+            lift, centerX, centerY, lean, pull, drop, gulp, roll, mark, toast,
+            sheet, arrive, press, ghostOpacity, ghostPress,
+        ).forEach { value -> value.update(now) }
+    }
+
+    private fun updateCompletion() {
+        if (landing && !drop.running) landPhoto()
+        if (returning && !lift.running && !centerX.running && !centerY.running) {
+            returning = false
+            carriedIndex = -1
+            pull.snap(0f)
+            drop.snap(0f)
+            if (!touching) quietStartedAt = now
+        }
+        if (closingSheet && !sheet.running) {
+            closingSheet = false
+            sheetOpen = false
+        }
+        if (arriveAt >= 0.0 && now >= arriveAt) {
+            arriveAt = -1.0
+            arrive.timing(
+                1f,
+                if (reducedMotion) 0.160 else SaveToCollectionTokens.ArriveDuration,
+                SaveToCollectionEase.EaseOut,
+                now,
             )
         }
-    }
-
-    private fun saveAll(silent: Boolean) {
-        val visible = visibleIndices().reversed()
-        if (visible.isEmpty()) {
-            return
+        if (gulpStage == 1 && !gulp.running) {
+            gulpStage = 2
+            gulp.spring(1f, SaveToCollectionTokens.GulpDuration, SaveToCollectionTokens.GulpDamping, now)
+        } else if (gulpStage == 2 && !gulp.running) {
+            gulpStage = 0
         }
-        if (!reducedMotion) {
-            rushStart = clock
-        }
-        fly(visible, silent)
-    }
-
-    private fun land(silent: Boolean) {
-        saved += 1
-        if (!reducedMotion) {
-            bounceStart = clock
-            ringStart = clock
-        }
-        if (!silent) {
-            onHaptic(SaveHaptic.Land)
+        if (markedIndex >= 0 && count == SaveToCollectionTokens.CountBefore && !mark.running && mark.value <= 0f) {
+            markedIndex = -1
         }
     }
 
-    private fun maybeFinishPile() {
-        if (autoPlay && !paused) {
-            return
-        }
-        if (visibleIndices().isNotEmpty() || flights.isNotEmpty() || dragCard >= 0 || nextPileAt >= 0.0) {
-            return
-        }
-        pileCount = tokens.cards.count { card -> card.pile == pile }
-        onHaptic(SaveHaptic.Success)
-        riseStart = clock
-        val up = if (reducedMotion) tokens.timingReduced else tokens.timingRise
-        nextPileAt = clock + (up + tokens.timingRiseHold) / 1000.0
-    }
-
-    private fun nextPile() {
-        pile = if (pile == 0) 1 else 0
-        gone.fill(false)
-        dealStart = clock
-    }
-
-    fun riseProgress(): Float {
-        if (riseStart < 0.0) {
-            return 0f
-        }
-        val elapsed = clock - riseStart
-        val up = (if (reducedMotion) tokens.timingReduced else tokens.timingRise) / 1000.0
-        val hold = tokens.timingRiseHold / 1000.0
-        val down = (if (reducedMotion) tokens.timingReduced else tokens.timingRiseDown) / 1000.0
-        return when {
-            elapsed < 0.0 -> 0f
-            elapsed < up -> cubicBezier((elapsed / up).toFloat(), tokens.riseEase)
-            elapsed < up + hold -> 1f
-            elapsed < up + hold + down -> cubicInOut((1.0 - (elapsed - up - hold) / down).toFloat())
-            else -> 0f
+    private fun updateHeldPhoto() {
+        if (!touching || pointerTarget != PointerTarget.Tile || pointerTile < 0 || carriedIndex >= 0) return
+        if (now - pointerDownAt >= SaveToCollectionTokens.HoldSeconds) {
+            pickUp(pointerTile, pointerDownX, pointerDownY)
+            moveCarried(pointerX, pointerY, 0f)
         }
     }
 
-    fun ringProgress(): Float {
-        if (ringStart < 0.0 || reducedMotion) {
-            return 1f
-        }
-        return clamp01(((clock - ringStart) / (tokens.timingLandRing / 1000.0)).toFloat())
+    private fun pauseDemo() {
+        silent = false
+        if (!autoPlay || paused) return
+        paused = true
+        ghostOpacity.timing(0f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+        ghostPress.snap(0f)
+        if (carriedIndex >= 0 && !landing) releaseCarried()
     }
 
-    fun bounceProgress(): Float {
-        if (bounceStart < 0.0 || reducedMotion) {
-            return 0f
-        }
-        val elapsed = (clock - bounceStart).toFloat()
-        if (elapsed <= tokens.bounceUp) {
-            return clamp01(elapsed / tokens.bounceUp)
-        }
-        val decay = max(0f, 1f - (elapsed - tokens.bounceUp) / tokens.bounceSettle)
-        return decay * cos((elapsed - tokens.bounceUp) * tokens.bounceFrequency)
-    }
-
-    fun dealProgress(order: Int): Float {
-        if (dealStart < 0.0) {
-            return 1f
-        }
-        val start = dealStart + order * tokens.timingDealStagger / 1000.0
-        val raw = ((clock - start) / (tokens.timingDeal / 1000.0)).toFloat()
-        return cubicBezier(clamp01(raw), tokens.easeOut)
-    }
-
-    fun flightProgress(flight: SaveFlight): Float {
-        return clamp01(((clock - flight.start) / flight.duration).toFloat())
-    }
-
-    private fun hit(x: Float, y: Float): Int {
-        val visible = visibleIndices()
-        for (position in visible.indices.reversed()) {
-            val index = visible[position]
-            val rect = cardRect(index)
-            if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
-                return index
+    private fun updateResume() {
+        if (touching || carriedIndex >= 0) return
+        if (resumeAt >= 0.0) {
+            if (now >= resumeAt) {
+                resumeAt = -1.0
+                demoClock = 0.0
+                paused = false
             }
+            return
         }
-        return -1
-    }
-
-    private fun canResume(): Boolean {
-        val pileZeroCount = tokens.cards.count { card -> card.pile == 0 }
-        return quiet >= tokens.resumeMs / 1000.0 &&
-            !touching &&
-            dragCard < 0 &&
-            riseProgress() == 0f &&
-            pile == 0 &&
-            visibleIndices().size == pileZeroCount
-    }
-
-    private fun resetLoop() {
-        gone.fill(false)
-        flights.clear()
-        clock = 0.0
-        scriptTime = 0.0
-        pile = 0
-        saved = 0
-        pileCount = 0
-        dealStart = -100.0
-        rushStart = -1.0
-        riseStart = -1.0
-        ringStart = -1.0
-        bounceStart = -1.0
-        nextPileAt = -1.0
-        pressTarget = -1
-        pressAmount = 0f
-        dragCard = -1
-        dragMode = DRAG_NONE
-        dragScale = 1f
-        dragScaleTarget = 1f
-        dragTilt = 0f
-        dragTiltTarget = 0f
-        dragOpen = 0f
-        ghostAlpha = 0f
-        ghostPress = 0f
-        quiet = 0.0
-    }
-
-    private fun crossed(start: Double, end: Double, point: Double): Boolean {
-        return start < point && end >= point
-    }
-
-    private fun fadeWindow(time: Float, start: Float, finish: Float, fade: Float): Float {
-        val fadeIn = clamp01((time - start) / fade)
-        val fadeOut = clamp01((finish + fade - time) / fade)
-        return min(fadeIn, fadeOut)
-    }
-
-    companion object {
-        private const val DRAG_NONE = 0
-        private const val DRAG_ACTIVE = 1
-        private const val DRAG_DROP = 2
-        private const val DRAG_BACK = 3
-    }
-}
-
-fun saveStreamDrops(): List<SaveStreamDrop> {
-    var seed = SaveToCollectionTokens.streamSeed.toLong()
-    fun random(): Float {
-        seed = seed * 16807L % 2147483647L
-        return ((seed - 1L).toDouble() / 2147483646.0).toFloat()
-    }
-    return List(SaveToCollectionTokens.streamCount) { index ->
-        val big = random() < SaveToCollectionTokens.streamBigChance
-        val width = if (big) {
-            SaveToCollectionTokens.streamBigWidth + random() * SaveToCollectionTokens.streamBigWidthRange
-        } else {
-            SaveToCollectionTokens.streamSmallWidth + random() * SaveToCollectionTokens.streamSmallWidthRange
-        }
-        val normalizedStart = index.toFloat() / SaveToCollectionTokens.streamCount
-        SaveStreamDrop(
-            art = index % SaveToCollectionTokens.streaks.size,
-            x = (random() - 0.5f) * 2f * SaveToCollectionTokens.streamSpread,
-            width = width,
-            start = normalizedStart * SaveToCollectionTokens.streamPour,
-            duration = min(
-                SaveToCollectionTokens.streamFall * (SaveToCollectionTokens.streamDurationMin + random() * SaveToCollectionTokens.streamDurationRange),
-                1f - normalizedStart * SaveToCollectionTokens.streamPour,
-            ),
-            y0 = SaveToCollectionTokens.streamStartY + random() * SaveToCollectionTokens.streamStartYRange,
-        )
-    }
-}
-
-fun clamp01(value: Float): Float {
-    return value.coerceIn(0f, 1f)
-}
-
-fun mix(start: Float, end: Float, progress: Float): Float {
-    return start + (end - start) * progress
-}
-
-fun cosineEase(value: Float): Float {
-    val progress = clamp01(value)
-    return ((1f - cos(PI.toFloat() * progress)) / 2f)
-}
-
-fun cubicInOut(value: Float): Float {
-    val progress = clamp01(value)
-    return if (progress < 0.5f) {
-        4f * progress * progress * progress
-    } else {
-        1f - (-2f * progress + 2f).let { term -> term * term * term } / 2f
-    }
-}
-
-fun cubicSpeed(value: Float): Float {
-    val progress = clamp01(value)
-    return if (progress < 0.5f) {
-        12f * progress * progress
-    } else {
-        3f * (-2f * progress + 2f).let { term -> term * term }
-    }
-}
-
-fun cubicBezier(value: Float, curve: SaveCubicBezier): Float {
-    val target = clamp01(value)
-    var parameter = target
-    repeat(5) {
-        val oneMinus = 1f - parameter
-        val x = 3f * oneMinus * oneMinus * parameter * curve.x1 +
-            3f * oneMinus * parameter * parameter * curve.x2 +
-            parameter * parameter * parameter
-        val derivative = 3f * oneMinus * oneMinus * curve.x1 +
-            6f * oneMinus * parameter * (curve.x2 - curve.x1) +
-            3f * parameter * parameter * (1f - curve.x2)
-        if (derivative > 0.0001f) {
-            parameter = (parameter - (x - target) / derivative).coerceIn(0f, 1f)
+        if (quietStartedAt >= 0.0 && now - quietStartedAt >= SaveToCollectionTokens.ResumeSeconds) {
+            silent = true
+            resetAll()
+            quietStartedAt = -1.0
+            resumeAt = now + SaveToCollectionTokens.TidySeconds
         }
     }
-    val oneMinus = 1f - parameter
-    return 3f * oneMinus * oneMinus * parameter * curve.y1 +
-        3f * oneMinus * parameter * parameter * curve.y2 +
-        parameter * parameter * parameter
+
+    private fun updateDemo(delta: Double) {
+        val previous = demoClock
+        var next = previous + delta
+        if (crossed(previous, next, SaveToCollectionTokens.DemoFingerIn)) {
+            val tile = layout.tiles[SaveToCollectionTokens.DemoTile]
+            ghostX = tile.centerX
+            ghostY = tile.y + tile.height * 0.42f
+            demoPreviousFingerX = ghostX
+            ghostOpacity.timing(1f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoDown)) {
+            ghostPress.timing(1f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoLift)) {
+            pickUp(SaveToCollectionTokens.DemoTile, ghostX, ghostY)
+        }
+        if (carriedIndex >= 0 && !landing && next >= SaveToCollectionTokens.DemoCarryStart &&
+            next <= SaveToCollectionTokens.DemoCarryEnd + 0.12
+        ) {
+            val tile = layout.tiles[SaveToCollectionTokens.DemoTile]
+            val startX = tile.centerX
+            val startY = tile.y + tile.height * 0.42f
+            val raw = ((next - SaveToCollectionTokens.DemoCarryStart) /
+                (SaveToCollectionTokens.DemoCarryEnd - SaveToCollectionTokens.DemoCarryStart)).toFloat().coerceIn(0f, 1f)
+            val eased = (1f - cos(PI.toFloat() * raw)) / 2f
+            val targetX = layout.saveX - carryOffsetX
+            val targetY = layout.saveY - carryOffsetY
+            val nextX = startX + (targetX - startX) * eased - sin(eased * PI.toFloat()) * 28f
+            val nextY = startY + (targetY - startY) * eased
+            val velocityX = (nextX - demoPreviousFingerX) / max(delta.toFloat(), 0.008f)
+            demoPreviousFingerX = nextX
+            ghostX = nextX
+            ghostY = nextY
+            moveCarried(nextX, nextY, velocityX)
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoRelease)) {
+            releaseCarried()
+            ghostPress.timing(0f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+            ghostOpacity.timing(0f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoTapIn)) {
+            ghostX = layout.saveX
+            ghostY = layout.saveY
+            ghostOpacity.timing(1f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoTapDown)) {
+            ghostPress.timing(1f, 0.100, SaveToCollectionEase.Linear, now)
+            press.timing(1f, 0.100, SaveToCollectionEase.EaseOut, now)
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoTap)) {
+            ghostPress.timing(0f, SaveToCollectionTokens.PressOutDuration, SaveToCollectionEase.Linear, now)
+            ghostOpacity.timing(0f, SaveToCollectionTokens.FingerDuration, SaveToCollectionEase.Linear, now)
+            press.timing(0f, SaveToCollectionTokens.PressOutDuration, SaveToCollectionEase.EaseOut, now)
+            openSheet()
+        }
+        if (crossed(previous, next, SaveToCollectionTokens.DemoClose)) closeSheet()
+        if (crossed(previous, next, SaveToCollectionTokens.DemoReset)) resetAll()
+        if (next >= SaveToCollectionTokens.LoopSeconds) next -= SaveToCollectionTokens.LoopSeconds
+        demoClock = next
+    }
+
+    private fun pickUp(index: Int, x: Float, y: Float) {
+        if (index !in layout.tiles.indices || carriedIndex >= 0 || sheet.value > 0.01f) return
+        val tile = layout.tiles[index]
+        carriedIndex = index
+        centerX.snap(tile.centerX)
+        centerY.snap(tile.centerY)
+        carryOffsetX = tile.centerX - x
+        carryOffsetY = tile.centerY - y
+        drop.snap(0f)
+        pull.snap(0f)
+        magnetNear = false
+        if (reducedMotion) lift.snap(1f)
+        else lift.spring(1f, SaveToCollectionTokens.LiftDuration, SaveToCollectionTokens.LiftDamping, now)
+        emit(SaveToCollectionHaptic.Lift)
+    }
+
+    private fun moveCarried(x: Float, y: Float, velocityX: Float) {
+        if (carriedIndex < 0 || landing) return
+        centerX.snap(x + carryOffsetX)
+        centerY.snap(y + carryOffsetY)
+        if (!reducedMotion) {
+            val target = (velocityX * SaveToCollectionTokens.LeanPerVelocity)
+                .coerceIn(-SaveToCollectionTokens.LeanMaximum, SaveToCollectionTokens.LeanMaximum)
+            lean.spring(target, SaveToCollectionTokens.HomeDuration, SaveToCollectionTokens.HomeDamping, now)
+        }
+        val nextPull = smoothStep(SaveToCollectionTokens.MagnetFar, SaveToCollectionTokens.MagnetNear, distanceToSave(centerX.value, centerY.value))
+        pull.snap(nextPull)
+        val nextNear = nextPull > 0.5f
+        if (nextNear && !magnetNear) emit(SaveToCollectionHaptic.Magnet)
+        magnetNear = nextNear
+    }
+
+    private fun releaseCarried() {
+        val index = carriedIndex
+        if (index < 0 || landing) return
+        if (distanceToSave(centerX.value, centerY.value) < SaveToCollectionTokens.DropRadius || pull.value > 0.5f) {
+            landing = true
+            drop.timing(
+                1f,
+                if (reducedMotion) 0.120 else SaveToCollectionTokens.DropDuration,
+                SaveToCollectionEase.EaseInOut,
+                now,
+            )
+            return
+        }
+        val tile = layout.tiles[index]
+        returning = true
+        pull.timing(0f, 0.200, SaveToCollectionEase.EaseOut, now)
+        lean.spring(0f, SaveToCollectionTokens.HomeDuration, SaveToCollectionTokens.HomeDamping, now)
+        val duration = if (reducedMotion) SaveToCollectionTokens.ReducedDuration else SaveToCollectionTokens.HomeDuration
+        val damping = if (reducedMotion) 1f else SaveToCollectionTokens.HomeDamping
+        centerX.spring(tile.centerX, duration, damping, now)
+        centerY.spring(tile.centerY, duration, damping, now)
+        lift.spring(0f, duration, damping, now)
+    }
+
+    private fun landPhoto() {
+        val index = carriedIndex
+        landing = false
+        carriedIndex = -1
+        lift.snap(0f)
+        lean.snap(0f)
+        pull.snap(0f)
+        drop.snap(0f)
+        gulpStage = if (reducedMotion) 0 else 1
+        if (reducedMotion) gulp.snap(1f)
+        else gulp.timing(0.86f, 0.070, SaveToCollectionEase.EaseOut, now)
+        roll.snap(0f)
+        roll.timing(1f, if (reducedMotion) 0.001 else SaveToCollectionTokens.RollDuration, SaveToCollectionEase.EaseOut, now)
+        count = SaveToCollectionTokens.CountBefore + 1
+        markedIndex = index
+        mark.timing(1f, SaveToCollectionTokens.MarkDuration, SaveToCollectionEase.EaseOut, now)
+        toast.timing(1f, SaveToCollectionTokens.ToastInDuration, SaveToCollectionEase.EaseOut, now)
+        emit(SaveToCollectionHaptic.Success)
+        if (!touching) quietStartedAt = now
+    }
+
+    private fun toggleSheet() {
+        if (sheet.value > 0.5f) closeSheet() else openSheet()
+    }
+
+    private fun openSheet() {
+        if (carriedIndex >= 0) return
+        sheetOpen = true
+        closingSheet = false
+        toast.timing(0f, SaveToCollectionTokens.ToastOutDuration, SaveToCollectionEase.EaseOut, now)
+        if (reducedMotion) sheet.timing(1f, 0.200, SaveToCollectionEase.Linear, now)
+        else sheet.spring(1f, SaveToCollectionTokens.SheetDuration, SaveToCollectionTokens.SheetDamping, now)
+        val fresh = markedIndex >= 0
+        arrive.snap(if (fresh) 0f else 1f)
+        arriveAt = if (fresh) now + SaveToCollectionTokens.ArriveDelay else -1.0
+        emit(SaveToCollectionHaptic.Select)
+    }
+
+    private fun closeSheet() {
+        if (sheet.value <= 0f && !sheetOpen) return
+        closingSheet = true
+        sheet.timing(0f, SaveToCollectionTokens.SheetOutDuration, SaveToCollectionEase.EaseOut, now)
+    }
+
+    private fun resetAll() {
+        if (sheet.value > 0f || sheetOpen) closeSheet()
+        toast.timing(0f, SaveToCollectionTokens.ToastOutDuration, SaveToCollectionEase.EaseOut, now)
+        mark.timing(0f, SaveToCollectionTokens.MarkDuration, SaveToCollectionEase.EaseOut, now)
+        if (markedIndex >= 0) {
+            roll.snap(0f)
+            roll.timing(1f, if (reducedMotion) 0.001 else SaveToCollectionTokens.RollDuration, SaveToCollectionEase.EaseOut, now)
+        }
+        count = SaveToCollectionTokens.CountBefore
+    }
+
+    private fun tileAt(x: Float, y: Float): Int {
+        return layout.tiles.indexOfFirst { tile -> tile.contains(x, y) && y < layout.barY - 8f }
+    }
+
+    private fun currentSheetTop(): Float {
+        return layout.sheetY + (1f - sheet.value) * (layout.height - layout.sheetY)
+    }
+
+    private fun isSheetClose(x: Float, y: Float): Boolean {
+        val top = currentSheetTop()
+        return x >= layout.width - 60f && y in (top + 16f)..(top + 72f)
+    }
+
+    private fun isToast(x: Float, y: Float): Boolean {
+        val top = layout.barY - 56f
+        return x in 64f..(layout.width - 64f) && y in top..(top + 44f)
+    }
+
+    private fun distanceToSave(x: Float, y: Float): Float {
+        return hypot(x - layout.saveX, y - layout.saveY)
+    }
+
+    private fun emit(kind: SaveToCollectionHaptic) {
+        if (!silent) onHaptic(kind)
+    }
+
+    private fun hasAnimations(): Boolean {
+        return listOf(
+            lift, centerX, centerY, lean, pull, drop, gulp, roll, mark, toast,
+            sheet, arrive, press, ghostOpacity, ghostPress,
+        ).any { value -> value.running }
+    }
+
+    private fun crossed(previous: Double, next: Double, event: Double): Boolean {
+        return previous < event && next >= event
+    }
 }
 
-fun springStep(
-    value: Float,
-    velocity: Float,
-    target: Float,
-    spring: SaveSpring,
-    delta: Float,
-): Pair<Float, Float> {
-    val acceleration = (-spring.stiffness * (value - target) - spring.damping * velocity) / spring.mass
-    val nextVelocity = velocity + acceleration * delta
-    return Pair(value + nextVelocity * delta, nextVelocity)
+private fun smoothStep(edge0: Float, edge1: Float, value: Float): Float {
+    val progress = ((value - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+    return progress * progress * (3f - 2f * progress)
+}
+
+private fun saveToCollectionEase(progress: Float, ease: SaveToCollectionEase): Float {
+    return when (ease) {
+        SaveToCollectionEase.Linear -> progress
+        SaveToCollectionEase.EaseOut -> cubicBezier(progress, 0.23f, 1f, 0.32f, 1f)
+        SaveToCollectionEase.EaseInOut -> cubicBezier(progress, 0.77f, 0f, 0.175f, 1f)
+    }
+}
+
+private fun cubicBezier(progress: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {
+    var parameter = progress.coerceIn(0f, 1f)
+    repeat(6) {
+        val inverse = 1f - parameter
+        val x = 3f * inverse * inverse * parameter * x1 +
+            3f * inverse * parameter * parameter * x2 + parameter * parameter * parameter
+        val derivative = 3f * inverse * inverse * x1 +
+            6f * inverse * parameter * (x2 - x1) + 3f * parameter * parameter * (1f - x2)
+        if (derivative > 0.0001f) parameter = (parameter - (x - progress) / derivative).coerceIn(0f, 1f)
+    }
+    val inverse = 1f - parameter
+    return 3f * inverse * inverse * parameter * y1 +
+        3f * inverse * parameter * parameter * y2 + parameter * parameter * parameter
+}
+
+private fun saveToCollectionSpring(progress: Float, damping: Float): Float {
+    val ratio = damping.coerceIn(0.05f, 1f)
+    val omega = 9f
+    fun response(time: Float): Float {
+        if (ratio >= 0.999f) return 1f - exp(-omega * time) * (1f + omega * time)
+        val root = sqrt(1f - ratio * ratio)
+        val damped = omega * root
+        return 1f - exp(-ratio * omega * time) *
+            (cos(damped * time) + ratio / root * sin(damped * time))
+    }
+    val end = response(1f)
+    return if (end == 0f) progress else response(progress) / end
 }

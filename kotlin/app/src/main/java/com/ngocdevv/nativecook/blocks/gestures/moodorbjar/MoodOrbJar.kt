@@ -46,6 +46,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -84,8 +85,8 @@ fun MoodOrbJar(
     val activity = LocalActivity.current
     val reduced = rememberReducedMotion()
     val safeTop = WindowInsets.safeDrawing.getTop(localDensity) / localDensity.density
-    val art = rememberMoodOrbJarArt()
-    val pens = rememberMoodOrbJarScenePens()
+    val material = rememberMoodOrbJarBeadMaterial()
+    val sceneCache = rememberMoodOrbJarSceneCache()
     val roll = rememberMoodOrbJarRoll(enabled = !reduced)
 
     // The jar sits on a light page: dark status bar icons.
@@ -104,7 +105,7 @@ fun MoodOrbJar(
         val currentReduced = rememberUpdatedState(reduced)
 
         // Settling the pile takes a few hundred steps: once, not on every composition.
-        val sim = remember { initialSim(geometry, reduced, autoPlay) }
+        val sim = remember { initialSim(geometry, reduced, autoPlay && !reduced) }
         val frame = remember { MoodOrbJarFrame(initialCount = (0 until POOL).count { sim.state[it] == MoodOrbJarOrb.PILE }) }
         var entries by remember { mutableStateOf(MoodOrbJarStartEntries) }
         val nextId = remember { mutableIntStateOf(1) }
@@ -115,7 +116,7 @@ fun MoodOrbJar(
         }
 
         fun avatarY(g: MoodOrbJarGeometry): Double {
-            return g.rowY + MoodOrbJarSpace.AVATAR_TOP + MoodOrbJarLayout.ENTRY_ORB
+            return g.rowY + MoodOrbJarLayout.ENTRY_HEIGHT / 2
         }
 
         fun onEvent(event: Int) {
@@ -149,17 +150,16 @@ fun MoodOrbJar(
             var previousNanos = withFrameNanos { it }
             while (isActive) {
                 val nanos = withFrameNanos { it }
-                val elapsed = ((nanos - previousNanos) / 1_000_000_000.0)
-                    .coerceAtMost(MoodOrbJarMotion.MAX_FRAME_DELTA)
+                val elapsed = (nanos - previousNanos) / 1_000_000_000.0
                 previousNanos = nanos
                 val g = currentGeometry.value
                 sim.reduced = currentReduced.value
                 sim.tilt = if (sim.reduced) 0.0 else roll.value.toDouble().coerceIn(-1.0, 1.0)
                 if (MoodOrbJarMotion.REPLICA_HOLD >= 0) {
                     // QA only: run to the held time once, then freeze.
-                    if (sim.clock == 0.0) stepSim(sim, g, MoodOrbJarMotion.REPLICA_HOLD, autoPlay, uncapped = true)
+                    if (sim.clock == 0.0) stepSim(sim, g, MoodOrbJarMotion.REPLICA_HOLD, autoPlay && !sim.reduced, uncapped = true)
                 } else {
-                    stepSim(sim, g, elapsed * MoodOrbJarMotion.QA_SPEED, autoPlay)
+                    stepSim(sim, g, elapsed * MoodOrbJarMotion.QA_SPEED, autoPlay && !sim.reduced)
                 }
                 frame.publish(sim, g, avatarX(g), avatarY(g))
                 // Events from the finger and from the steps both wait in the sim until a frame hands them over.
@@ -234,9 +234,15 @@ fun MoodOrbJar(
                     }
                 },
         ) {
-            Canvas(Modifier.fillMaxSize()) {
-                drawMoodOrbJarScene(currentGeometry.value, frame, art, pens)
-            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawWithCache {
+                        onDrawBehind {
+                            drawMoodOrbJarScene(currentGeometry.value, frame, material, sceneCache)
+                        }
+                    },
+            )
 
             MoodOrbJarHeader(safeTop = safeTop.toDouble(), g = geometry)
 
@@ -264,7 +270,7 @@ fun MoodOrbJar(
 
             // The shared element flies above the list, so it lands on the new card's avatar.
             Canvas(Modifier.fillMaxSize()) {
-                drawMoodOrbJarGhost(currentGeometry.value, frame, art)
+                drawMoodOrbJarGhost(currentGeometry.value, frame)
             }
         }
     }
@@ -363,6 +369,21 @@ private fun MoodOrbJarHeader(safeTop: Double, g: MoodOrbJarGeometry) {
             }
         }
     }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = safeTop.dp)
+            .height((MoodOrbJarLayout.HEADER * g.s).dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = MoodOrbJarCopy.TITLE,
+            color = MoodOrbJarColors.ink,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.3).sp,
+        )
+    }
 }
 
 /** The picker's label under one orb; the orb itself is drawn by the canvas. The touch is the screen's own drag. */
@@ -388,7 +409,12 @@ private fun MoodOrbJarSlotLabel(index: Int, name: String, g: MoodOrbJarGeometry,
             },
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Text(text = name, color = MoodOrbJarColors.label, fontSize = MoodOrbJarLayout.LABEL_SIZE.sp)
+        Text(
+            text = name,
+            color = MoodOrbJarColors.label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

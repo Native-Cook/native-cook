@@ -1,27 +1,16 @@
 package com.ngocdevv.nativecook.blocks.gestures.holddragresize
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import com.ngocdevv.nativecook.R
+import android.content.res.AssetManager
+import android.graphics.Typeface
 
-data class HoldDragResizeAssets(
-    val clips: List<Bitmap>,
-)
+internal class HoldDragResizeAssets(assets: AssetManager) {
+    val regular: Typeface = Typeface.createFromAsset(assets, "$Root/holddragresize_Inter-Regular.ttf")
+    val medium: Typeface = Typeface.createFromAsset(assets, "$Root/holddragresize_Inter-Medium.ttf")
+    val semibold: Typeface = Typeface.createFromAsset(assets, "$Root/holddragresize_Inter-SemiBold.ttf")
+    val mono: Typeface = Typeface.createFromAsset(assets, "$Root/holddragresize_JetBrainsMono-Medium.ttf")
+    val monoBold: Typeface = Typeface.createFromAsset(assets, "$Root/holddragresize_JetBrainsMono-Bold.ttf")
 
-@Composable
-fun rememberHoldDragResizeAssets(): HoldDragResizeAssets {
-    val resources = LocalContext.current.resources
-    return remember(resources) {
-        HoldDragResizeAssets(
-            clips = listOf(
-                BitmapFactory.decodeResource(resources, R.drawable.holddragresize_clip_shelves),
-                BitmapFactory.decodeResource(resources, R.drawable.holddragresize_clip_cocktail),
-                BitmapFactory.decodeResource(resources, R.drawable.holddragresize_clip_lamps),
-                BitmapFactory.decodeResource(resources, R.drawable.holddragresize_clip_lounge),
-            ),
-        )
+    private companion object {
+        const val Root = "holddragresize"
     }
 }

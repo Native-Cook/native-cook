@@ -8,29 +8,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 
-/** Draws the seven registered replica layers; [revision] is observed only by the draw phase. */
+/** Draw invalidation observes [revision] only in the draw phase; the static background is cached by the renderer. */
 @Composable
-fun GlassLockKeyScene(
+internal fun GlassLockKeyScene(
     simulation: GlassLockKeySimulation,
     revision: State<Int>,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val assets = remember(context) { GlassLockKeyAssets(context) }
-    val renderer = remember(assets) { GlassLockKeyRenderer(assets) }
-
+    val density = LocalDensity.current.density
+    val renderer = remember(context, simulation.geometry, density) {
+        GlassLockKeyRenderer(context, simulation.geometry, density)
+    }
     Canvas(modifier = modifier) {
         revision.value
-        val displayDensity = density
-        val widthDp = size.width / displayDensity
-        val heightDp = size.height / displayDensity
-        drawIntoCanvas { composeCanvas ->
-            val canvas = composeCanvas.nativeCanvas
-            canvas.save()
-            canvas.scale(displayDensity, displayDensity)
-            renderer.draw(canvas, simulation, widthDp, heightDp)
-            canvas.restore()
-        }
+        drawIntoCanvas { renderer.draw(it.nativeCanvas, simulation) }
     }
 }

@@ -72,6 +72,7 @@ final class PageCurlJournalEngine {
     private var scriptAt = -1
     private var nudgeDone = false
     private var returningToRest = false
+    private var loopRested = false
     private var lastLoopIndex = 0
     private var lastFrame: Double?
     private var hideCountdown = 0
@@ -364,7 +365,7 @@ final class PageCurlJournalEngine {
                 return
             }
             // A tap: the right margin or the hint turns forward, the left margin back; elsewhere a lifted corner drops.
-            let hintTop = (Double(Theme.Typography.hint.top) - 12) * s
+            let hintTop = (Double(Theme.Typography.hintTop) - 12) * s
             let onHint = c == 0 && y > hintTop && y < hintTop + 44 * s
             if x > width * 0.66 || onHint {
                 turnBy(1)
@@ -516,30 +517,40 @@ final class PageCurlJournalEngine {
             return
         }
         if !playing {
-            // Owner override to motion.ts IDLE_RESUME_MS=3500: 2 s after the last real touch,
-            // ease every remaining sheet back to the title before restarting the complete loop.
-            if mode != .idle || now - lastTouch < 2000 { return }
-            if cur > 0 {
-                returnToRest()
-                return
-            }
+            if mode != .idle || now - lastTouch < Motion.idleResumeMs { return }
+            // Resume at the next useful beat for the current page, exactly as the React Native script does.
+            let page = cur
             playing = true
             scriptAt = -1
             nudgeDone = false
-            clock = 0
-            lastLoopIndex = 0
+            if page == 0 {
+                clock = 0
+            } else if page == Self.lastPage {
+                clock = Motion.script[4].t0 - 400
+            } else {
+                clock = Motion.script[page + 1].t0 - 400
+            }
+            lastLoopIndex = Int(clock / Motion.loopMs)
             return
         }
         let loopIndex = Int(clock / Motion.loopMs)
         if loopIndex != lastLoopIndex {
-            // The RN nudge begins at 12.2 s. Its energy-threshold spring can outlive 14 s by a
-            // few frames, so normalize the virtually flat paper at the cut for a seamless video.
-            // Keep all RN script event times and spring settings intact.
+            // Normalize the virtually flat paper at the cut for a seamless recording loop.
             lastLoopIndex = loopIndex
             normalizeLoopSeam()
         }
         let t = clock.truncatingRemainder(dividingBy: Motion.loopMs)
-        if t < 100 { nudgeDone = false }
+        if t < 100 {
+            nudgeDone = false
+            loopRested = false
+        }
+        if t >= Motion.loopRestMs {
+            if !loopRested {
+                loopRested = true
+                normalizeLoopSeam()
+            }
+            return
+        }
         if t >= Motion.nudgeAtMs, !nudgeDone {
             nudgeDone = true
             nudge()
@@ -578,20 +589,24 @@ final class PageCurlJournalEngine {
     }
 
     private func normalizeLoopSeam() {
-        if cur != 0 {
-            cur = 0
-            onLanded?(0)
-        }
+        cur = 0
+        onLanded?(0)
         for slot in slots {
-            slot.tx.set(slot.gx)
-            slot.ty.set(slot.gy)
+            slot.gx = width
+            slot.gy = 0
+            slot.tx.set(width)
+            slot.ty.set(0)
             slot.on = 0
         }
         mode = .idle
+        scripted = false
+        scriptAt = -1
+        returningToRest = false
+        pastHalf = false
         fade.set(-1)
         flex = 0
         flexV = 0
-        lastTip = (slot0.gx, slot0.gy)
+        lastTip = (width, 0)
         twinkle.set(1)
         foilT.set(0)
         hideCountdown = 0

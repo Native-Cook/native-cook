@@ -1,168 +1,134 @@
 import SwiftUI
+import UIKit
 
-struct DragCardToSendCard: View {
-    typealias T = DragCardToSendTokens
-    @ObservedObject var motion: DragCardToSendMotion
-    let width: Double
+struct DragCardToSendWalletCard: View {
+    let frame: DragCardToSendFrame
+    let layout: DragCardToSendLayout
 
     var body: some View {
-        let cardWidth = width - T.layout.side * 2
-        let lift = min(max((1 - motion.cardScale) / (1 - T.tokenScale), 0), 1)
-        let tilt = min(max(motion.cardOffset.height / T.pull.full, 0), 1)
-        let sheen = sin(2 * .pi * motion.clock / T.ambient.sheen) * T.cardStyle.sheenAmplitude + tilt * T.cardStyle.sheenPull + motion.sway / T.cardStyle.sheenSway
+        ZStack(alignment: .topLeading) {
+            Image(uiImage: DragCardToSendCardRaster.image(size: CGSize(width: layout.cardWidth, height: layout.cardHeight)))
+                .resizable()
+                .interpolation(.high)
 
-        ZStack {
-            LinearGradient(colors: [T.ColorToken.cardHigh, T.ColorToken.card, T.ColorToken.card], startPoint: .topLeading, endPoint: .bottomTrailing)
-            VStack(spacing: 0) {
-                HStack {
-                    Text("AERO")
-                        .font(.system(size: T.type.brand, weight: .black, design: .default))
-                        .italic()
-                        .tracking(T.cardStyle.brandTracking)
-                        .foregroundStyle(T.ColorToken.cardInk)
-                    Spacer()
-                    DragCardToSendOdometer(cents: motion.balance)
-                        .offset(y: T.cardStyle.balanceYOffset)
-                }
-                HStack {
-                    RoundedRectangle(cornerRadius: T.card.chipRadius)
-                        .fill(T.ColorToken.chip)
-                        .frame(width: T.card.chipWidth, height: T.card.chipHeight)
-                    Spacer()
-                    Text("VALID THRU").font(.system(size: T.cardStyle.validFont, weight: .semibold)).tracking(T.cardStyle.validTracking).foregroundStyle(T.ColorToken.cardFaint)
-                }
-                .padding(.top, T.card.chipTop)
-                HStack {
-                    Text("••••  ••••  ••••  1234")
-                    Spacer()
-                    Text("12/35")
-                }
-                .font(.system(size: T.type.cardSmall + 1, weight: .semibold).monospacedDigit())
-                .padding(.top, T.card.numberTop)
-                HStack {
-                    Text("JULES MORROW").font(.system(size: T.cardStyle.holderFont, weight: .semibold)).tracking(T.cardStyle.holderTracking).foregroundStyle(T.ColorToken.cardFaint)
-                    Spacer()
-                }
-                .padding(.top, T.card.holderTop)
-                Spacer()
+            LinearGradient(
+                colors: [.white.opacity(0.16), .clear, DragCardToSendPalette.accent.opacity(0.1)],
+                startPoint: UnitPoint(x: 0.05 + frame.cardOffset / 220, y: 0),
+                endPoint: UnitPoint(x: 0.72, y: 1)
+            )
+            .blendMode(.screen)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            Text("cove")
+                .font(.system(size: 27, weight: .medium, design: .rounded))
+                .tracking(1.4)
+                .foregroundStyle(.white)
+                .position(x: 77, y: 39)
+
+            DragCardToSendContactless()
+                .stroke(.white.opacity(0.7), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                .frame(width: 25, height: 34)
+                .position(x: layout.cardWidth - 35, y: 39)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Balance")
+                    .font(.system(size: 12, weight: .medium))
+                    .tracking(0.2)
+                    .foregroundStyle(.white.opacity(0.66))
+                    .frame(height: 16, alignment: .top)
+                Text(DragCardToSendFormat.money(balanceCents, signed: false))
+                    .font(.system(size: 32, weight: .bold))
+                    .tracking(-0.8)
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .frame(height: 36)
             }
-            .padding(T.layout.cardPad)
+            .offset(x: 24, y: layout.cardHeight - 76)
 
-            VStack(spacing: 0) {
-                Spacer()
-                HStack {
-                    DragCardToSendCardAction(symbol: "arrow.up.left", label: "Send to")
-                    Spacer()
-                    DragCardToSendCardAction(symbol: "arrow.down.right", label: "Receive")
-                    Spacer()
-                    DragCardToSendCardAction(symbol: "plus", label: "Add")
-                }
-                .padding(.horizontal, T.layout.cardPad - T.space.sm)
-                .padding(.bottom, T.card.actionsBottom)
-            }
-            .frame(width: cardWidth, height: T.layout.cardHeight, alignment: .bottom)
-
-            T.ColorToken.cardDeep.opacity(T.pull.deep * min(max(motion.cardOffset.height / T.replica.pullFrame, 0), 1))
-            LinearGradient(colors: [.clear, .white.opacity(T.cardStyle.sheenAlpha), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(width: cardWidth * T.card.sheenWidth, height: T.layout.cardHeight * T.cardStyle.sheenHeight)
-                .rotationEffect(.degrees(T.card.sheenAngle))
-                .offset(x: sheen * cardWidth)
+            Text("•••• 4821")
+                .font(.system(size: 14, weight: .semibold))
+                .tracking(0.6)
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 112, height: 20, alignment: .trailing)
+                .offset(x: layout.cardWidth - 136, y: layout.cardHeight - 45)
         }
-        .foregroundStyle(T.ColorToken.cardInk)
-        .frame(width: cardWidth, height: T.layout.cardHeight, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: T.layout.cardRadius, style: .continuous))
-        .shadow(color: T.ColorToken.shadow.opacity(T.cardStyle.shadowBase + T.cardStyle.shadowLift * lift), radius: T.cardStyle.radiusBase + T.cardStyle.radiusLift * lift, y: T.cardStyle.shadowY)
-        .scaleEffect(motion.cardScale * motion.cardPress * (1 - T.pull.shrink * tilt))
-        .rotationEffect(.degrees(motion.sway))
-        .opacity(motion.cardOpacity)
-        .position(x: width / 2 + motion.cardOffset.width, y: T.layout.cardTop + T.layout.cardHeight / 2 + motion.cardOffset.height)
-        .allowsHitTesting(false)
+        .shadow(color: Color(red: 10 / 255, green: 18 / 255, blue: 70 / 255).opacity(0.2), radius: 18, y: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Cove card, balance \(DragCardToSendFormat.money(balanceCents, signed: false)), ending in 4821")
+    }
+
+    private var balanceCents: Int { frame.sentCommitted ? 243_620 : 248_120 }
+}
+
+final class DragCardToSendCardRaster {
+    private static var cached: [String: UIImage] = [:]
+
+    static func image(size: CGSize) -> UIImage {
+        let key = "\(Int(size.width))x\(Int(size.height))"
+        if let image = cached[key] { return image }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            let cg = context.cgContext
+            let bounds = CGRect(origin: .zero, size: size)
+            UIBezierPath(roundedRect: bounds, cornerRadius: 18).addClip()
+
+            let colors = [
+                UIColor(red: 0.08, green: 0.14, blue: 0.48, alpha: 1).cgColor,
+                UIColor(red: 0.018, green: 0.043, blue: 0.23, alpha: 1).cgColor,
+                UIColor(red: 0.015, green: 0.025, blue: 0.12, alpha: 1).cgColor
+            ] as CFArray
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.58, 1])!
+            cg.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
+
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.052).cgColor)
+            cg.setLineWidth(0.7)
+            for index in 0..<20 {
+                let inset = CGFloat(index) * 9
+                cg.addEllipse(in: CGRect(x: size.width * 0.42 + inset * 0.32, y: -size.height * 0.25 + inset * 0.18,
+                                         width: size.width * 0.94 - inset, height: size.height * 1.65 - inset))
+                cg.strokePath()
+            }
+
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.018).cgColor)
+            cg.setLineWidth(0.45)
+            for y in stride(from: CGFloat(4), to: size.height, by: 3) {
+                cg.move(to: CGPoint(x: 0, y: y))
+                cg.addLine(to: CGPoint(x: size.width, y: y + 0.35))
+                cg.strokePath()
+            }
+
+            let chipRect = CGRect(x: 24, y: 80, width: 46, height: 35)
+            UIBezierPath(roundedRect: chipRect, cornerRadius: 6).addClip()
+            let gold = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+                UIColor(red: 0.87, green: 0.73, blue: 0.49, alpha: 1).cgColor,
+                UIColor(red: 0.48, green: 0.35, blue: 0.19, alpha: 1).cgColor
+            ] as CFArray, locations: [0, 1])!
+            cg.drawLinearGradient(gold, start: chipRect.origin, end: CGPoint(x: chipRect.maxX, y: chipRect.maxY), options: [])
+            cg.resetClip()
+            cg.setStrokeColor(UIColor(red: 0.35, green: 0.27, blue: 0.17, alpha: 0.55).cgColor)
+            cg.setLineWidth(0.8)
+            cg.stroke(chipRect.insetBy(dx: 0.5, dy: 0.5))
+            cg.stroke(CGRect(x: 39, y: 88, width: 17, height: 19))
+            [31.5, 62.5].forEach { x in
+                cg.move(to: CGPoint(x: x, y: 80)); cg.addLine(to: CGPoint(x: x, y: 115)); cg.strokePath()
+            }
+            [91.5, 103.5].forEach { y in
+                cg.move(to: CGPoint(x: 24, y: y)); cg.addLine(to: CGPoint(x: 70, y: y)); cg.strokePath()
+            }
+        }
+        cached[key] = image
+        return image
     }
 }
 
-private struct DragCardToSendOdometer: View {
-    typealias T = DragCardToSendTokens
-    let cents: Int
-
-    var body: some View {
-        let text = DragCardToSendFormat.money(cents)
-        let characters = Array(text)
-
-        HStack(spacing: 0) {
-            ForEach(characters.indices, id: \.self) { characterIndex in
-                let character = characters[characterIndex]
-                if let digit = character.wholeNumberValue {
-                    DragCardToSendOdometerDigit(
-                        value: digit,
-                        index: characters[..<characterIndex].filter { $0.wholeNumberValue != nil }.count
-                    )
-                } else {
-                    Text(character == "$" ? "$ " : String(character))
-                        .font(balanceFont)
-                        .tracking(T.cardStyle.balanceTracking)
-                        .foregroundStyle(T.ColorToken.cardInk)
-                }
-            }
+struct DragCardToSendContactless: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for radius in [7.0, 12.0, 17.0] {
+            path.addArc(center: CGPoint(x: rect.minX + 1, y: rect.midY), radius: radius,
+                        startAngle: .degrees(-48), endAngle: .degrees(48), clockwise: false)
         }
-        .frame(height: T.card.digitHeight, alignment: .top)
-        .accessibilityLabel("Balance \(text)")
-    }
-
-    private var balanceFont: Font {
-        .system(size: T.type.balance, weight: .bold).monospacedDigit()
-    }
-}
-
-private struct DragCardToSendOdometerDigit: View {
-    typealias T = DragCardToSendTokens
-    let value: Int
-    let index: Int
-    @State private var displayedValue: Int
-
-    init(value: Int, index: Int) {
-        self.value = value
-        self.index = index
-        _displayedValue = State(initialValue: value)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ForEach(0 ..< 10, id: \.self) { digit in
-                Text("\(digit)")
-                    .font(balanceFont)
-                    .tracking(T.cardStyle.balanceTracking)
-                    .foregroundStyle(T.ColorToken.cardInk)
-                    .frame(height: T.card.digitHeight, alignment: .top)
-            }
-        }
-        .offset(y: -Double(displayedValue) * T.card.digitHeight)
-        .frame(height: T.card.digitHeight, alignment: .top)
-        .clipped()
-        .onChange(of: value) { _, nextValue in
-            withAnimation(.timingCurve(0.33, 1, 0.68, 1, duration: T.send.roll).delay(Double(index) * 0.04)) {
-                displayedValue = nextValue
-            }
-        }
-    }
-
-    private var balanceFont: Font {
-        .system(size: T.type.balance, weight: .bold).monospacedDigit()
-    }
-}
-
-struct DragCardToSendCardAction: View {
-    typealias T = DragCardToSendTokens
-    let symbol: String
-    let label: String
-
-    var body: some View {
-        VStack(spacing: T.space.sm) {
-            Image(systemName: symbol)
-                .font(.system(size: T.replica.icon, weight: .regular))
-                .frame(width: T.layout.actionSize, height: T.layout.actionSize)
-                .background(T.ColorToken.cardButton, in: Circle())
-            Text(label).font(.system(size: T.type.cardLabel, weight: .semibold))
-        }
-        .frame(width: T.card.actionWidth)
+        return path
     }
 }

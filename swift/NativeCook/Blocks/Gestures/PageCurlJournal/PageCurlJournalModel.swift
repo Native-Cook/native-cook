@@ -6,7 +6,6 @@ import SwiftUI
 @Observable
 final class PageCurlJournalModel {
     var page: Int
-    let twinkle = PageCurlJournalTwinkle()
     @ObservationIgnored var turn: ((Int) -> Void)?
 
     init(page: Int = 0) {

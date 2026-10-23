@@ -1,0 +1,2 @@
+Map data (c) OpenStreetMap contributors (ODbL), https://www.openstreetmap.org/copyright
+BBBike extract of New York, 2026-10-17, rendered in Web Mercator for this block.

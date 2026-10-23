@@ -9,18 +9,10 @@ function facePath(inset: number): SkPath {
   const F = LOCK.face - inset * 2;
   const H = LOCK.height - inset * 2;
   const R = Math.max(4, LOCK.radius - inset);
-  const b = Skia.PathBuilder.Make();
-  // Flat top with round corners, a round belly below, as the source's padlock.
-  b.moveTo(inset + R, inset);
-  b.lineTo(inset + F - R, inset);
-  b.quadTo(inset + F, inset, inset + F, inset + R);
-  b.lineTo(inset + F, inset + H * 0.6);
-  b.cubicTo(inset + F, inset + H * 0.9, inset + F * 0.78, inset + H, inset + F / 2, inset + H);
-  b.cubicTo(inset + F * 0.22, inset + H, inset, inset + H * 0.9, inset, inset + H * 0.6);
-  b.lineTo(inset, inset + R);
-  b.quadTo(inset, inset, inset + R, inset);
-  b.close();
-  return b.build();
+  // A brass block: flat top, straight sides, generously rounded corners, as a laminated padlock's body is cast.
+  return Skia.PathBuilder.Make()
+    .addRRect({ rect: { x: inset, y: inset, width: F, height: H }, rx: R, ry: R })
+    .build();
 }
 
 /** The shackle's centreline: a short free leg on the left, the long hinged leg on the right. */

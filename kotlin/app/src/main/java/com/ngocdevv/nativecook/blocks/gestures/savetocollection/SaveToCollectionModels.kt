@@ -1,60 +1,91 @@
 package com.ngocdevv.nativecook.blocks.gestures.savetocollection
 
-data class SaveCubicBezier(
-    val x1: Float,
-    val y1: Float,
-    val x2: Float,
-    val y2: Float,
-)
+import kotlin.math.roundToInt
 
-data class SaveSpring(
-    val damping: Float,
-    val stiffness: Float,
-    val mass: Float,
-)
-
-data class SaveCard(
-    val id: String,
-    val label: String,
+internal data class SaveToCollectionFrame(
     val x: Float,
     val y: Float,
     val width: Float,
     val height: Float,
-    val blur: Float,
-    val pile: Int,
-    val art: Int,
-    val soft: Int,
+) {
+    val centerX: Float get() = x + width / 2f
+    val centerY: Float get() = y + height / 2f
+
+    fun contains(px: Float, py: Float): Boolean {
+        return px in x..(x + width) && py in y..(y + height)
+    }
+}
+
+internal data class SaveToCollectionPhoto(
+    val asset: String,
+    val title: String,
+    val place: String,
 )
 
-data class SaveRect(
-    val x: Float,
-    val y: Float,
+internal data class SaveToCollectionLayout(
     val width: Float,
     val height: Float,
-)
+    val safeTop: Float,
+    val safeBottom: Float,
+    val columnWidth: Float,
+    val gridTop: Float,
+    val tiles: List<SaveToCollectionFrame>,
+    val barY: Float,
+    val saveX: Float,
+    val saveY: Float,
+    val sheetY: Float,
+) {
+    companion object {
+        fun create(width: Float, height: Float, safeTop: Float, safeBottom: Float): SaveToCollectionLayout {
+            val columnWidth = (width - SaveToCollectionTokens.Edge * 2f - SaveToCollectionTokens.Gap) / 2f
+            val heightScale = columnWidth / 181f
+            val gridTop = safeTop + SaveToCollectionTokens.GridTop
+            val tiles = buildList {
+                SaveToCollectionTokens.ColumnHeights.forEachIndexed { column, heights ->
+                    var y = gridTop
+                    heights.forEach { designHeight ->
+                        val tileHeight = (designHeight * heightScale).roundToInt().toFloat()
+                        add(
+                            SaveToCollectionFrame(
+                                x = SaveToCollectionTokens.Edge + column * (columnWidth + SaveToCollectionTokens.Gap),
+                                y = y,
+                                width = columnWidth,
+                                height = tileHeight,
+                            ),
+                        )
+                        y += tileHeight + SaveToCollectionTokens.Gap
+                    }
+                }
+            }
+            val barY = height - maxOf(safeBottom, SaveToCollectionTokens.Edge) -
+                SaveToCollectionTokens.BarGap - SaveToCollectionTokens.BarHeight
+            val saveX = width - SaveToCollectionTokens.Edge - SaveToCollectionTokens.SaveSize / 2f
+            return SaveToCollectionLayout(
+                width = width,
+                height = height,
+                safeTop = safeTop,
+                safeBottom = safeBottom,
+                columnWidth = columnWidth,
+                gridTop = gridTop,
+                tiles = tiles,
+                barY = barY,
+                saveX = saveX,
+                saveY = barY + SaveToCollectionTokens.BarHeight / 2f,
+                sheetY = safeTop + SaveToCollectionTokens.SheetTop,
+            )
+        }
+    }
+}
 
-data class SaveFlight(
-    val id: Int,
-    val card: Int,
-    val from: SaveRect,
-    val start: Double,
-    val duration: Double,
-)
-
-data class SaveStreamDrop(
-    val art: Int,
-    val x: Float,
-    val width: Float,
-    val start: Float,
-    val duration: Float,
-    val y0: Float,
-)
-
-enum class SaveHaptic {
+internal enum class SaveToCollectionHaptic {
     Lift,
     Magnet,
-    Land,
     Select,
-    Commit,
     Success,
+}
+
+internal enum class SaveToCollectionEase {
+    Linear,
+    EaseOut,
+    EaseInOut,
 }

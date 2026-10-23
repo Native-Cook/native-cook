@@ -1,74 +1,105 @@
-// Every colour and size of the block. Sizes are points on the source's 402 × 874 pt screen,
-// measured from the rectified frames (`.work/ref/cassette-deck-*.png`, 3 px per point), and scaled by width / 402.
-
-export const SCREEN = { w: 402, h: 874 };
+/**
+ * A cassette deck that is the whole screen: a brushed aluminium faceplate lit from above, a recessed well behind a
+ * smoked acrylic door with a mixtape in it (charcoal shell, a paper label written by hand, brown tape winding from reel
+ * to reel), a mechanical counter and two level meters, and a row of five piano keys. Inter for the engraving, a
+ * handwriting face for the label. Sizes are points on a 402 × 778 stage (the screen inside its safe area).
+ */
+export const FONT = {
+  regular: 'CD-Inter-Regular',
+  medium: 'CD-Inter-Medium',
+  semibold: 'CD-Inter-SemiBold',
+  hand: 'CD-CoveredByYourGrace',
+} as const;
 
 export const COLOR = {
-  // Measured: flat #242225 with a faint lift above the cassette and a darker pool under it.
-  bg: '#242225',
-  bgLift: 'rgba(255, 252, 255, 0.045)',
-  bgPool: 'rgba(0, 0, 0, 0.16)',
-  grille: '#19181B',
-  grilleRim: 'rgba(255, 255, 255, 0.05)',
-  ledOff: '#3A393D',
-  ledOn: '#35E39A',
-  ledGlow: 'rgba(53, 227, 154, 0.55)',
-  glyphOff: '#2D2C30',
-  glyphOn: '#E9E8EC',
-  glyphGlow: 'rgba(255, 255, 255, 0.35)',
-  labelInk: '#1C1B1D',
-  labelMute: '#5E5C60',
-  wordmark: '#ECEAE4',
-  pillTop: '#A9A9AB',
-  pillBottom: '#7E7E81',
-  pillInk: '#3A3A3C',
-  tape: '#2B2421',
-  tapeEdge: 'rgba(150, 118, 92, 0.35)',
-  // A narrow band of the key light, soft at both ends (expo-linear-gradient stops).
-  sheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'] as const,
-  // The shell's side faces: lit from the top left, so the left face is brighter.
-  edgeL: ['#2A292C', '#141316'] as const,
-  edgeR: ['#111013', '#08080A'] as const,
-  // The room takes the hue of the loaded cassette's cover (track 1 keeps the source's neutral lift).
-  tints: [[255, 252, 255, 0.045], [150, 140, 255, 0.085], [80, 220, 190, 0.075]],
-  redSpill: 'rgba(230, 40, 64, 0.32)',
-  ledSpill: 'rgba(53, 227, 154, 0.10)',
-};
+  plate: '#CFD2D5',
+  plateLight: '#E6E8EA',
+  plateDeep: '#A9ADB2',
+  engrave: '#4A4E54',
+  engraveMute: '#7B8086',
+  well: '#121314',
+  shell: '#2A2B2E',
+  shellLight: '#3A3B3F',
+  label: '#F1E8D4',
+  labelLine: 'rgba(160,120,90,0.35)',
+  labelBand: '#D9573B',
+  pen: '#1F2A63',
+  tape: '#3B2418',
+  tapeLight: '#6B4430',
+  hub: '#F4F2EE',
+  counter: '#0E0F10',
+  digit: '#F2F0EA',
+  led: '#FF8A2A',
+  ledOff: '#3A2A20',
+  meterOn: '#7BE38E',
+  meterHot: '#FFB34A',
+  meterPeak: '#FF5A3C',
+  meterOff: '#23262A',
+  keyTop: '#E9EBED',
+  keyFront: '#9EA3A9',
+  keyDeep: '#6E737A',
+  playMark: '#E2462F',
+  finger: 'rgba(30,32,36,0.16)',
+  fingerEdge: 'rgba(30,32,36,0.4)',
+} as const;
 
-/**
- * Spacing scale (step 0, 20 Oct), derived from the source's measured gaps: 4 pt base; 16 ≈ the side margin of the
- * cassette (16.7) and the pill (17.7), 32 ≈ half a key (32.5). Source elements keep their measured positions; only
- * the upgrade's additions sit on this scale.
- */
-export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+export const STAGE = { w: 402, h: 778 };
 
-// Absolute positions in points on the 402 × 874 screen.
 export const LAYOUT = {
-  grille: { cx: 44.3, cy: 88.7, pitch: 6.6, dot: 2.1, radius: 20.5 },
-  led: { cx: 374.3, cy: 77.7, r: 2.1 },
-  cassette: { x: 16.67, y: 223.33, w: 370, h: 240 },
-  // Inside the cassette frame.
-  reels: [{ cx: 119.7, cy: 106.3 }, { cx: 248, cy: 106.3 }],
-  reelSize: 70,
-  // The dark band through the label, where the tape packs show around the hubs.
-  window: { x: 95, y: 80.7, w: 179, h: 49.3 },
-  tapePack: { min: 26, max: 62 },
-  cover: { x: 38.3, y: 35, size: 37.3, radius: 1 },
-  title: { x: 86, y: 36.5, size: 16, tracking: -0.6 },
-  artist: { x: 86, y: 56, size: 11.2, tracking: -0.1 },
-  wordmark: { right: 43.3, y: 145.5, size: 11.6, tracking: 1.6 },
-  keys: { x0: 60, pitch: 53.75, y: 588.3, w: 65, h: 96.67, travel: 3.3 },
-  glyphs: { y: 580.7, size: 10, x0: 92.5 },
-  pill: { x: 17.7, y: 805.7, w: 31.3, h: 20 },
+  edge: 16,
+  brandBase: 46,
+  modelBase: 66,
+  power: { x: 370, y: 40 },
+  well: { x: 16, y: 98, w: 370, h: 300, r: 18 },
+  cassette: { x: 36, y: 132, w: 330, h: 226, r: 12 },
+  label: { x: 52, y: 146, w: 298, h: 128, r: 6 },
+  window: { x: 116, y: 210, w: 170, h: 52, r: 26 },
+  reels: [{ x: 148, y: 236 }, { x: 254, y: 236 }],
+  hub: 14,
+  pack: { min: 17, max: 44 },
+  readout: { y: 436, h: 64 },
+  counter: { x: 16, w: 146 },
+  meters: { x: 178, w: 208 },
+  keys: { y: 552, h: 140, gap: 8, top: 22 },
+  hintBase: 748,
+  finger: 44,
+} as const;
+
+export const TYPE = {
+  brand: { font: 'semibold', size: 22 },
+  model: { font: 'medium', size: 10 },
+  small: { font: 'medium', size: 9 },
+  digit: { font: 'semibold', size: 26 },
+  hand: { font: 'hand', size: 27 },
+  handSmall: { font: 'hand', size: 18 },
+  hint: { font: 'medium', size: 14 },
+} as const;
+export type TypeRole = keyof typeof TYPE;
+
+/** The keys, left to right. */
+export const KEYS = ['rew', 'play', 'ff', 'stop', 'pause'] as const;
+export const KEY = { rew: 0, play: 1, ff: 2, stop: 3, pause: 4 } as const;
+
+export const COPY = {
+  brand: 'VELOR',
+  model: 'TC-7  STEREO CASSETTE DECK',
+  side: 'A',
+  title: 'Glass Hours',
+  sub: 'for Jun, summer mix',
+  counter: 'TAPE COUNTER',
+  memo: 'MEMO',
+  left: 'L',
+  right: 'R',
+  hint: ['Press play', 'Playing side A', 'Winding', 'Rewinding to 000', 'Paused'],
+  keys: ['Rewind', 'Play', 'Fast forward', 'Stop', 'Pause'],
 };
 
-export const TRACKS = [
-  { title: 'Glass Hours', artist: 'Northern Pilots', cover: 0 },
-  { title: 'Afterglow', artist: 'Northern Pilots', cover: 1 },
-  { title: 'Undertow', artist: 'Northern Pilots', cover: 2 },
-];
-
-// An invented wordmark in the source's bold extended style.
-export const BRAND = 'VELOR';
-
-export const KEY_LABELS = ['Play', 'Pause', 'Next track', 'Rewind', 'Fast forward'];
+/** Where the stage sits on a screen `width` × `height` with safe-area insets. */
+export function makeLayout(width: number, height: number, top: number, bottom: number) {
+  const room = height - top - Math.max(bottom, 16);
+  const s = Math.min(width / STAGE.w, room / STAGE.h);
+  const ox = (width - STAGE.w * s) / 2;
+  const oy = top + (room - STAGE.h * s) / 2;
+  return { width, height, top, bottom, s, ox, oy };
+}
+export type Layout = ReturnType<typeof makeLayout>;

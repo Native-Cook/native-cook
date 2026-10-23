@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import com.ngocdevv.nativecook.shared.rememberReducedMotion
@@ -27,19 +28,22 @@ fun PinchToSummarize(
             height = maxHeight.value,
             insetTop = WindowInsets.safeDrawing.getTop(density) / density.density,
         )
-        val summary = rememberPtsSummaryLayout(stage.width)
         val state = rememberPtsState(
             stage = stage,
             autoPlay = autoPlay,
             reduceMotion = reduceMotion,
-            revealTotal = summary.revealTotal,
+            revealTotal = 0f,
             ready = stage.width > 0f && stage.height > 0f,
         )
+        val summary = rememberPtsSummaryLayout(stage.width, state.level)
+        SideEffect { state.updateRevealTotal(summary.revealTotal) }
         val insetBottom = WindowInsets.safeDrawing.getBottom(density) / density.density
         PinchToSummarizeStatusBars(darkStatus = state.mode == PtsMode.Reading)
         Box(Modifier.fillMaxSize().ptsGestures(state)) {
             PtsField(stage = stage, state = state, modifier = Modifier.fillMaxSize())
+            PtsDepthLabel(stage = stage, insetBottom = insetBottom, state = state)
             PinchToSummarizeArticle(stage = stage, insetBottom = insetBottom, state = state)
+            PtsChips(stage = stage, state = state, summary = summary)
             PinchToSummarizeSummary(stage = stage, insetBottom = insetBottom, state = state, reduceMotion = reduceMotion, summary = summary)
             PtsLight(stage = stage, state = state, modifier = Modifier.fillMaxSize())
         }

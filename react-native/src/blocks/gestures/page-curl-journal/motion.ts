@@ -92,19 +92,19 @@ export const STACK = { gap: 1.6, line: 1 };
 
 export const FADE_MS = 200; // Reduce Motion: pages cross-fade
 
-export const IDLE_RESUME_MS = 3500;
+export const IDLE_RESUME_MS = 2000;
 
-// Autoplay: a scripted finger through the same input as a real one. Times in ms on a 14 s loop.
+// Autoplay: a scripted finger through the same input as a real one. Times in ms on a 10 s loop.
 // Each stroke: down at `from`, moves through `via` to `to`, lifts at t1 with the path's speed.
-export const LOOP_MS = 14000;
+export const LOOP_MS = 10000;
 export type Stroke = { t0: number; t1: number; from: [number, number]; via: [number, number]; to: [number, number] };
 export const SCRIPT: Stroke[] = [
   // A hesitant peek at the corner, let go: the page falls back.
-  { t0: 900, t1: 2500, from: [384, 64], via: [150, 330], to: [310, 170] },
+  { t0: 600, t1: 1900, from: [384, 64], via: [150, 330], to: [310, 170] },
   // Title page over to the preface: a short drag and a flick.
-  { t0: 3200, t1: 3700, from: [386, 540], via: [300, 520], to: [150, 480] },
-  { t0: 5300, t1: 5800, from: [388, 300], via: [300, 310], to: [160, 340] },
-  { t0: 7400, t1: 7900, from: [388, 690], via: [300, 670], to: [160, 610] },
-  // A fast flick right from the cover: the riffle turns every page back to the title.
-  { t0: 9900, t1: 10180, from: [60, 450], via: [120, 446], to: [260, 438] },
+  { t0: 2500, t1: 3000, from: [386, 540], via: [300, 520], to: [150, 480] },
+  { t0: 4000, t1: 4500, from: [388, 300], via: [300, 310], to: [160, 340] },
+  { t0: 5500, t1: 6000, from: [388, 690], via: [300, 670], to: [160, 610] },
+  // A fast flick right from the last page: the riffle turns every page back to the title.
+  { t0: 7300, t1: 7580, from: [60, 450], via: [120, 446], to: [260, 438] },
 ];

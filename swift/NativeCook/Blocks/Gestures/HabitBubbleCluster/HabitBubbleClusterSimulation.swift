@@ -13,12 +13,20 @@ struct HabitBubbleClusterEntity: Identifiable {
 }
 
 struct HabitBubbleClusterSimulation {
+    enum Event {
+        static let tick = 1
+        static let done = 2
+        static let undo = 3
+        static let grab = 4
+        static let count = 5
+    }
+
     static let entities: [HabitBubbleClusterEntity] = {
         let social = HabitBubbleClusterTokens.social.map {
             HabitBubbleClusterEntity(id: $0.id, name: $0.name, icon: $0.icon, hue: $0.hue, radius: $0.r, home: CGPoint(x: $0.x, y: $0.y), set: 0, quiet: false)
         }
         let quiet = HabitBubbleClusterTokens.quiet
-        let dial = HabitBubbleClusterEntity(id: "quiet", name: quiet.title, icon: "moon-outline", hue: "red", radius: quiet.r, home: CGPoint(x: quiet.x, y: quiet.y), set: 0, quiet: true)
+        let dial = HabitBubbleClusterEntity(id: "quiet", name: quiet.title, icon: "moon-outline", hue: "glass", radius: quiet.r, home: CGPoint(x: quiet.x, y: quiet.y), set: 0, quiet: true)
         let personal = HabitBubbleClusterTokens.personal.map {
             HabitBubbleClusterEntity(id: $0.id, name: $0.name, icon: $0.icon, hue: $0.hue, radius: $0.r, home: CGPoint(x: $0.x, y: $0.y), set: 1, quiet: false)
         }
@@ -38,12 +46,12 @@ struct HabitBubbleClusterSimulation {
     var homeY: [Double] = []
     var done: [Double] = []
     var doneTarget: [Double] = []
-    var flash: [Double] = []
     var pendingRadius: [Double] = []
     var pendingAt: [Double] = []
+    var events: [Int] = []
     var tab = 0
-    var focus = -1
     var held = -1
+    /// 0 press, 1 charge, 2 drag.
     var mode = 0
     var pressMS = 0.0
     var charge = 0.0
@@ -74,7 +82,6 @@ struct HabitBubbleClusterSimulation {
             homeY.append(entity.home.y)
             done.append(0)
             doneTarget.append(0)
-            flash.append(-1)
             pendingRadius.append(-1)
             pendingAt.append(0)
         }
@@ -84,10 +91,10 @@ struct HabitBubbleClusterSimulation {
     }
 
     mutating func setDone(_ index: Int, _ value: Bool) {
+        guard Self.entities.indices.contains(index) else { return }
         doneTarget[index] = value ? 1 : 0
         radiusTarget[index] = baseRadius(index, done: value)
         if value {
-            flash[index] = 0
             burst = index
             burstMS = 0
             for other in Self.entities.indices where other != index && radiusTarget[other] > 0 && !Self.entities[other].quiet {
@@ -100,6 +107,8 @@ struct HabitBubbleClusterSimulation {
             }
         }
         packHomes()
+        events.append(value ? Event.done : Event.undo)
+        events.append(Event.count)
     }
 
     mutating func setTab(_ value: Int) {
@@ -111,35 +120,28 @@ struct HabitBubbleClusterSimulation {
             pendingRadius[index] = target
             pendingAt[index] = clock + distance / HabitBubbleClusterTokens.stagger.per * HabitBubbleClusterTokens.stagger.stepMs
         }
-        let before = radiusTarget
+        let previousTargets = radiusTarget
         radiusTarget = pendingRadius
         packHomes()
-        radiusTarget = before
+        radiusTarget = previousTargets
+        events.append(Event.count)
     }
 
-    mutating func open(_ index: Int, at point: CGPoint) {
-        focus = index
-        for other in Self.entities.indices {
-            radiusTarget[other] = other == index ? HabitBubbleClusterTokens.detail.radius : 0
-            guard other != index else { continue }
-            let dx = x[other] - x[index]
-            let dy = y[other] - y[index]
-            let distance = max(1, hypot(dx, dy))
-            homeX[other] = x[other] + dx / distance * HabitBubbleClusterTokens.scatter.distance
-            homeY[other] = y[other] + dy / distance * HabitBubbleClusterTokens.scatter.distance
+    mutating func resetDay() {
+        held = -1
+        charge = 0
+        ring = -1
+        for index in Self.entities.indices { doneTarget[index] = 0 }
+        if tab != 0 {
+            setTab(0)
+        } else {
+            for index in Self.entities.indices { radiusTarget[index] = baseRadius(index, done: false) }
+            packHomes()
         }
-        homeX[index] = point.x
-        homeY[index] = point.y
-    }
-
-    mutating func close() {
-        focus = -1
-        for index in Self.entities.indices { radiusTarget[index] = baseRadius(index, done: doneTarget[index] > 0.5) }
-        packHomes()
+        events.append(Event.count)
     }
 
     mutating func touchDown(_ point: CGPoint) {
-        guard focus < 0 else { held = -1; return }
         held = hitTest(point)
         mode = 0
         pressMS = 0
@@ -152,6 +154,7 @@ struct HabitBubbleClusterSimulation {
         if held >= 0 {
             offsetX = x[held] - point.x
             offsetY = y[held] - point.y
+            events.append(Event.grab)
         }
     }
 
@@ -162,6 +165,7 @@ struct HabitBubbleClusterSimulation {
         if hypot(point.x - startX, point.y - startY) > HabitBubbleClusterTokens.hold.moveTolerance { mode = 2 }
     }
 
+    /// Returns a short-tapped open bubble so the caller can show its label.
     mutating func touchUp(velocity: CGVector, reducedMotion: Bool) -> Int {
         let index = held
         held = -1
@@ -183,47 +187,60 @@ struct HabitBubbleClusterSimulation {
     }
 
     mutating func step(milliseconds: Double, reducedMotion: Bool) -> [Int] {
-        var events: [Int] = []
-        remainder += min(milliseconds, 100)
+        remainder += min(milliseconds, HabitBubbleClusterTokens.physics.maxFrameMs)
         let dt = HabitBubbleClusterTokens.physics.step
         let stepMS = dt * 1000
         while remainder >= stepMS - 0.000_001 {
             remainder -= stepMS
-            if held >= 0 && mode != 2 {
-                pressMS += stepMS
-                if pressMS >= HabitBubbleClusterTokens.hold.delayMs && doneTarget[held] < 0.5 {
-                    mode = 1
-                    ring = held
-                    charge = min(1, charge + stepMS / HabitBubbleClusterTokens.hold.chargeMs)
-                    let nextTick = charge >= HabitBubbleClusterTokens.hold.ticks[1] ? 2 : charge >= HabitBubbleClusterTokens.hold.ticks[0] ? 1 : 0
-                    if nextTick > tickCount { tickCount = nextTick; events.append(1) }
-                    if charge >= 1 {
-                        let completed = held
-                        setDone(completed, true)
-                        held = -1
-                        mode = 0
-                        events.append(2)
-                    }
-                }
-            } else if charge > 0 && (held < 0 || mode == 2) {
-                charge = charge >= 1 ? 0 : max(0, charge - stepMS / HabitBubbleClusterTokens.hold.drainMs)
-            }
+            clock += stepMS
+            updateHold(stepMS: stepMS)
             for index in Self.entities.indices where pendingRadius[index] >= 0 && clock >= pendingAt[index] {
                 radiusTarget[index] = pendingRadius[index]
                 pendingRadius[index] = -1
             }
-            integrate(dt: dt, stepMS: stepMS, reducedMotion: reducedMotion)
+            integrate(dt: dt, reducedMotion: reducedMotion)
             collide(dt: dt)
             if burst >= 0 {
                 burstMS += stepMS
-                if burstMS > HabitBubbleClusterTokens.burst.sparkMs { burst = -1 }
+                if burstMS > HabitBubbleClusterTokens.burst.rippleMs { burst = -1 }
             }
         }
-        return events
+        let emitted = events
+        events.removeAll(keepingCapacity: true)
+        return emitted
     }
 
-    mutating func advanceClock(milliseconds: Double) {
-        clock += max(0, milliseconds)
+    func doneCount() -> (done: Int, total: Int) {
+        var result = (done: 0, total: 0)
+        for index in Self.entities.indices where Self.entities[index].set == tab && !Self.entities[index].quiet {
+            result.total += 1
+            if doneTarget[index] > 0.5 { result.done += 1 }
+        }
+        return result
+    }
+
+    private mutating func updateHold(stepMS: Double) {
+        if held >= 0, mode != 2 {
+            pressMS += stepMS
+            if pressMS >= HabitBubbleClusterTokens.hold.delayMs, doneTarget[held] < 0.5 {
+                mode = 1
+                ring = held
+                charge = min(1, charge + stepMS / HabitBubbleClusterTokens.hold.chargeMs)
+                let nextTick = charge >= HabitBubbleClusterTokens.hold.ticks[1] ? 2 : charge >= HabitBubbleClusterTokens.hold.ticks[0] ? 1 : 0
+                if nextTick > tickCount {
+                    tickCount = nextTick
+                    events.append(Event.tick)
+                }
+                if charge >= 1 {
+                    let completed = held
+                    setDone(completed, true)
+                    held = -1
+                    mode = 0
+                }
+            }
+        } else if charge > 0, held < 0 || mode == 2 {
+            charge = charge >= 1 ? 0 : max(0, charge - stepMS / HabitBubbleClusterTokens.hold.drainMs)
+        }
     }
 
     private func baseRadius(_ index: Int, done: Bool) -> Double {
@@ -237,17 +254,20 @@ struct HabitBubbleClusterSimulation {
         var bestDistance = Double.infinity
         for index in Self.entities.indices where !Self.entities[index].quiet && radiusTarget[index] > 0 {
             let distance = hypot(point.x - x[index], point.y - y[index])
-            if distance < max(radius[index], 22), distance < bestDistance { best = index; bestDistance = distance }
+            if distance < max(radius[index], 22), distance < bestDistance {
+                best = index
+                bestDistance = distance
+            }
         }
         return best
     }
 
     private mutating func packHomes() {
-        var packedX = Self.entities.map(\.home.x)
-        var packedY = Self.entities.map(\.home.y)
+        var packedX = Self.entities.map { Double($0.home.x) }
+        var packedY = Self.entities.map { Double($0.home.y) }
         let active = Self.entities.indices.filter { radiusTarget[$0] > 0 && !Self.entities[$0].quiet }.count
         let changed = Self.entities.indices.contains { radiusTarget[$0] > 0 && abs(radiusTarget[$0] - Self.entities[$0].radius) > 0.5 }
-        let iterations = active > 1 && changed ? Int(HabitBubbleClusterTokens.physics.relaxIterations) : 0
+        let iterations = active > 1 && changed ? HabitBubbleClusterTokens.physics.relaxIterations : 0
         for _ in 0..<iterations {
             for index in Self.entities.indices where radiusTarget[index] > 0 && !Self.entities[index].quiet {
                 packedX[index] -= packedX[index] * HabitBubbleClusterTokens.physics.relaxGravity
@@ -272,15 +292,15 @@ struct HabitBubbleClusterSimulation {
                 }
             }
         }
-        homeX = packedX.map(Double.init)
-        homeY = packedY.map(Double.init)
+        homeX = packedX
+        homeY = packedY
     }
 
-    private mutating func integrate(dt: Double, stepMS: Double, reducedMotion: Bool) {
+    private mutating func integrate(dt: Double, reducedMotion: Bool) {
         for index in Self.entities.indices {
             let squeeze = index == held && mode != 2 && !reducedMotion ? HabitBubbleClusterTokens.hold.squeeze : 1
             let cycles = HabitBubbleClusterTokens.idle.cyclesMin + Double(index % 3)
-            let breathe = reducedMotion || HabitBubbleClusterTokens.qaHold != nil ? 0 : sin(clock / (HabitBubbleClusterTokens.loopMs / cycles) * .pi * 2 + Double(index)) * HabitBubbleClusterTokens.idle.breathe
+            let breathe = reducedMotion ? 0 : sin(clock / (HabitBubbleClusterTokens.loopMs / cycles) * .pi * 2 + Double(index)) * HabitBubbleClusterTokens.idle.breathe
             let target = radiusTarget[index] * squeeze * (1 + breathe)
             if reducedMotion {
                 radius[index] += (target - radius[index]) * min(1, dt * 18)
@@ -290,8 +310,7 @@ struct HabitBubbleClusterSimulation {
                 radius[index] = max(0, radius[index] + radiusVelocity[index] * dt)
             }
             done[index] += (doneTarget[index] - done[index]) * min(1, dt * (reducedMotion ? 14 : 9))
-            if flash[index] >= 0 { flash[index] = flash[index] + stepMS > HabitBubbleClusterTokens.burst.flashMs ? -1 : flash[index] + stepMS }
-            if index == held && mode == 2 {
+            if index == held, mode == 2 {
                 let nextX = fingerX + offsetX
                 let nextY = fingerY + offsetY
                 velocityX[index] = (nextX - x[index]) / dt
@@ -319,7 +338,8 @@ struct HabitBubbleClusterSimulation {
                 let dx = x[second] - x[first]
                 let dy = y[second] - y[first]
                 let distance = max(0.001, hypot(dx, dy))
-                let designed = abs(radiusTarget[first] - Self.entities[first].radius) < 0.5 && abs(radiusTarget[second] - Self.entities[second].radius) < 0.5 ? hypot(Self.entities[second].home.x - Self.entities[first].home.x, Self.entities[second].home.y - Self.entities[first].home.y) : .infinity
+                let atDesignSize = abs(radiusTarget[first] - Self.entities[first].radius) < 0.5 && abs(radiusTarget[second] - Self.entities[second].radius) < 0.5
+                let designed = atDesignSize ? hypot(Self.entities[second].home.x - Self.entities[first].home.x, Self.entities[second].home.y - Self.entities[first].home.y) : .infinity
                 let minimum = min(radius[first] + radius[second] + HabitBubbleClusterTokens.layout.gap, designed)
                 guard distance < minimum else { continue }
                 let fixedFirst = (first == held && mode == 2) || Self.entities[first].quiet
@@ -328,10 +348,14 @@ struct HabitBubbleClusterSimulation {
                 let firstWeight = fixedFirst ? 0 : fixedSecond ? 1 : radius[second] * radius[second] / (radius[first] * radius[first] + radius[second] * radius[second])
                 let secondWeight = fixedSecond ? 0 : fixedFirst ? 1 : radius[first] * radius[first] / (radius[first] * radius[first] + radius[second] * radius[second])
                 let push = (minimum - distance) / distance * HabitBubbleClusterTokens.physics.separation
-                x[first] -= dx * push * firstWeight; y[first] -= dy * push * firstWeight
-                x[second] += dx * push * secondWeight; y[second] += dy * push * secondWeight
-                velocityX[first] -= dx * push * firstWeight / dt * 0.25; velocityY[first] -= dy * push * firstWeight / dt * 0.25
-                velocityX[second] += dx * push * secondWeight / dt * 0.25; velocityY[second] += dy * push * secondWeight / dt * 0.25
+                x[first] -= dx * push * firstWeight
+                y[first] -= dy * push * firstWeight
+                x[second] += dx * push * secondWeight
+                y[second] += dy * push * secondWeight
+                velocityX[first] -= dx * push * firstWeight / dt * 0.25
+                velocityY[first] -= dy * push * firstWeight / dt * 0.25
+                velocityX[second] += dx * push * secondWeight / dt * 0.25
+                velocityY[second] += dy * push * secondWeight / dt * 0.25
             }
         }
     }

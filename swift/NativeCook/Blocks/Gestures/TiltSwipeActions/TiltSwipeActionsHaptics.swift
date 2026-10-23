@@ -2,22 +2,16 @@ import UIKit
 
 /// Discrete tactile events only; never played while the demo runs.
 enum TiltSwipeActionsHaptic {
-    case open, arm, disarm, undo, tap, commit
+    case detent, split, arm, flag, undo
 
     @MainActor
     func play() {
         switch self {
-        case .open:
+        case .detent, .flag:
             UISelectionFeedbackGenerator().selectionChanged()
-        case .arm:
+        case .arm, .split:
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        case .disarm:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        case .commit:
-            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         case .undo:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        case .tap:
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         }
     }

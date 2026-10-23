@@ -119,8 +119,8 @@ function bound(g: Geometry, px: number[], py: number[], i: number, r: number) {
 function stepJar(s: Sim, g: Geometry, settleAll: boolean) {
   'worklet';
   const dt = STEP;
-  // The source's orbs overlap a little (their glass rims): they pack at 0.9 of the drawn radius.
-  const r = LAYOUT.orb * g.s * 0.9;
+  // Glass beads do not overlap: they pack at their drawn radius, less a hair for the antialiased rim.
+  const r = LAYOUT.orb * g.s * 0.98;
   const px: number[] = [];
   const py: number[] = [];
   const damp = Math.exp(-PILE.damping * dt);
@@ -207,19 +207,22 @@ export function initialSim(g: Geometry, reduced: boolean, autoPlay: boolean): Si
     s.sqv.push(0);
     s.pvy.push(0);
   }
+  // Dropped and settled under gravity: the pile is stacked by the physics, not placed.
   for (let k = 0; k < PILE.settleSteps; k++) stepJar(s, g, true);
-  {
-    // The source's pile, where the reference frame shows it, orb for orb (the shipped sprites carry each orb's turn).
-    const k = g.w / 1206;
+  // Then let the pile find its own rest on its springs: a gravity pose can leave two beads a hair inside each other,
+  // and the collisions would push one off its slot on the first frame (a 1 pt pop at every loop seam). Each round
+  // takes where it settled as the new home, until nothing moves.
+  for (let round = 0; round < 4; round++) {
     for (let i = 0; i < PILE_N; i++) {
-      s.x[i] = REPLICA_PILE[i][0] * k;
-      s.y[i] = REPLICA_PILE[i][1] * k;
-      s.mood[i] = REPLICA_PILE[i][2];
-      s.spin[i] = REPLICA ? (-REPLICA_PILE[i][3] * Math.PI) / 180 : 0; // Skia turns clockwise
+      s.state[i] = ORB.pile;
+      s.hx[i] = s.x[i];
+      s.hy[i] = s.y[i];
+      s.vx[i] = 0;
+      s.vy[i] = 0;
     }
+    for (let k = 0; k < 240; k++) stepJar(s, g, false);
   }
   for (let i = 0; i < PILE_N; i++) {
-    s.state[i] = ORB.pile;
     s.hx[i] = s.x[i];
     s.hy[i] = s.y[i];
     s.vx[i] = 0;
@@ -554,7 +557,7 @@ function fixedStep(s: Sim, g: Geometry, autoPlay: boolean) {
     s.hopAt = hop;
     const k = (hop * 7) % PILE_N;
     // (None as the loop starts, so it begins at rest.)
-    if (hop !== 0 && !s.reduced && s.state[k] === ORB.pile) s.vy[k] -= HOP.speed * g.s;
+    if (hop !== 0 && lt < HOP.last && !s.reduced && s.state[k] === ORB.pile) s.vy[k] -= HOP.speed * g.s;
   }
   if (s.ghostT >= 0) {
     s.ghostT += dt;

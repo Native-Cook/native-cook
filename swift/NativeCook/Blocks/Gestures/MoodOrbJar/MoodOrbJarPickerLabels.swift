@@ -14,7 +14,7 @@ struct MoodOrbJarPickerLabels: View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(MoodOrbJarTokens.moods.enumerated()), id: \.element.name) { index, mood in
                 Text(mood.name)
-                    .font(.system(size: Layout.labelSize))
+                    .font(.system(size: Layout.labelSize, weight: .medium))
                     .foregroundStyle(MoodOrbJarTokens.Palette.label)
                     .frame(width: 60 * s, height: Layout.slotLabelHeight * s, alignment: .bottom)
                     .offset(x: geometry.slotX[index] - 30 * s, y: geometry.slotY - 24 * s)

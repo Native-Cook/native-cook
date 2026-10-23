@@ -8,7 +8,9 @@ internal object ReceiptPrinterMotion {
     val LONG_PRESS_MS = Tokens.PRESS.longPressMs.toFloat()
     const val MENU_OUT_MS = Tokens.PRESS.menuOutMs
     const val GRID_OUT_MS = Tokens.SCREEN.gridOutMs
-    const val GRID_IN_MS = Tokens.SCREEN.gridInMs
+    const val GRID_IN_MS = Tokens.RETRACT.gridInMs
+    const val GRID_LEAD_MS = Tokens.RETRACT.gridLeadMs
+    const val REDUCED_RETRACT_MS = Tokens.RETRACT.reducedMs
     /** The Dynamic Island opens before any paper emerges. */
     const val ISLAND_LEAD_MS = 220f
     const val FEED_MS = Tokens.FEED.ms
@@ -25,7 +27,6 @@ internal object ReceiptPrinterMotion {
     const val BAR_MS = Tokens.SCROLL.barMs
     const val RETRACT_MS = Tokens.RETRACT.ms
     const val MORPH_MS = Tokens.UPGRADE.morphMs
-    const val RETURN_MS = Tokens.POLISH.returnMs
     const val DEVELOP_FADE_MS = Tokens.UPGRADE.developFadeMs
     const val CUT_DROP = Tokens.UPGRADE.cutDrop
     const val CUT_DOWN_MS = Tokens.UPGRADE.cutDownMs
@@ -43,6 +44,5 @@ internal object ReceiptPrinterMotion {
     val PAPER_EDGE = Tokens.RECEIPT.edge.depth
     val PAPER_TOTAL = PAPER_LENGTH + PAPER_EDGE
     const val BAR_TOP = Tokens.BAR.top
-    // RN AUTOPLAY.resumeDelayMs stays 3500 in tokens; the user's current touch contract overrides its use.
-    const val RESUME_DELAY_MS = Tokens.USER_RESUME_DELAY_MS
+    const val RESUME_DELAY_MS = Tokens.AUTOPLAY.resumeDelayMs
 }

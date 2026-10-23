@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -41,7 +42,6 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,17 +55,14 @@ import kotlin.math.sin
 internal fun TiltPosterParallaxInfo(
     engine: TiltPosterParallaxEngine,
     stageWidth: Dp,
-    cardHeight: Dp,
     top: Dp,
+    typography: TiltPosterParallaxTypography,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .offset(x = Tokens.LAYOUT.gutter.dp, y = top)
-            .width(stageWidth - (Tokens.LAYOUT.gutter * 2.0).dp)
-            .graphicsLayer {
-                translationY = (engine.lift - 1f) * cardHeight.toPx()
-            },
+            .width(stageWidth - (Tokens.LAYOUT.gutter * 2.0).dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -73,21 +70,20 @@ internal fun TiltPosterParallaxInfo(
             modifier = Modifier.fillMaxWidth(),
             color = Tokens.COLOR.ink,
             fontSize = Tokens.TYPE.titleSize.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.SansSerif,
+            fontFamily = typography.serif,
             lineHeight = Tokens.TYPE.titleLineHeight.sp,
+            letterSpacing = (-0.2).sp,
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
         Spacer(modifier = Modifier.height(Tokens.LAYOUT.infoGap.dp))
         Text(
-            text = Tokens.COPY.date,
+            text = Tokens.COPY.meta,
             modifier = Modifier.fillMaxWidth(),
             color = Tokens.COLOR.inkFaint,
-            fontSize = Tokens.TYPE.dateSize.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.SansSerif,
-            lineHeight = Tokens.TYPE.dateLineHeight.sp,
+            fontSize = Tokens.TYPE.metaSize.sp,
+            fontFamily = typography.regular,
+            lineHeight = Tokens.TYPE.metaLineHeight.sp,
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
@@ -98,17 +94,16 @@ internal fun TiltPosterParallaxInfo(
                 .height(Tokens.LAYOUT.pillHeight.dp),
             horizontalArrangement = Arrangement.spacedBy(Tokens.LAYOUT.pillGap.dp),
         ) {
-            WatchlistPill(engine = engine, modifier = Modifier.weight(1f))
-            WatchedPill(engine = engine, modifier = Modifier.weight(1f))
+            TiltPosterParallaxWatchlistPill(engine, typography, Modifier.weight(1f))
+            TiltPosterParallaxPlayPill(engine, typography, Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height((Tokens.LAYOUT.pillsMarginBottom + Tokens.LAYOUT.infoGap).dp))
         Text(
             text = Tokens.COPY.body,
             modifier = Modifier.fillMaxWidth(),
-            color = Tokens.COLOR.ink,
+            color = Tokens.COLOR.inkSoft,
             fontSize = Tokens.TYPE.bodySize.sp,
-            fontWeight = FontWeight.Normal,
-            fontFamily = FontFamily.SansSerif,
+            fontFamily = typography.regular,
             lineHeight = Tokens.TYPE.bodyLineHeight.sp,
             maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Clip,
@@ -117,9 +112,7 @@ internal fun TiltPosterParallaxInfo(
         Row(
             modifier = Modifier
                 .align(Alignment.Start)
-                .clickable {
-                    expanded = !expanded
-                }
+                .clickable { expanded = !expanded }
                 .semantics {
                     role = Role.Button
                     contentDescription = if (expanded) Tokens.COPY.less else Tokens.COPY.more
@@ -129,25 +122,63 @@ internal fun TiltPosterParallaxInfo(
         ) {
             Text(
                 text = if (expanded) Tokens.COPY.less else Tokens.COPY.more,
-                color = Tokens.COLOR.inkFaint,
+                color = Tokens.COLOR.ink,
                 fontSize = Tokens.TYPE.moreSize.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = FontFamily.SansSerif,
+                fontFamily = typography.semibold,
             )
-            ChevronIcon(up = expanded)
+            TiltPosterParallaxChevronIcon(up = expanded)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Tokens.LAYOUT.formatsMarginTop.dp)
+                .drawBehind {
+                    drawLine(
+                        color = Tokens.COLOR.glassBorder,
+                        start = Offset.Zero,
+                        end = Offset(size.width, 0f),
+                        strokeWidth = 0.5.dp.toPx(),
+                    )
+                }
+                .padding(top = Tokens.LAYOUT.formatsPaddingTop.dp)
+                .semantics { contentDescription = "Available in 4K, HDR, Dolby Atmos, with audio description" },
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Tokens.COPY.formats.forEach { format ->
+                Box(
+                    modifier = Modifier
+                        .height(Tokens.LAYOUT.chipHeight.dp)
+                        .border(0.5.dp, Tokens.COLOR.inkFaint, RoundedCornerShape(Tokens.LAYOUT.chipRadius.dp))
+                        .padding(horizontal = Tokens.LAYOUT.chipPadding.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = format,
+                        color = Tokens.COLOR.inkSoft,
+                        fontSize = Tokens.TYPE.chipSize.sp,
+                        fontFamily = typography.semibold,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = Tokens.TYPE.chipLineHeight.sp,
+                        letterSpacing = 0.4.sp,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun WatchlistPill(engine: TiltPosterParallaxEngine, modifier: Modifier) {
+private fun TiltPosterParallaxWatchlistPill(
+    engine: TiltPosterParallaxEngine,
+    typography: TiltPosterParallaxTypography,
+    modifier: Modifier,
+) {
     val view = LocalView.current
     val progress = engine.savedMotion.coerceIn(0f, 1f)
-    val background = lerp(Tokens.COLOR.pill, Tokens.COLOR.pillSaved, progress)
+    val background = lerp(Tokens.COLOR.glass, Tokens.COLOR.pillSaved, progress)
     val border = lerp(Tokens.COLOR.glassBorder, Tokens.COLOR.pillSavedBorder, progress)
     val pop = 1f + sin(progress * PI).toFloat() * Tokens.MORPH.pop.toFloat()
-    val label = if (engine.saved) Tokens.COPY.added else Tokens.COPY.watchlist
-    val description = if (engine.saved) "In your watchlist" else "Add to watchlist"
     Row(
         modifier = modifier
             .height(Tokens.LAYOUT.pillHeight.dp)
@@ -160,10 +191,10 @@ private fun WatchlistPill(engine: TiltPosterParallaxEngine, modifier: Modifier) 
             .padding(horizontal = Tokens.LAYOUT.pillPadding.dp)
             .semantics {
                 role = Role.Button
-                contentDescription = description
+                contentDescription = if (engine.saved) "In your watchlist" else "Add to watchlist"
                 selected = engine.saved
                 onClick {
-                    performWatchHaptic(view, engine.toggleSaved())
+                    performTiltPosterParallaxWatchHaptic(view, engine.toggleSaved())
                     true
                 }
             }
@@ -186,9 +217,7 @@ private fun WatchlistPill(engine: TiltPosterParallaxEngine, modifier: Modifier) 
                         }
                     } finally {
                         engine.setWatchPressed(false)
-                        if (released) {
-                            performWatchHaptic(view, engine.toggleSaved())
-                        }
+                        if (released) performTiltPosterParallaxWatchHaptic(view, engine.toggleSaved())
                         engine.realTouchUp()
                     }
                 }
@@ -197,32 +226,35 @@ private fun WatchlistPill(engine: TiltPosterParallaxEngine, modifier: Modifier) 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(Tokens.LAYOUT.pillIcon.dp), contentAlignment = Alignment.Center) {
-            PlusIcon(progress = progress)
-            CheckIcon(progress = progress)
+            TiltPosterParallaxPlusIcon(progress)
+            TiltPosterParallaxCheckIcon(progress)
         }
         Text(
-            text = label,
+            text = if (engine.saved) Tokens.COPY.added else Tokens.COPY.watchlist,
             color = if (engine.saved) Tokens.COLOR.goldInk else Tokens.COLOR.ink,
             fontSize = Tokens.TYPE.pillSize.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.SansSerif,
+            fontFamily = typography.semibold,
             maxLines = 1,
         )
     }
 }
 
 @Composable
-private fun WatchedPill(engine: TiltPosterParallaxEngine, modifier: Modifier) {
+private fun TiltPosterParallaxPlayPill(
+    engine: TiltPosterParallaxEngine,
+    typography: TiltPosterParallaxTypography,
+    modifier: Modifier,
+) {
     var pressed by remember { mutableStateOf(false) }
     Row(
         modifier = modifier
             .height(Tokens.LAYOUT.pillHeight.dp)
-            .alpha(if (pressed) 0.7f else 1f)
-            .background(Tokens.COLOR.pillGhost, RoundedCornerShape((Tokens.LAYOUT.pillHeight / 2.0).dp))
+            .alpha(if (pressed) 0.8f else 1f)
+            .background(Tokens.COLOR.play, RoundedCornerShape((Tokens.LAYOUT.pillHeight / 2.0).dp))
             .padding(horizontal = Tokens.LAYOUT.pillPadding.dp)
             .semantics {
                 role = Role.Button
-                contentDescription = "Mark as watched"
+                contentDescription = Tokens.COPY.play
             }
             .pointerInput(engine) {
                 awaitEachGesture {
@@ -233,10 +265,7 @@ private fun WatchedPill(engine: TiltPosterParallaxEngine, modifier: Modifier) {
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.changedToUp() || !change.pressed) {
-                                change.consume()
-                                break
-                            }
+                            if (change.changedToUp() || !change.pressed) break
                             change.consume()
                         }
                     } finally {
@@ -248,125 +277,74 @@ private fun WatchedPill(engine: TiltPosterParallaxEngine, modifier: Modifier) {
         horizontalArrangement = Arrangement.spacedBy(Tokens.LAYOUT.pillContentGap.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        EyeIcon()
+        Canvas(modifier = Modifier.size(16.dp)) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(size.width * 0.30f, size.height * 0.18f)
+                lineTo(size.width * 0.82f, size.height * 0.50f)
+                lineTo(size.width * 0.30f, size.height * 0.82f)
+                close()
+            }
+            drawPath(path, Tokens.COLOR.playInk)
+        }
         Text(
-            text = Tokens.COPY.watched,
-            color = Tokens.COLOR.inkGhost,
+            text = Tokens.COPY.play,
+            color = Tokens.COLOR.playInk,
             fontSize = Tokens.TYPE.pillSize.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.SansSerif,
+            fontFamily = typography.semibold,
             maxLines = 1,
         )
     }
 }
 
 @Composable
-private fun PlusIcon(progress: Float) {
+private fun TiltPosterParallaxPlusIcon(progress: Float) {
     Canvas(
         modifier = Modifier
             .size(Tokens.LAYOUT.pillIcon.dp)
             .graphicsLayer {
                 alpha = 1f - progress
                 rotationZ = progress * Tokens.MORPH.iconTurn.toFloat()
-                val scale = 1f - progress * (1f - Tokens.MORPH.iconSmall.toFloat())
-                scaleX = scale
-                scaleY = scale
+                scaleX = 1f - progress * (1f - Tokens.MORPH.iconSmall.toFloat())
+                scaleY = scaleX
             },
     ) {
         val stroke = 1.8.dp.toPx()
         val inset = size.width * 0.22f
-        drawLine(
-            color = Tokens.COLOR.ink,
-            start = Offset(size.width / 2f, inset),
-            end = Offset(size.width / 2f, size.height - inset),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color = Tokens.COLOR.ink,
-            start = Offset(inset, size.height / 2f),
-            end = Offset(size.width - inset, size.height / 2f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-        )
+        drawLine(Tokens.COLOR.ink, Offset(size.width / 2f, inset), Offset(size.width / 2f, size.height - inset), stroke, StrokeCap.Round)
+        drawLine(Tokens.COLOR.ink, Offset(inset, size.height / 2f), Offset(size.width - inset, size.height / 2f), stroke, StrokeCap.Round)
     }
 }
 
 @Composable
-private fun CheckIcon(progress: Float) {
+private fun TiltPosterParallaxCheckIcon(progress: Float) {
     Canvas(
         modifier = Modifier
             .size(Tokens.LAYOUT.pillIcon.dp)
             .graphicsLayer {
                 alpha = progress
                 rotationZ = (progress - 1f) * Tokens.MORPH.iconTurn.toFloat()
-                val scale = Tokens.MORPH.iconSmall.toFloat() + progress * (1f - Tokens.MORPH.iconSmall.toFloat())
-                scaleX = scale
-                scaleY = scale
+                scaleX = Tokens.MORPH.iconSmall.toFloat() + progress * (1f - Tokens.MORPH.iconSmall.toFloat())
+                scaleY = scaleX
             },
     ) {
-        drawLine(
-            color = Tokens.COLOR.goldInk,
-            start = Offset(size.width * 0.2f, size.height * 0.52f),
-            end = Offset(size.width * 0.42f, size.height * 0.72f),
-            strokeWidth = 1.8.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color = Tokens.COLOR.goldInk,
-            start = Offset(size.width * 0.42f, size.height * 0.72f),
-            end = Offset(size.width * 0.82f, size.height * 0.28f),
-            strokeWidth = 1.8.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
+        val stroke = 1.8.dp.toPx()
+        drawLine(Tokens.COLOR.goldInk, Offset(size.width * 0.2f, size.height * 0.52f), Offset(size.width * 0.42f, size.height * 0.72f), stroke, StrokeCap.Round)
+        drawLine(Tokens.COLOR.goldInk, Offset(size.width * 0.42f, size.height * 0.72f), Offset(size.width * 0.82f, size.height * 0.28f), stroke, StrokeCap.Round)
     }
 }
 
 @Composable
-private fun EyeIcon() {
-    Canvas(modifier = Modifier.size(Tokens.LAYOUT.pillIcon.dp)) {
-        val path = androidx.compose.ui.graphics.Path().apply {
-            moveTo(size.width * 0.08f, size.height * 0.5f)
-            quadraticBezierTo(size.width * 0.5f, size.height * 0.12f, size.width * 0.92f, size.height * 0.5f)
-            quadraticBezierTo(size.width * 0.5f, size.height * 0.88f, size.width * 0.08f, size.height * 0.5f)
-            close()
-        }
-        drawPath(
-            path = path,
-            color = Tokens.COLOR.inkGhost,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.3.dp.toPx()),
-        )
-        drawCircle(color = Tokens.COLOR.inkGhost, radius = size.width * 0.13f, center = center)
-    }
-}
-
-@Composable
-private fun ChevronIcon(up: Boolean) {
+private fun TiltPosterParallaxChevronIcon(up: Boolean) {
     Canvas(modifier = Modifier.size(Tokens.LAYOUT.chevron.dp)) {
         val top = if (up) size.height * 0.62f else size.height * 0.38f
         val bottom = if (up) size.height * 0.38f else size.height * 0.62f
-        drawLine(
-            color = Tokens.COLOR.inkFaint,
-            start = Offset(size.width * 0.22f, top),
-            end = Offset(size.width * 0.5f, bottom),
-            strokeWidth = 1.4.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color = Tokens.COLOR.inkFaint,
-            start = Offset(size.width * 0.5f, bottom),
-            end = Offset(size.width * 0.78f, top),
-            strokeWidth = 1.4.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
+        val stroke = 1.4.dp.toPx()
+        drawLine(Tokens.COLOR.ink, Offset(size.width * 0.22f, top), Offset(size.width * 0.5f, bottom), stroke, StrokeCap.Round)
+        drawLine(Tokens.COLOR.ink, Offset(size.width * 0.5f, bottom), Offset(size.width * 0.78f, top), stroke, StrokeCap.Round)
     }
 }
 
-private fun performWatchHaptic(view: android.view.View, haptic: TiltPosterParallaxHaptic) {
-    val constant = if (haptic == TiltPosterParallaxHaptic.Save) {
-        HapticFeedbackConstants.LONG_PRESS
-    } else {
-        HapticFeedbackConstants.VIRTUAL_KEY
-    }
+private fun performTiltPosterParallaxWatchHaptic(view: android.view.View, haptic: TiltPosterParallaxHaptic) {
+    val constant = if (haptic == TiltPosterParallaxHaptic.Save) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.VIRTUAL_KEY
     view.performHapticFeedback(constant)
 }

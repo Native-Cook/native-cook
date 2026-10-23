@@ -1,234 +1,161 @@
 package com.ngocdevv.nativecook.blocks.gestures.giftslotdrop
 
-/** Token values mirrored from the approved React Native Gift Slot Drop block. */
-object Tokens {
-    const val DESIGN_WIDTH = 402f
-    const val MAX_FRAME_SECONDS = 0.1f
+/** Exact design and motion tokens from the approved React Native block. */
+internal object GiftSlotDropTokens {
+    const val MAX_FRAME_SECONDS = 0.064f
 
-    object COLORS {
-        const val stage = "#605133"
-        const val stageEdge = "#302816"
-        const val floor = "#332A13"
-        const val floorLow = "#2D2511"
-        const val floorLine = "rgba(255,240,190,0.08)"
-        const val pocket = "#251902"
-        const val pocketFade = "rgba(37,25,2,0)"
-        const val pocketLow = "#4F3803"
-        const val ink = "#FFFFFF"
-        const val mute = "#B9B3A0"
-        const val hint = "#CFCABB"
-        const val hueTint = 0.05f
-        const val stageWarm = 0.3f
-        const val stageWarmInk = "#E07A2A"
-        const val pocketLight = "rgba(255,224,60,1)"
-        const val glowCore = "#F7B812"
-        const val cardLift = 0.2f
-        const val offerWarm = "rgba(214,200,140,0.28)"
-        val cardShade = floatArrayOf(0.2f, 0.25f)
-        const val cardShadeInk = "#8A4C00"
-        const val yellow = "#FFD23F"
-        const val yellowDeep = "#F2A900"
-        const val outline = "rgba(255,255,255,0.42)"
-        const val button = "#FCD43C"
-        const val buttonInk = "#2A2112"
-        const val step = "#D8D3C4"
+    object Color {
+        const val page = "#0D0B09"
+        const val ink = "#F6F2EC"
+        const val mute = "#94F6F2EC"
+        const val faint = "#5CF6F2EC"
+        const val amber = "#FFB54A"
+        const val amberInk = "#FFD08A"
+        const val slotDeep = "#050403"
+        const val lip = "#8CFFECC8"
+        const val button = "#F6F2EC"
+        const val buttonInk = "#16120D"
     }
 
-    object SPACE {
-        const val xs = 4f
-        const val sm = 8f
-        const val md = 12f
-        const val lg = 16f
-        const val xl = 20f
-        const val xxl = 24f
-        const val gutter = 28f
-    }
-
-    object LAYOUT {
-        const val headerTop = 63f
-        const val offerHeaderTop = 25f
-        const val headerLeft = 14f
-        const val headerRight = 50f
-        const val giftY = 144f
-        const val giftDx = -2.5f
-        const val giftSize = 47f
-        const val titleY = 214f
-        const val titleSize = 25.5f
-        const val titleLine = 34f
-        const val cardY = 427f
-        const val cardW = 158f
-        const val cardH = 206f
-        const val cardR = 12f
-        const val spacing = 172f
-        const val turnDeg = 42f
-        const val sideScale = 1f
-        const val chevronY = 605f
-        const val pocketW = 180f
-        const val pocketTop = 634f
-        const val floorY = 669f
-        const val slotY = 678f
-        const val slotW = 170f
-        const val slotH = 24f
-        const val glowDrop = 21f
-        const val glowTop = -14f
-        const val glowH = 92f
-        const val pocketDepth = 28f
-        const val hintY = 764.5f
-        const val offerY = 366f
-        const val offerW = 292f
-        const val offerH = 505f
-        const val howTop = 669f
-        const val stepTop = 716f
-        const val buttonTop = 780f
-        const val buttonH = 60f
-        const val buttonW = 357f
-        const val headerH = 44f
-        const val headerHitSlop = 12f
-        const val cardHitSlop = 12f
-        const val offerRadius = 14f
-        const val detailsRight = 24f
-        const val detailRise = 12f
-        const val closeRise = 24f
-        const val closeScale = 0.06f
-    }
-
-    object TYPE {
-        const val header = 14f
-        const val hint = 17.8f
-        const val cardMark = 12f
-        const val cardHeadline = 30f
-        const val cardLine = 15f
-        const val offerHeadline = 52f
-        const val offerLine = 28f
-        const val offerSmall = 15f
-        const val offerMark = 20f
-        const val howTitle = 17.3f
-        const val stepNumber = 40f
-        const val stepText = 18.4f
-        const val stepLine = 24f
+    object Type {
+        const val eyebrow = 11f
+        const val title = 28f
+        const val nav = 15f
+        const val hint = 13f
+        const val mark = 14f
+        const val offer = 54f
+        const val offerLine = 15f
+        const val cap = 13f
+        const val tag = 10f
+        const val codeLabel = 11f
+        const val code = 22f
+        const val step = 15f
+        const val stepNum = 13f
         const val button = 16f
     }
 
-    object DRAW {
-        const val perspective = 700f
-        const val frameOuterInset = 7f
-        const val frameInnerInset = 6f
-        const val frameOuterStroke = 6f
-        const val frameInnerStroke = 3f
-        const val frameOuterAlpha = 0.55f
-        const val frameFadePull = 60f
-        const val stageGlowWidth = 400f
-        const val stageGlowHeight = 440f
-        const val stageGlowTop = 207f
-        const val slotHaloInsetX = 24f
-        const val slotHaloInsetY = 10f
-        const val slotHaloExtraH = 26f
-        const val slotHaloAlpha = 0.2f
-        const val slotGlowAlpha = 0.72f
-        const val chevronHalfW = 11.5f
-        const val chevronTop = -7.5f
-        const val chevronMid = 1f
-        const val chevronSecondTop = 2.5f
-        const val chevronBottom = 11f
-        const val chevronStroke = 2f
-        const val placeholderStroke = 1.2f
-        const val cardWordmarkY = 37f
-        const val cardHeadlineY = 94f
-        const val cardLineY = 111f
-        const val cardCapY = 129f
-        const val cardBottomLineY = 34f
-        const val cardBottomCapY = 15f
-        const val offerWordmarkY = 54f
-        const val offerPercentY = -44f
-        const val offerLineY = -2f
-        const val offerUseFirstY = 62f
-        const val offerUseSecondY = 82f
-        const val offerExpiryInset = 46f
-        const val offerWordmarkScale = 1.4f
-        const val pocketRadius = 16f
-        const val confettiHalfW = 5f
-        const val confettiHalfH = 2.6f
-        const val confettiMinHalfH = 0.5f
+    object Layout {
+        const val edge = 16f
+        const val eyebrowY = 70f
+        const val titleY = 106f
+        const val titleLine = 34f
+        const val cardY = 356f
+        const val cardW = 212f
+        const val cardH = 272f
+        const val cardR = 22f
+        const val sideScale = 0.84f
+        const val sideTurn = 20f
+        const val gap = 16f
+        const val shelfY = 612f
+        const val shelfW = 304f
+        const val shelfH = 64f
+        const val slotW = 236f
+        const val slotH = 12f
+        const val hintY = 548f
+        const val giftW = 248f
+        const val giftH = 318f
+        const val giftY = 330f
+        const val stepsY = 522f
+        const val buttonH = 52f
     }
 
-    data class Gift(val id: String, val name: String, val wordmark: String, val headline: String, val line: String, val cap: String, val use: String, val expires: String, val ink: String, val glow: String)
-
-    val GIFTS = listOf(
-        Gift("white", "Loomwell", "loomwell", "50%", "cashback", "up to \$20", "Use AERO Pay at Loomwell", "Expires on 27 Nov", "#22201C", "#E9E4DA"),
-        Gift("parcels", "Nimbus", "nimbus", "50%", "cashback", "up to \$25", "Use AERO Pay to shop on Nimbus", "Expires on 27 Nov", "#1A2433", "#9CCADC"),
-        Gift("burger", "Bunbox", "BUNBOX", "50%", "cashback", "up to \$10", "Order on Bunbox and pay with AERO Pay", "Expires on 27 Nov", "#FFFFFF", "#E8612A"),
-        Gift("red", "Volta", "volta", "50%", "cashback on", "mobile recharge", "Recharge your Volta number with AERO Pay", "Expires on 27 Nov", "#FFFFFF", "#D9141C"),
+    data class Gift(
+        val id: String,
+        val shop: String,
+        val kind: String,
+        val offer: String,
+        val line: String,
+        val cap: String,
+        val code: String,
+        val steps: List<String>,
+        val action: String,
+        val background: String,
+        val backgroundEnd: String,
+        val ink: String,
+        val sub: String,
+        val mark: GiftSlotDropMark,
     )
-    const val START_INDEX = 2
 
-    object DRAG {
+    val gifts = listOf(
+        Gift("kiln", "Kiln & Clay", "studio ceramics", "20%", "off your first order", "up to \$30", "KILN-20-H7QM", listOf("Add pieces worth \$40 or more", "Paste the code at checkout"), "Shop Kiln & Clay", "#B9573A", "#8E3B24", "#FFF4EA", "#B8FFF4EA", GiftSlotDropMark.Bowl),
+        Gift("northline", "Northline", "rail tickets", "\$15", "off your first trip", "any route, any day", "NORTH-15-K4QZ", listOf("Book any single or return", "Paste the code before paying"), "Book with Northline", "#1F4D40", "#123128", "#EAF4EE", "#B3EAF4EE", GiftSlotDropMark.Rails),
+        Gift("fernhouse", "Fernhouse", "houseplants", "2 for 1", "on any houseplant", "pots included", "FERN-241-P2LD", listOf("Pick two plants, pay for one", "Paste the code at checkout"), "Shop Fernhouse", "#EDE6D6", "#D9CFB9", "#1F2A22", "#A81F2A22", GiftSlotDropMark.Leaf),
+        Gift("ember", "Ember Roasters", "coffee", "Free", "flat white for a week", "one a day, 7 days", "EMBER-7-W9TB", listOf("Show the code at the counter", "One flat white a day, 7 days"), "Find a café", "#2C1E17", "#1A110C", "#F1D9BC", "#A8F1D9BC", GiftSlotDropMark.Bean),
+    )
+    const val START_INDEX = 1
+
+    object Drag {
         const val decide = 8f
-        const val commit = 170f
-        const val full = 250f
-        const val minScale = 0.92f
-        const val leanDeg = 64f
+        const val commit = 150f
+        const val full = 210f
+        const val minScale = 0.8f
+        const val leanDeg = 46f
         const val lift = 1.03f
         const val upResist = 0.2f
+        const val sideResist = 0.25f
         const val swipeVelocity = 600f
     }
-    data class Spring(val stiffness: Float, val damping: Float, val mass: Float)
-    val SPRINGS = mapOf(
-        "snap" to Spring(260f, 28f, 1f),
-        "back" to Spring(320f, 26f, 1f),
-        "centre" to Spring(420f, 30f, 0.8f),
-        "rise" to Spring(170f, 20f, 1f),
-        "lift" to Spring(500f, 30f, 0.6f),
-    )
 
-    const val insertCentreMs = 160L
-    const val insertSinkMs = 300L
-    const val insertSinkEaseX1 = 0.77f
-    const val insertSinkEaseY1 = 0f
-    const val insertSinkEaseX2 = 0.175f
-    const val insertSinkEaseY2 = 1f
-    const val insertFlashMs = 420L
-    const val activateMs = 1150L
-    const val activateDotMs = 280L
-    const val printFeeds = 3
-    const val printFeedShare = 0.22f
-    const val printFeedMs = 260L
-    const val printFeedGap = 90L
-    const val printFeedEaseBack = 1.6f
-    const val printStartScale = 0.44f
-    const val printRollMs = 900L
-    const val printDetailsDelay = 280L
-    const val printStagger = 60L
-    const val printConfetti = 72
-    const val printConfettiLife = 1.6f
-    const val printGravity = 820f
-    const val ambientFloatPt = 3f
-    const val ambientFloatMs = 3000L
-    const val ambientRollPerPt = 0.08f
-    const val ambientRollMax = 7f
-    const val ambientBand = 0.4f
-    const val ambientBandMs = 6000L
-    const val ambientSlotBreathMs = 2400L
-    const val chevronBobPt = 4f
-    const val chevronBobMs = 1400L
-    const val chevronGap = 18f
-    const val closeMs = 260L
-    const val closeEaseX1 = 0.23f
-    const val closeEaseY1 = 1f
-    const val closeEaseX2 = 0.32f
-    const val closeEaseY2 = 1f
-    const val closeReturnMs = 420L
-    const val buttonScale = 0.97f
-    const val buttonInMs = 100L
-    const val buttonOutMs = 160L
-    const val reducedMs = 200L
-    const val LOOP_MS = 15000L
-    const val resumeAfterMs = 3500L
-    const val touchResumeAfterMs = 2000L
-    data class Swipe(val at: Long, val ms: Long, val dx: Float)
-    val scriptSwipes = listOf(Swipe(1000L, 450L, 200f), Swipe(12700L, 450L, -200f))
-    const val scriptPullDown = 2400L
-    const val scriptPullUp = 3450L
-    const val scriptPullBy = 252f
-    const val scriptDone = 11000L
-    val QA_HOLD_AT: Long? = null
+    data class Spring(val durationMs: Float, val dampingRatio: Float)
+
+    val snapSpring = Spring(420f, 0.86f)
+    val backSpring = Spring(380f, 0.8f)
+    val liftSpring = Spring(200f, 1f)
+
+    object Sequence {
+        const val sink = 380f
+        const val read = 1_000f
+        const val rise = 700f
+        const val pause = 140f
+        const val flip = 560f
+        const val stagger = 60f
+        const val detailsIn = 260f
+    }
+
+    object Close {
+        const val out = 220f
+        const val back = 420f
+    }
+
+    object Title {
+        const val out = 140f
+        const val inside = 220f
+        const val rise = 6f
+    }
+
+    const val REDUCED_MS = 200f
+    const val LOOP_MS = 10_000L
+    const val RESUME_MS = 2_000f
+    val scriptSwipes = listOf(
+        GiftSlotDropScriptSwipe(500f, 460f, -220f),
+        GiftSlotDropScriptSwipe(8_950f, 460f, 220f),
+    )
+    const val scriptPullDown = 1_450f
+    const val scriptPullUp = 2_500f
+    const val scriptPullBy = 196f
+    const val scriptDone = 7_900f
+}
+
+internal enum class GiftSlotDropMark { Bowl, Rails, Leaf, Bean }
+
+internal data class GiftSlotDropScriptSwipe(val at: Float, val duration: Float, val deltaX: Float)
+
+internal data class GiftSlotDropLayout(
+    val width: Float,
+    val height: Float,
+    val top: Float,
+    val bottom: Float,
+) {
+    val centerX = width / 2f
+    val cardY = top + GiftSlotDropTokens.Layout.cardY
+    val spacing = GiftSlotDropTokens.Layout.cardW / 2f +
+        GiftSlotDropTokens.Layout.cardW * GiftSlotDropTokens.Layout.sideScale / 2f +
+        GiftSlotDropTokens.Layout.gap
+    val slotY = top + GiftSlotDropTokens.Layout.shelfY
+    val hintY = top + GiftSlotDropTokens.Layout.hintY
+    val giftY = top + GiftSlotDropTokens.Layout.giftY
+    val stepsY = top + GiftSlotDropTokens.Layout.stepsY
+    val buttonY = height - maxOf(bottom, GiftSlotDropTokens.Layout.edge) - 8f - GiftSlotDropTokens.Layout.buttonH
+    val dotsY = top + GiftSlotDropTokens.Layout.shelfY + 76f
+    val printY = height - maxOf(bottom, GiftSlotDropTokens.Layout.edge) - 20f
 }

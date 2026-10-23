@@ -3,8 +3,9 @@ package com.ngocdevv.nativecook.blocks.gestures.pinchtosummarize
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -34,7 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.pow
 
 internal enum class PtsMode {
     Reading,
@@ -43,11 +43,12 @@ internal enum class PtsMode {
 }
 
 internal enum class PtsHaptic {
-    Armed,
-    Disarmed,
-    Land,
+    Lock,
+    Level,
+    Commit,
     Ready,
     Restore,
+    Lift,
 }
 
 private data class PtsPinchState(
@@ -98,13 +99,20 @@ internal class PtsState(
     val clock = Animatable(0f)
     val rim = Animatable(0f)
     val reveal = Animatable(0f)
-    val summaryAlpha = Animatable(0f)
+    val summaryAlpha = Animatable(1f)
+    val mark = Animatable(0f)
+    val markAlpha = Animatable(1f)
+    val dim = Animatable(0f)
+    val wait = Animatable(0f)
+    val depthAlpha = Animatable(0f)
+    val levelPos = Animatable(0f)
     val bloomAt = Animatable(-1f)
     val fingerAX = Animatable(0f)
     val fingerAY = Animatable(0f)
     val fingerBX = Animatable(0f)
     val fingerBY = Animatable(0f)
     val fingerAlpha = Animatable(0f)
+    val readScroll = Animatable(0f)
 
     var mode by mutableStateOf(PtsMode.Reading)
         private set
@@ -112,21 +120,27 @@ internal class PtsState(
     var isScrollLocked by mutableStateOf(false)
         private set
 
-    val summaryText: String = buildString {
-        append(PtsCopy.lead)
-        for (item in PtsCopy.items) {
-            append(' ')
-            append(item.title)
-            append(": ")
-            append(item.body)
+    var level by mutableStateOf(0)
+        private set
+
+    val summaryText: String
+        get() = buildString {
+            append(PtsCopy.levels[level].lead)
+            for (index in PtsCopy.levels[level].points) {
+                val item = PtsCopy.items[index]
+                append(' ')
+                append(item.title)
+                append(": ")
+                append(item.body)
+            }
         }
-    }
 
     private var stage = PtsStage(width = 1f, height = 1f, insetTop = 0f)
     private var ready = false
     private var autoPlay = true
     private var reduceMotion = false
     private var revealTotal = 0f
+    private var savedScroll = 0f
     private var jobToken = 0
     private var pinchState = PtsPinchState()
     private val script = PtsScriptState()
@@ -151,6 +165,10 @@ internal class PtsState(
         this.ready = ready
     }
 
+    fun updateRevealTotal(value: Float) {
+        revealTotal = value
+    }
+
     fun requestSummary() {
         launchMotion {
             touch(down = false)
@@ -162,6 +180,15 @@ internal class PtsState(
         launchMotion {
             touch(down = false)
             if (mode != PtsMode.Reading) restore(velocity = 0f, scripted = false)
+        }
+    }
+
+    fun requestSource(source: Int) {
+        val sourceY = listOf(790f, 912f, 1_040f, 1_160f).getOrElse(source) { 790f }
+        val target = (sourceY - stage.height * .38f).coerceAtLeast(0f)
+        launchMotion {
+            touch(down = false)
+            if (mode != PtsMode.Reading) restore(velocity = 0f, scripted = false, targetScroll = target)
         }
     }
 
@@ -191,9 +218,6 @@ internal class PtsState(
     private suspend fun arrive(token: Int, scripted: Boolean) {
         if (jobToken != token || mode != PtsMode.Thinking) return
         changeMode(PtsMode.Summary)
-        buzz(PtsHaptic.Ready, scripted)
-        if (!reduceMotion) bloomAt.snapTo(clock.value)
-
         launchMotion {
             if (reduceMotion) rim.snapTo(0f)
             else rim.animateTo(0f, ptsTween(PtsTiming.rimOut))
@@ -201,12 +225,23 @@ internal class PtsState(
         launchMotion {
             think.animateTo(
                 targetValue = 0f,
-                animationSpec = ptsTween(if (reduceMotion) PtsTiming.reducedFade else PtsTiming.rimOut),
+                animationSpec = ptsTween(if (reduceMotion) PtsTiming.reducedFade else PtsFlight.landMs),
             )
+            buzz(PtsHaptic.Ready, scripted)
+            if (!reduceMotion) bloomAt.snapTo(clock.value)
         }
         launchMotion {
             if (reduceMotion) lift.snapTo(1f)
             else lift.animateTo(1f, ptsSpring(PtsSpring.lift))
+        }
+        if (!reduceMotion) {
+            launchMotion { p.animateTo(1f, ptsSpring(PtsSpring.collapse)) }
+            launchMotion {
+                readScroll.animateTo(
+                    0f,
+                    tween(PtsFlight.scrollMs.toInt(), easing = ptsInOutEasing),
+                )
+            }
         }
         summaryAlpha.snapTo(1f)
         reveal.snapTo(0f)
@@ -229,12 +264,26 @@ internal class PtsState(
         thinkJob?.cancel()
         val token = ++jobToken
         changeMode(PtsMode.Thinking)
+        buzz(PtsHaptic.Commit, scripted)
         isScrollLocked = true
+        savedScroll = readScroll.value
         driftX.stop()
         driftY.stop()
         launchMotion { driftX.animateTo(0f, ptsSpring(PtsSpring.drift)) }
         launchMotion { driftY.animateTo(0f, ptsSpring(PtsSpring.drift)) }
 
+        wait.snapTo(0f)
+        launchMotion {
+            mark.animateTo(
+                PtsMark.count.toFloat(),
+                tween(
+                    ((PtsMark.count - mark.value).coerceAtLeast(0f) * PtsMark.autoLockMs).toInt(),
+                    easing = LinearEasing,
+                ),
+            )
+        }
+        launchMotion { dim.animateTo(PtsMark.dimMax, ptsTween(PtsTiming.thinkIn)) }
+        launchMotion { depthAlpha.animateTo(0f, ptsTween(160)) }
         if (reduceMotion) {
             lift.snapTo(1f)
             launchMotion {
@@ -244,15 +293,15 @@ internal class PtsState(
             }
         } else {
             lift.snapTo(0f)
+            val hold = p.value.coerceIn(PtsHold.min, PtsHold.max)
             launchMotion {
                 try {
                     val releaseVelocity = -velocity * PtsPinch.velocityToProgress
                     p.animateTo(
-                        targetValue = 1f,
-                        animationSpec = ptsSpring(PtsSpring.collapse, releaseVelocity),
+                        targetValue = hold,
+                        animationSpec = ptsSpring(PtsSpring.hold, releaseVelocity),
                         initialVelocity = releaseVelocity,
                     )
-                    buzz(PtsHaptic.Land, scripted)
                 } catch (_: CancellationException) {
                     // A new pinch owns the value now.
                 }
@@ -265,7 +314,7 @@ internal class PtsState(
         thinkJob = launchMotion {
             try {
                 think.animateTo(1f, ptsTween(PtsTiming.thinkIn))
-                delay((PtsTiming.thinkMs - PtsTiming.thinkIn).toLong())
+                wait.animateTo(PtsTiming.thinkMs.toFloat(), tween(PtsTiming.thinkMs.toInt(), easing = LinearEasing))
                 if (jobToken != token || mode != PtsMode.Thinking) return@launchMotion
                 think.animateTo(1f, ptsTween(PtsTiming.tick))
                 if (QA_HOLD != "a") arrive(token, scripted)
@@ -275,7 +324,7 @@ internal class PtsState(
         }
     }
 
-    private suspend fun restore(velocity: Float, scripted: Boolean) {
+    private suspend fun restore(velocity: Float, scripted: Boolean, targetScroll: Float? = null) {
         thinkJob?.cancel()
         thinkJob = null
         ++jobToken
@@ -287,8 +336,22 @@ internal class PtsState(
         launchMotion {
             summaryAlpha.animateTo(0f, ptsTween(PtsTiming.reducedFade))
         }
+        launchMotion { dim.animateTo(0f, ptsTween(PtsTiming.reducedFade)) }
+        launchMotion { wait.animateTo(0f, ptsTween(PtsTiming.reducedFade)) }
+        launchMotion {
+            markAlpha.animateTo(1f, ptsTween(PtsMark.fadeDelay))
+            markAlpha.animateTo(0f, ptsTween(PtsMark.fadeMs))
+            mark.snapTo(0f)
+            markAlpha.snapTo(1f)
+        }
         launchMotion { driftX.animateTo(0f, ptsSpring(PtsSpring.drift)) }
         launchMotion { driftY.animateTo(0f, ptsSpring(PtsSpring.drift)) }
+        launchMotion {
+            readScroll.animateTo(
+                targetScroll ?: savedScroll,
+                tween(PtsFlight.scrollMs.toInt(), easing = ptsInOutEasing),
+            )
+        }
 
         if (reduceMotion) {
             rim.snapTo(0f)
@@ -343,7 +406,15 @@ internal class PtsState(
             track = p.value,
             scripted = scripted,
         )
-        if (!pinchState.out) isScrollLocked = true
+        if (!pinchState.out) {
+            isScrollLocked = true
+            mark.stop()
+            mark.snapTo(0f)
+            markAlpha.snapTo(1f)
+            dim.snapTo(0f)
+            level = 0
+            levelPos.snapTo(0f)
+        }
     }
 
     internal suspend fun pinchMove(scale: Float, focalX: Float, focalY: Float) {
@@ -356,22 +427,37 @@ internal class PtsState(
         }
         val track = ptsRubber(raw)
         val armed = if (gesture.out) track < PtsPinch.restoreAt else track > PtsPinch.commitAt
-        if (armed != gesture.armed) {
-            buzz(if (armed) PtsHaptic.Armed else PtsHaptic.Disarmed, gesture.scripted)
-        }
         pinchState = gesture.copy(track = track, armed = armed)
+        if (!gesture.out) {
+            val progress = ptsClamp01(track / PtsMark.span)
+            val nextMark = (progress / PtsMark.step).coerceAtMost(PtsMark.count.toFloat())
+            val oldLocked = mark.value.toInt()
+            val newLocked = nextMark.toInt()
+            if (newLocked > oldLocked) buzz(PtsHaptic.Lock, gesture.scripted)
+            mark.snapTo(if (reduceMotion) newLocked.toFloat() else nextMark)
+            dim.snapTo(progress * PtsMark.dimMax)
+            val wanted = when {
+                track > PtsDepth.tldr -> 2
+                track > PtsDepth.brief -> 1
+                else -> 0
+            }
+            if (wanted != level) {
+                val edge = if (maxOf(wanted, level) == 2) PtsDepth.tldr else PtsDepth.brief
+                if (abs(track - edge) >= PtsDepth.hysteresis) {
+                    level = wanted
+                    levelPos.snapTo(wanted.toFloat())
+                    buzz(PtsHaptic.Level, gesture.scripted)
+                }
+            }
+            depthAlpha.snapTo(ptsClamp01((track - PtsDepth.showFrom) / PtsDepth.showSpan))
+        }
+        if (gesture.out) summaryAlpha.snapTo(ptsMix(1f, .5f, ptsClamp01((1f - track) / (1f - PtsPinch.restoreAt))))
         if (reduceMotion) return
 
         p.snapTo(track)
         driftX.snapTo((focalX - gesture.focalX) * PtsPinch.follow)
         driftY.snapTo((focalY - gesture.focalY) * PtsPinch.follow)
         if (gesture.out) {
-            summaryAlpha.snapTo(
-                ptsClamp01(
-                    (track - PtsPinch.restoreAt) /
-                        (PtsTiming.summaryOutStart - PtsPinch.restoreAt),
-                ),
-            )
             rim.snapTo(if (armed) PtsRim.pinchMax + PtsRim.armedBoost else 0f)
         } else {
             rim.snapTo(
@@ -406,6 +492,12 @@ internal class PtsState(
                 }
                 launchMotion { driftX.animateTo(0f, ptsSpring(PtsSpring.drift)) }
                 launchMotion { driftY.animateTo(0f, ptsSpring(PtsSpring.drift)) }
+                launchMotion { dim.animateTo(0f, ptsTween(PtsMark.cancelMs)) }
+                launchMotion {
+                    markAlpha.animateTo(0f, ptsTween(PtsMark.cancelMs))
+                    mark.snapTo(0f)
+                    markAlpha.snapTo(1f)
+                }
             }
             return
         }
@@ -464,6 +556,20 @@ internal class PtsState(
 
     private suspend fun runScript(deltaMs: Float) {
         val time = script.time
+        val readY = when {
+            time < PtsAutoplay.readStart -> 0f
+            time < PtsAutoplay.readStart + PtsAutoplay.readMs -> {
+                val u = ptsEase((time - PtsAutoplay.readStart) / PtsAutoplay.readMs)
+                PtsAutoplay.readTarget * u
+            }
+            time < PtsAutoplay.topStart -> PtsAutoplay.readTarget
+            time < PtsAutoplay.topStart + PtsAutoplay.topMs -> {
+                val u = ptsEase((time - PtsAutoplay.topStart) / PtsAutoplay.topMs)
+                PtsAutoplay.readTarget * (1f - u)
+            }
+            else -> 0f
+        }
+        if (mode == PtsMode.Reading) readScroll.snapTo(readY)
         val inPinch = time >= PtsAutoplay.pinchInStart.toFloat() &&
             time < PtsAutoplay.pinchInEnd.toFloat()
         val outPinch = time >= PtsAutoplay.pinchOutStart.toFloat() &&
@@ -522,6 +628,7 @@ internal class PtsState(
         if (next >= LOOP.toFloat()) {
             next -= LOOP.toFloat()
             clock.snapTo(0f)
+            readScroll.snapTo(0f)
         }
         script.time = next
         script.segment = segment
@@ -546,9 +653,7 @@ internal class PtsState(
                 script.quiet = if (script.realDown) 0f else script.quiet + deltaMs
                 val settledAtArticle = mode == PtsMode.Reading && !pinchState.active && abs(p.value) < 0.002f
 
-                // The RN token remains 3,500 ms for fidelity documentation. This port intentionally
-                // applies the owner's 2,000 ms idle policy, eases back to rest, then restarts at t=0.
-                if (!script.returningToRest && script.quiet >= TOUCH_IDLE_RESUME_MS) {
+                if (!script.returningToRest && script.quiet >= PtsAutoplay.resumeDelayMs) {
                     script.returningToRest = true
                     if (mode != PtsMode.Reading || !settledAtArticle) {
                         restore(velocity = 0f, scripted = true)
@@ -601,18 +706,20 @@ internal fun Modifier.ptsGestures(state: PtsState): Modifier = composed {
         state.installFeedback(
             haptic = { kind ->
                 val feedback = when (kind) {
-                    PtsHaptic.Armed,
-                    PtsHaptic.Disarmed,
+                    PtsHaptic.Lock,
+                    PtsHaptic.Level,
                     -> HapticFeedbackConstants.CLOCK_TICK
 
-                    PtsHaptic.Land -> HapticFeedbackConstants.CONTEXT_CLICK
+                    PtsHaptic.Commit -> HapticFeedbackConstants.CONTEXT_CLICK
                     PtsHaptic.Ready -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         HapticFeedbackConstants.CONFIRM
                     } else {
                         HapticFeedbackConstants.CONTEXT_CLICK
                     }
 
-                    PtsHaptic.Restore -> HapticFeedbackConstants.VIRTUAL_KEY
+                    PtsHaptic.Restore,
+                    PtsHaptic.Lift,
+                    -> HapticFeedbackConstants.VIRTUAL_KEY
                 }
                 view.performHapticFeedback(feedback)
             },
@@ -713,8 +820,6 @@ internal fun Modifier.ptsGestures(state: PtsState): Modifier = composed {
     }
 }
 
-private const val TOUCH_IDLE_RESUME_MS = 2_000f
-
 private fun ptsBand(over: Float): Float =
     (over * PtsPinch.rubber) / (1f + PtsPinch.rubber * abs(over))
 
@@ -728,21 +833,14 @@ private fun ptsProject(velocity: Float): Float =
     ((velocity / 1_000f) * PtsPinch.deceleration) / (1f - PtsPinch.deceleration)
 
 private fun ptsEase(value: Float): Float {
-    val t = ptsClamp01(value)
-    return if (t < 0.5f) {
-        4f * t * t * t
-    } else {
-        1f - (-2f * t + 2f).pow(3) / 2f
-    }
+    return ptsInOutEasing.transform(ptsClamp01(value))
 }
 
-private val ptsTimingEasing = Easing { fraction ->
-    if (fraction < 0.5f) {
-        2f * fraction * fraction
-    } else {
-        1f - (-2f * fraction + 2f).pow(2) / 2f
-    }
-}
+private val ptsTimingEasing = CubicBezierEasing(.23f, 1f, .32f, 1f)
+private val ptsInOutEasing = CubicBezierEasing(.77f, 0f, .175f, 1f)
+private val ptsSheetEasing = CubicBezierEasing(.32f, .72f, 0f, 1f)
+
+internal fun ptsSheetEase(value: Float): Float = ptsSheetEasing.transform(ptsClamp01(value))
 
 private fun ptsTween(durationMillis: Number) = tween<Float>(
     durationMillis = durationMillis.toInt(),
@@ -752,4 +850,7 @@ private fun ptsTween(durationMillis: Number) = tween<Float>(
 private fun ptsSpring(
     config: PtsSpring.Config,
     configuredVelocity: Float = 0f,
-) = PtsEnergySpringSpec(config, configuredVelocity)
+) = spring<Float>(
+    dampingRatio = config.dampingRatio,
+    stiffness = (600_000f / (config.duration * config.duration)).coerceIn(80f, 500f),
+)

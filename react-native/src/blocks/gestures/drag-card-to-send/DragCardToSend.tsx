@@ -1,61 +1,86 @@
 /**
- * Drag Card to Send: pull the card down and the island swells into your contacts; drop the card on a person.
- * Layers, back to front: wallet home, the black island shape, the sheet content, the pill, the card.
+ * Drag Card to Send: pull the card down and the Dynamic Island lets out a drop of liquid that holds the amount, one
+ * detent per step; slide sideways to choose who. Let go: the drop pinches off, falls into that person, and the island
+ * becomes the receipt with Undo while the balance rolls down.
+ * Layers, back to front: wallet home, the card, the liquid, the people (a drop falls behind their faces), the
+ * amount on the drop, the receipt.
  */
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View, useWindowDimensions, type AccessibilityActionEvent } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
-  FadeInUp, FadeOutUp, LinearTransition, useAnimatedStyle, useReducedMotion,
+  ReduceMotion, useAnimatedStyle, useFrameCallback, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnUI } from 'react-native-worklets';
 
-import { bodyAt, clamp01 } from './island-path';
-import { IslandPill, IslandShape } from './Island';
-import { AMBIENT, FADE, PULL } from './motion';
-import { SendSheet } from './SendSheet';
-import { AMOUNTS, COLORS, CONTACTS, DEFAULT_AMOUNT_INDEX, FAVOURITES, LAYOUT, SPACE, START_BALANCE, TRANSACTIONS, TYPE } from './theme';
-import { PHASE, makeGeometry, useSendMotion, type Haptic } from './use-send-motion';
-import { ArrowIcon, WalletCard, formatMoney } from './WalletCard';
+import { DropAmount, IslandLiquid, Receipt, useLiquid, type Subscribe } from './Island';
+import { SEND, easeOut } from './motion';
+import { Activity, Avatar, PeopleRow } from './People';
+import { COLORS, LAYOUT, PEOPLE, PHOTOS, ROWS, START_BALANCE, STEPS, TYPE, formatMoney, makeLayout, type Row } from './theme';
+import { PHASE, useSendMotion, type Haptic } from './use-send-motion';
+import { WalletCard } from './WalletCard';
 
 export type DragCardToSendProps = { autoPlay?: boolean };
 
-const PEOPLE = [...FAVOURITES, ...CONTACTS];
-type Row = { id: string; name: string; date: string; amount: number; kind: 'in' | 'out' };
-
 const HAPTIC: Record<Haptic, () => void> = {
+  tick: () => { void Haptics.selectionAsync(); },
   light: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); },
-  medium: () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); },
-  select: () => { void Haptics.selectionAsync(); },
   success: () => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); },
 };
 
 export function DragCardToSend({ autoPlay = false }: DragCardToSendProps) {
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const reduced = useReducedMotion();
-  // Geometry is fixed per size; remount on a size or Reduce Motion change so the worklets see the new values.
-  return <Wallet key={`${width}x${height}-${reduced}`} width={width} height={height} reduced={reduced} autoPlay={autoPlay} />;
+  // Geometry is fixed per width; remount on a width or Reduce Motion change so the worklets see the new values.
+  return <Wallet key={`${width}-${reduced}`} width={width} reduced={reduced} autoPlay={autoPlay} />;
 }
 
-function Wallet({ width, height, reduced, autoPlay }: { width: number; height: number; reduced: boolean; autoPlay: boolean }) {
-  const geo = useMemo(() => makeGeometry(width, height), [width, height]);
+const A11Y_DEFAULT_STEP = STEPS.indexOf(20);
+
+/**
+ * 0 → 1 once the screen is drawing steadily. The card's Skia canvas paints a few frames after the views do, so on
+ * opening the block its white type would sit bare on the light page; the card waits for this and fades in.
+ */
+function useSteady() {
+  const ready = useSharedValue(0);
+  const count = useSharedValue({ ms: 0, smooth: 0 });
+  useFrameCallback((info) => {
+    if (ready.get() > 0) return;
+    const dt = info.timeSincePreviousFrame ?? 0;
+    const c = count.get();
+    const next = { ms: c.ms + dt, smooth: dt > 0 && dt < 50 ? c.smooth + 1 : 0 };
+    count.set(next);
+    if (next.ms > 200 && next.smooth >= 4) ready.set(withTiming(1, { duration: 180, easing: easeOut, reduceMotion: ReduceMotion.Never }));
+  });
+  return ready;
+}
+
+function Wallet({ width, reduced, autoPlay }: { width: number; reduced: boolean; autoPlay: boolean }) {
+  const lay = useMemo(() => makeLayout(width), [width]);
   const [phase, setPhase] = useState<number>(PHASE.rest);
   const [balance, setBalance] = useState(START_BALANCE);
-  // Quick-send amount; the source's sheet has no amount picker, so it stays the default here.
-  const [amountIndex] = useState(DEFAULT_AMOUNT_INDEX);
-  const [rows, setRows] = useState<Row[]>(TRANSACTIONS.map((t) => ({ ...t })));
-  const [last, setLast] = useState<{ target: number; cents: number } | null>(null);
+  const [rows, setRows] = useState<Row[]>(ROWS);
+  const [last, setLast] = useState<{ person: number; cents: number } | null>(null);
+  const [draft, setDraft] = useState({ step: -1, person: -1 });
+  const [a11yStep, setA11yStep] = useState(A11Y_DEFAULT_STEP);
 
-  // The worklets keep the first callbacks they were given, so the amount is read through a ref.
-  const amountRef = useRef(amountIndex);
-  useEffect(() => { amountRef.current = amountIndex; }, [amountIndex]);
-  const onSent = useCallback((target: number) => {
-    const cents = AMOUNTS[amountRef.current] * 100;
-    setLast({ target, cents });
+  // The drop's amount is its own small component; it listens here instead of re-rendering the whole screen.
+  const listeners = useRef(new Set<(s: number, p: number) => void>());
+  const subscribe = useCallback<Subscribe>((fn) => {
+    listeners.current.add(fn);
+    return () => { listeners.current.delete(fn); };
+  }, []);
+  const onDraft = useCallback((step: number, person: number) => {
+    listeners.current.forEach((fn) => fn(step, person));
+    // The hint keeps the last full choice while the drop falls (the flight ends with a draft of -1 once sent).
+    setDraft((d) => (step < 0 && person >= 0 ? d : { step, person }));
+  }, []);
+  const onSent = useCallback((person: number, cents: number) => {
+    setLast({ person, cents });
     setBalance((b) => b - cents);
-    setRows((r) => [{ id: `s${Date.now()}`, name: PEOPLE[target].name, date: 'Just now', amount: -cents, kind: 'out' }, ...r]);
+    const p = PEOPLE[person];
+    setRows((r) => [{ id: `s${Date.now()}`, name: p.full, meta: 'Just now', cents: -cents, person }, ...r]);
   }, []);
   const onUndo = useCallback(() => {
     setLast((l) => {
@@ -68,14 +93,15 @@ function Wallet({ width, height, reduced, autoPlay }: { width: number; height: n
   }, []);
   const onHaptic = useCallback((kind: Haptic) => HAPTIC[kind](), []);
 
-  const { values: v, input } = useSendMotion(geo, autoPlay, reduced, { onPhase: setPhase, onSent, onUndo, onHaptic });
+  const { values: v, input } = useSendMotion(lay, autoPlay, reduced, { onPhase: setPhase, onDraft, onSent, onUndo, onHaptic });
+  const look = useLiquid(lay, v);
 
   const pan = useMemo(() => Gesture.Pan().minDistance(0).maxPointers(1)
     .onBegin((e) => { input.takeOver(); input.down(e.absoluteX, e.absoluteY, false); })
-    .onUpdate((e) => { input.move(e.absoluteX, e.absoluteY, e.velocityX); })
-    .onFinalize((e) => { input.up(e.velocityX, e.velocityY); input.letGo(); }), [input]);
+    .onUpdate((e) => { input.move(e.absoluteX, e.absoluteY); })
+    .onFinalize((e) => { input.up(e.velocityY, e.absoluteY); input.letGo(); }), [input]);
 
-  // Any tap on a sheet control also stops the script, like a drag does.
+  // Any tap also stops the script, like a drag does.
   const ui = useCallback((fn: () => void) => scheduleOnUI(() => {
     'worklet';
     input.takeOver();
@@ -83,175 +109,82 @@ function Wallet({ width, height, reduced, autoPlay }: { width: number; height: n
     input.letGo();
   }), [input]);
 
-  const sheenStyle = useAnimatedStyle(() => {
-    const drift = reduced ? 0 : Math.sin((2 * Math.PI * v.clock.get()) / AMBIENT.sheenMs) * 0.35;
-    const p = drift + v.tilt.get() * 0.9 + v.sway.get() / 20;
-    return { transform: [{ translateX: p * geo.cardW }, { rotate: '18deg' }] };
-  });
-  const ghostStyle = useAnimatedStyle(() => ({
-    opacity: v.phase.get() === PHASE.pulling ? clamp01(v.cardY.get() / 60) * (1 - clamp01((v.g.get() - 0.95) / 0.2)) : 0,
+  const steady = useSteady();
+  // Reduce Motion keeps the press in the card's light (WalletCard reads `press`) and drops the scale.
+  const pressScale = reduced ? 1 : SEND.pressScale;
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: steady.get(),
+    transform: [{ translateY: v.cardY.get() }, { scale: 1 - (1 - pressScale) * v.press.get() }],
   }));
-  // The header buttons step aside for the growing drop (source frame a: 29 pt each at g 0.66).
-  const spread = (g: number) => {
-    'worklet';
-    const u = clamp01(g / 0.66);
-    return reduced ? 0 : LAYOUT.headerSpread * u * u * (3 - 2 * u);
-  };
-  const spreadL = useAnimatedStyle(() => ({ transform: [{ translateX: -spread(v.g.get()) }] }));
-  const spreadR = useAnimatedStyle(() => ({ transform: [{ translateX: spread(v.g.get()) }] }));
-  // The drop shows a white "send" arrow while it grows (source frame a), gone once it becomes the sheet.
-  const dropArrowStyle = useAnimatedStyle(() => {
-    const g = v.g.get();
-    const b = bodyAt(Math.min(1, g), width, height);
-    return {
-      opacity: reduced ? 0 : PULL.arrow * clamp01(g / 0.4) * (1 - clamp01((g - 0.9) / 0.2)),
-      transform: [{ translateY: b.y + b.h * 0.42 - 12 }],
-    };
-  });
-  const deepStyle = useAnimatedStyle(() => ({ opacity: PULL.deep * clamp01(v.cardY.get() / 263) }));
-  // The pulled card pushes the transactions down with it.
-  // The pushed list also sinks back a little (scale), as the source's does under the pulled card.
-  const listStyle = useAnimatedStyle(() => {
-    const y = v.follow.get() ? 0 : Math.max(0, v.cardY.get());
-    return { transform: [{ translateY: y }, { scale: 1 - PULL.listSink * clamp01(y / 263) }] };
-  });
-  const homeStyle = useAnimatedStyle(() => {
-    const open = reduced ? v.veil.get() : clamp01((v.g.get() - 1) / 0.6);
-    return { opacity: 1 - (1 - FADE.homeDim) * open };
-  });
-  const cardStyle = useAnimatedStyle(() => {
-    const follow = v.follow.get();
-    const s = v.cardScale.get();
-    const tx = follow ? v.fx.get() - v.ox.get() * s - geo.homeCx + v.magX.get() : v.cardX.get();
-    const ty = follow ? v.fy.get() - v.oy.get() * s - geo.homeCy + v.magY.get() : v.cardY.get();
-    const lift = clamp01((1 - s) / (1 - 0.42));
-    return {
-      opacity: v.cardOpacity.get() * (1 - PULL.fade * v.tilt.get()),
-      shadowOpacity: 0.18 + 0.22 * lift,
-      shadowRadius: 18 + 14 * lift,
-      transform: [
-        // Pulling shrinks and fades the card a little (no 3D tilt: iOS would sort half of it behind the page).
-        { translateX: tx }, { translateY: ty }, { rotateZ: `${v.sway.get()}deg` },
-        { scale: s * v.press.get() * (1 - PULL.shrink * v.tilt.get()) },
-      ],
-    };
-  });
 
-  const open = phase === PHASE.docked || phase === PHASE.holding;
-  const person = last ? PEOPLE[last.target] : null;
-  const receipt = last ? formatMoney(last.cents).replace('.00', '') : '';
-  const cardLabel = `AERO card, balance ${formatMoney(balance)}`;
+  const pulling = phase === PHASE.pulling && draft.step >= 0 && draft.person >= 0;
+  const falling = phase === PHASE.falling;
+  const chosen = `$${STEPS[Math.max(0, draft.step)]} to ${PEOPLE[Math.max(0, draft.person)].name}`;
+  const hint = pulling ? `Let go to send ${chosen}` : falling ? `Sending ${chosen}` : 'Pull the card to send';
+
+  const a11yAmount = `$${STEPS[a11yStep]}`;
+  const onA11y = (e: AccessibilityActionEvent) => {
+    const name = e.nativeEvent.actionName;
+    if (name === 'increment') setA11yStep((s) => Math.min(STEPS.length - 1, s + 1));
+    else if (name === 'decrement') setA11yStep((s) => Math.max(0, s - 1));
+    else {
+      const i = PEOPLE.findIndex((p) => p.id === name);
+      const s = a11yStep;
+      if (i >= 0) ui(() => { 'worklet'; input.sendTo(i, s); });
+    }
+  };
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <Animated.View style={[styles.fill, homeStyle]} importantForAccessibility={open ? 'no-hide-descendants' : 'auto'}
-        accessibilityElementsHidden={open}>
-        <View style={[styles.header, { top: LAYOUT.headerCenter - LAYOUT.headerButton / 2, left: LAYOUT.side, right: LAYOUT.side }]}>
-          <Animated.View style={[styles.headerButton, spreadL]} accessible={false}>
-            <View style={styles.grid}>
-              {Array.from({ length: 9 }, (_, i) => <View key={i} style={styles.dot} />)}
-            </View>
-          </Animated.View>
-          <View />
-          <Animated.View style={[styles.headerButton, spreadR]} accessible={false}><ArrowIcon kind="add" color={COLORS.ink} /></Animated.View>
-        </View>
-        <Animated.View style={[StyleSheet.absoluteFill, listStyle]} pointerEvents="box-none">
-        <View style={[styles.listTitle, { top: LAYOUT.listTitleTop, left: LAYOUT.side, right: LAYOUT.side }]}>
-          <View>
-            <Text style={styles.titleLight}>Last</Text>
-            <Text style={styles.titleBold} accessibilityRole="header">Transactions</Text>
-          </View>
-          <View style={[styles.headerButton, styles.titleButton]} accessible={false}><ArrowIcon kind="open" color={COLORS.ink} /></View>
-        </View>
-        <View style={{ position: 'absolute', top: LAYOUT.rowTop, left: LAYOUT.side, right: LAYOUT.side, gap: LAYOUT.rowGap }}>
-          {rows.slice(0, 5).map((r) => (
-            <Animated.View key={r.id} style={styles.row} entering={FadeInUp.duration(320)} exiting={FadeOutUp.duration(200)}
-              layout={LinearTransition.springify().damping(24)} accessible
-              accessibilityLabel={`${r.name}, ${r.date}, ${formatMoney(r.amount)}`}>
-              <View style={styles.rowIcon}><ArrowIcon kind={r.kind === 'out' ? 'rowOut' : 'rowIn'} color={COLORS.ink} size={22} /></View>
-              <View style={styles.rowText}>
-                <Text style={styles.rowName} numberOfLines={1}>{r.name}</Text>
-                <Text style={styles.rowDate}>{r.date}</Text>
-              </View>
-              <Text style={[styles.rowAmount, r.amount > 0 && { color: COLORS.positive }]}>
-                {r.amount > 0 ? '+' : ''}{formatMoney(r.amount)}
-              </Text>
-            </Animated.View>
-          ))}
-        </View>
-        </Animated.View>
-      </Animated.View>
+      <View style={[styles.header, { top: LAYOUT.headerTop }]}>
+        <Text style={[TYPE.largeTitle, styles.ink]} accessibilityRole="header">Wallet</Text>
+        <View accessible accessibilityLabel="Account, Jules Morrow"><Avatar source={PHOTOS.jules} size={LAYOUT.headerAvatar} /></View>
+      </View>
 
-      {/* While pulling, "Drag to send" appears where the card was (source frame a); the list below is pushed down. */}
-      <Animated.Text pointerEvents="none" style={[styles.ghostLabel, { top: LAYOUT.dragLabelTop }, ghostStyle]}>Drag to send</Animated.Text>
-      <IslandShape width={width} height={height} v={v} reduced={reduced} />
-      <Animated.View pointerEvents="none" style={[styles.dropArrow, { left: width / 2 - SPACE.xxl / 2 }, dropArrowStyle]}>
-        <ArrowIcon kind="out" color={COLORS.sheetInk} size={SPACE.xxl} />
-      </Animated.View>
-      <SendSheet geo={geo} v={v} reduced={reduced} interactive={open}
-        onTarget={(i) => ui(() => { 'worklet'; input.select(i); })}
-        onNext={() => ui(() => { 'worklet'; const i = v.hoverIdx.get(); if (i >= 0) input.tapTarget(i); })}
-        onClose={() => ui(() => { 'worklet'; input.close(); })} />
-      <IslandPill width={width} v={v} receipt={receipt} canUndo={phase === PHASE.sent}
-        receiptLabel={person ? `Sent ${formatMoney(last?.cents ?? 0)} to ${person.name}` : ''}
-        onUndo={() => ui(() => { 'worklet'; input.tapUndo(false); })} />
+      <View style={[styles.section, { top: lay.sectionTop }]}>
+        <Text style={[TYPE.section, styles.ink]} accessibilityRole="header">Send to</Text>
+        <Text style={[TYPE.hint, { color: pulling || falling ? COLORS.ink : COLORS.mute }]} accessibilityLiveRegion="polite">{hint}</Text>
+      </View>
+
+      <View style={[styles.section, { top: lay.activityTop }]}>
+        <Text style={[TYPE.section, styles.ink]} accessibilityRole="header">Activity</Text>
+        <Text style={[TYPE.hint, styles.link]} accessibilityRole="link">See all</Text>
+      </View>
+      <Activity rows={rows} top={lay.rowTop} reduced={reduced} />
 
       <GestureDetector gesture={pan}>
-        <Animated.View pointerEvents={phase === PHASE.docked ? 'none' : 'auto'}
-          style={[styles.card, { top: LAYOUT.cardTop, left: LAYOUT.side, width: geo.cardW }, cardStyle]}
-          accessible accessibilityRole="button" accessibilityLabel={cardLabel}
-          accessibilityHint={open ? undefined : 'Pull down to choose who to send money to'}
-          accessibilityActions={[{ name: 'activate', label: 'Send money' }]}
-          onAccessibilityAction={() => ui(() => { 'worklet'; input.openSheet(); })}>
-          <WalletCard width={geo.cardW} cents={balance}>
-            {/* Lifted off the page, the card falls out of its light and reads deeper blue (source frame a). */}
-            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.deep, deepStyle]} />
-            {/* Specular sheen: drifts slowly at rest, follows the pull and the token's sway. */}
-            <Animated.View pointerEvents="none" style={[styles.sheen, sheenStyle]}>
-              <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0)']}
-                start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 0.8 }} style={StyleSheet.absoluteFill} />
-            </Animated.View>
-          </WalletCard>
+        <Animated.View style={[styles.card, { top: lay.cardTop, width: lay.cardW, height: lay.cardH }, cardStyle]}
+          accessible accessibilityRole="adjustable"
+          accessibilityLabel={`Cove card, balance ${formatMoney(balance)}`}
+          accessibilityValue={{ text: `Amount ${a11yAmount}` }}
+          accessibilityHint="Pull down to set an amount, slide sideways to choose a person, and let go to send"
+          accessibilityActions={[
+            { name: 'increment' }, { name: 'decrement' },
+            ...PEOPLE.map((p) => ({ name: p.id, label: `Send ${a11yAmount} to ${p.name}` })),
+          ]}
+          onAccessibilityAction={onA11y}>
+          <WalletCard width={lay.cardW} height={lay.cardH} cents={balance} shift={v.cardY} press={v.press} />
         </Animated.View>
       </GestureDetector>
+
+      <IslandLiquid lay={lay} look={look} />
+      <PeopleRow lay={lay} v={v} reduced={reduced} />
+      <DropAmount look={look} subscribe={subscribe} reduced={reduced} />
+      <Receipt lay={lay} v={v} last={last} canUndo={phase === PHASE.sent} reduced={reduced}
+        onUndo={() => {
+          // The haptic on the tap's own frame; the receipt folds on the UI thread.
+          HAPTIC.light();
+          ui(() => { 'worklet'; input.tapUndo(false); });
+        }} />
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.page },
-  fill: { ...StyleSheet.absoluteFill },
-  header: { position: 'absolute', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerButton: {
-    width: LAYOUT.headerButton, height: LAYOUT.headerButton, borderRadius: LAYOUT.headerButton / 2,
-    backgroundColor: COLORS.headerButton, alignItems: 'center', justifyContent: 'center',
-  },
-  grid: { width: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
-  dot: { width: 3.3, height: 3.3, borderRadius: 1, backgroundColor: COLORS.ink },
-  sheen: { position: 'absolute', top: -60, bottom: -60, left: '20%', width: '45%' },
-  deep: { backgroundColor: COLORS.cardDeep },
-  dropArrow: { position: 'absolute', top: 0, width: SPACE.xxl, height: SPACE.xxl },
-  ghost: { position: 'absolute', height: LAYOUT.cardHeight, borderRadius: LAYOUT.cardRadius, overflow: 'hidden', opacity: 0 },
-  frost: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(220,229,236,0.88)' },
-  ghostLabel: { position: 'absolute', left: 0, right: 0, textAlign: 'center', color: COLORS.mute, fontSize: TYPE.hint, fontWeight: '500' },
-  listTitle: { position: 'absolute', paddingLeft: 2, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  titleLight: { color: COLORS.ink, fontSize: TYPE.title, lineHeight: 26, fontWeight: '400' },
-  titleBold: { color: COLORS.ink, fontSize: TYPE.title, lineHeight: 26, fontWeight: '700', letterSpacing: -0.3 },
-  titleButton: { width: 40, height: 40, borderRadius: 20 },
-  row: {
-    height: LAYOUT.rowHeight, borderRadius: LAYOUT.rowHeight / 2, backgroundColor: COLORS.rowFill,
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10,
-  },
-  rowIcon: {
-    width: LAYOUT.rowIcon, height: LAYOUT.rowIcon, borderRadius: LAYOUT.rowIcon / 2, backgroundColor: COLORS.rowIcon,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  rowText: { flex: 1, marginLeft: 18 },
-  rowName: { color: COLORS.ink, fontSize: TYPE.rowName - 1, fontWeight: '600' },
-  rowDate: { marginTop: 2, color: COLORS.mute, fontSize: TYPE.rowMeta },
-  rowAmount: { marginRight: 0, color: COLORS.ink, fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  card: {
-    position: 'absolute', height: LAYOUT.cardHeight, borderRadius: LAYOUT.cardRadius,
-    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 14 }, elevation: 12,
-  },
+  ink: { color: COLORS.ink },
+  link: { color: COLORS.accent, fontWeight: '500' },
+  header: { position: 'absolute', left: LAYOUT.edge, right: LAYOUT.edge, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  section: { position: 'absolute', left: LAYOUT.edge, right: LAYOUT.edge, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  card: { position: 'absolute', left: LAYOUT.edge },
 });

@@ -4,6 +4,7 @@ import UIKit
 struct TiltPosterParallaxPoster: View {
     let width: CGFloat
     let height: CGFloat
+    let art: TiltPosterParallaxArt
     let tiltX: Double
     let tiltY: Double
     let lift: Double
@@ -16,10 +17,7 @@ struct TiltPosterParallaxPoster: View {
     }
 
     private var scale: CGFloat {
-        CGFloat(
-            lift
-                * (1 + sin(flip * .pi) * TiltPosterParallaxTokens.Flip.rise)
-        )
+        CGFloat(lift * (1 + sin(flip * .pi) * TiltPosterParallaxTokens.Flip.rise))
     }
 
     private var frontOpacity: Double {
@@ -30,7 +28,7 @@ struct TiltPosterParallaxPoster: View {
         ZStack(alignment: .topLeading) {
             posterGroup
                 .frame(width: width, height: height)
-                .scaleEffect(scale, anchor: .top)
+                .scaleEffect(scale)
                 .offset(
                     x: TiltPosterParallaxTokens.Layout.cardMargin,
                     y: TiltPosterParallaxTokens.Layout.cardMargin + floatOffset
@@ -38,7 +36,7 @@ struct TiltPosterParallaxPoster: View {
         }
         .frame(
             width: width + TiltPosterParallaxTokens.Layout.cardMargin * 2,
-            height: height * CGFloat(TiltPosterParallaxTokens.Tilt.lift) + TiltPosterParallaxTokens.Layout.cardMargin * 2,
+            height: height + TiltPosterParallaxTokens.Layout.cardMargin * 2,
             alignment: .topLeading
         )
         .accessibilityHidden(true)
@@ -50,8 +48,15 @@ struct TiltPosterParallaxPoster: View {
             shadow
             edges
             ZStack {
-                TiltPosterParallaxPosterFront(width: width, height: height, tiltX: tiltX, tiltY: tiltY, flip: flip)
-                    .opacity(frontOpacity)
+                TiltPosterParallaxPosterFront(
+                    width: width,
+                    height: height,
+                    art: art,
+                    tiltX: tiltX,
+                    tiltY: tiltY,
+                    flip: flip
+                )
+                .opacity(frontOpacity)
                 TiltPosterParallaxPosterBack(width: width, height: height, tiltX: tiltX, tiltY: tiltY)
                     .scaleEffect(x: reduceMotion ? 1 : -1, y: 1)
                     .opacity(1 - frontOpacity)
@@ -72,15 +77,17 @@ struct TiltPosterParallaxPoster: View {
     }
 
     private var floatOffset: CGFloat {
-        -CGFloat((1 - cos(clock / TiltPosterParallaxTokens.Float.period * .pi * 2)) / 2)
+        guard !reduceMotion else { return 0 }
+        return -CGFloat((1 - cos(clock / TiltPosterParallaxTokens.Float.period * .pi * 2)) / 2)
             * TiltPosterParallaxTokens.Float.amplitude
     }
 
     private var glow: some View {
         let motion = TiltPosterParallaxTokens.Render.self
+        let liftRange = max(TiltPosterParallaxTokens.Tilt.lift - 1, 0.001)
         let opacity = min(
             1,
-            ((lift - 1) / (TiltPosterParallaxTokens.Tilt.lift - 1)) * motion.glowLiftGain
+            ((lift - 1) / liftRange) * motion.glowLiftGain
                 + max(0, abs(tiltX) + abs(tiltY) - motion.glowDeadZone) * motion.glowTiltGain
         )
         return RoundedRectangle(cornerRadius: TiltPosterParallaxTokens.Layout.cardRadius)
@@ -89,11 +96,8 @@ struct TiltPosterParallaxPoster: View {
             .blur(radius: motion.glowBlur)
             .opacity(opacity)
             .offset(
-                x: width * (motion.glowInsetXRatio + motion.glowWidthRatio / 2 - 0.5)
-                    + CGFloat(tiltX) * motion.glowXGain,
-                y: height * (motion.glowInsetYRatio + motion.glowHeightRatio / 2 - 0.5)
-                    + motion.glowRestY
-                    + CGFloat(tiltY) * motion.glowYGain
+                x: width * motion.glowInsetXRatio + CGFloat(tiltX) * motion.glowXGain,
+                y: height * motion.glowInsetYRatio + motion.glowRestY + CGFloat(tiltY) * motion.glowYGain
             )
     }
 
@@ -103,7 +107,7 @@ struct TiltPosterParallaxPoster: View {
         return RoundedRectangle(cornerRadius: TiltPosterParallaxTokens.Layout.cardRadius)
             .fill(TiltPosterParallaxTokens.Palette.shadow)
             .frame(width: width, height: height)
-            .scaleEffect(x: motion.shadowScale * narrow, y: motion.shadowScale)
+            .scaleEffect(x: motion.shadowScaleX * narrow, y: motion.shadowScaleY)
             .blur(radius: motion.shadowBlur)
             .opacity(motion.shadowBaseOpacity + (lift - 1) * motion.shadowLiftGain)
             .offset(
@@ -116,26 +120,26 @@ struct TiltPosterParallaxPoster: View {
         let sine = sin(turn)
         let pitchSine = sin(-tiltY)
         return ZStack {
-            TiltPosterParallaxAssets.edgeSide
-                .resizable()
+            Rectangle()
+                .fill(LinearGradient(colors: TiltPosterParallaxTokens.Palette.edge, startPoint: .leading, endPoint: .trailing))
                 .frame(width: TiltPosterParallaxTokens.Edge.depth, height: height)
                 .offset(x: width / 2)
                 .rotation3DEffect(.degrees(90), axis: (x: 0, y: 1, z: 0))
                 .opacity(edgeOpacity(-cos(-tiltY) * sine))
-            TiltPosterParallaxAssets.edgeSide
-                .resizable()
+            Rectangle()
+                .fill(LinearGradient(colors: TiltPosterParallaxTokens.Palette.edge, startPoint: .leading, endPoint: .trailing))
                 .frame(width: TiltPosterParallaxTokens.Edge.depth, height: height)
                 .offset(x: -width / 2)
                 .rotation3DEffect(.degrees(90), axis: (x: 0, y: 1, z: 0))
                 .opacity(edgeOpacity(cos(-tiltY) * sine))
-            TiltPosterParallaxAssets.edgeTop
-                .resizable()
+            Rectangle()
+                .fill(LinearGradient(colors: TiltPosterParallaxTokens.Palette.edge, startPoint: .top, endPoint: .bottom))
                 .frame(width: width, height: TiltPosterParallaxTokens.Edge.depth)
                 .offset(y: -height / 2)
                 .rotation3DEffect(.degrees(-90), axis: (x: 1, y: 0, z: 0))
                 .opacity(edgeOpacity(-pitchSine))
-            TiltPosterParallaxAssets.edgeTop
-                .resizable()
+            Rectangle()
+                .fill(LinearGradient(colors: TiltPosterParallaxTokens.Palette.edge, startPoint: .top, endPoint: .bottom))
                 .frame(width: width, height: TiltPosterParallaxTokens.Edge.depth)
                 .offset(y: height / 2)
                 .rotation3DEffect(.degrees(-90), axis: (x: 1, y: 0, z: 0))
@@ -164,64 +168,33 @@ struct TiltPosterParallaxPoster: View {
 private struct TiltPosterParallaxPosterFront: View {
     let width: CGFloat
     let height: CGFloat
+    let art: TiltPosterParallaxArt
     let tiltX: Double
     let tiltY: Double
     let flip: Double
 
     var body: some View {
         ZStack {
-            TiltPosterParallaxAssets.plate
-                .resizable()
-                .scaledToFill()
-                .frame(
-                    width: width * TiltPosterParallaxTokens.Layout.plateOverscan,
-                    height: height * TiltPosterParallaxTokens.Layout.plateOverscan
-                )
-                .offset(
-                    x: CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.plate,
-                    y: CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.plate
-                )
-            TiltPosterParallaxAssets.figure
-                .resizable()
-                .scaledToFill()
-                .frame(width: width, height: height)
-                .offset(
-                    x: CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.figure,
-                    y: CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.figure
-                )
+            ForEach(Array(art.layers.enumerated()), id: \.offset) { index, image in
+                Image(uiImage: image)
+                    .resizable()
+                    .frame(
+                        width: width * TiltPosterParallaxArtFactory.overscan[index],
+                        height: height * TiltPosterParallaxArtFactory.overscan[index]
+                    )
+                    .offset(
+                        x: CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.layers[index],
+                        y: CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.layers[index]
+                    )
+            }
             TiltPosterParallaxWordmark(width: width, height: height, tiltX: tiltX, tiltY: tiltY, flip: flip)
-            glare
+            TiltPosterParallaxPosterCredit(width: width, height: height)
+            TiltPosterParallaxPosterGlare(width: width, height: height, tiltX: tiltX, tiltY: tiltY)
             RoundedRectangle(cornerRadius: TiltPosterParallaxTokens.Layout.cardRadius)
                 .stroke(TiltPosterParallaxTokens.Palette.rim, lineWidth: TiltPosterParallaxTokens.Render.rimWidth)
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: TiltPosterParallaxTokens.Layout.cardRadius))
-    }
-
-    private var glare: some View {
-        let x = width * (0.5 + CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.glare)
-        let y = height * (TiltPosterParallaxTokens.Render.glareRestY + CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.glare)
-        let opacity = TiltPosterParallaxTokens.Render.glareRestOpacity
-            + min(
-                TiltPosterParallaxTokens.Render.glareRange,
-                (abs(tiltX) + abs(tiltY)) * TiltPosterParallaxTokens.Render.glareGain
-            )
-        return Circle()
-            .fill(
-                RadialGradient(
-                    colors: [TiltPosterParallaxTokens.Palette.glare, .clear],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: width * TiltPosterParallaxTokens.Render.glareRadiusRatio
-                )
-            )
-            .frame(
-                width: width * TiltPosterParallaxTokens.Render.glareRadiusRatio * 2,
-                height: width * TiltPosterParallaxTokens.Render.glareRadiusRatio * 2
-            )
-            .blendMode(.screen)
-            .opacity(opacity)
-            .position(x: x, y: y)
     }
 }
 
@@ -233,62 +206,62 @@ private struct TiltPosterParallaxWordmark: View {
     let flip: Double
 
     private var titleWidth: CGFloat {
-        let font = UIFont(name: TiltPosterParallaxTokens.Typeface.script, size: TiltPosterParallaxTokens.Typeface.posterTitle)
-            ?? UIFont.systemFont(ofSize: TiltPosterParallaxTokens.Typeface.posterTitle, weight: .bold)
-        return (TiltPosterParallaxTokens.Copy.title as NSString).size(withAttributes: [.font: font]).width
+        let font = UIFont(name: TiltPosterParallaxTokens.Typeface.serif, size: TiltPosterParallaxTokens.Typeface.posterTitle)
+            ?? UIFont.systemFont(ofSize: TiltPosterParallaxTokens.Typeface.posterTitle)
+        return TiltPosterParallaxTokens.Copy.posterTitle
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
     }
 
     var body: some View {
         ZStack {
-            titleText
-                .foregroundStyle(TiltPosterParallaxTokens.Render.titleShadow)
-                .offset(x: TiltPosterParallaxTokens.Render.titleShadowX, y: TiltPosterParallaxTokens.Render.titleShadowY)
-            titleText
-                .foregroundStyle(
-                    LinearGradient(colors: TiltPosterParallaxTokens.Palette.gold, startPoint: .topLeading, endPoint: .bottomTrailing)
+            Rectangle()
+                .fill(TiltPosterParallaxTokens.Palette.embossDark)
+                .mask(titleMask)
+                .offset(
+                    x: TiltPosterParallaxTokens.Render.titleShadowX - CGFloat(tiltX) * 4,
+                    y: TiltPosterParallaxTokens.Render.titleShadowY - CGFloat(tiltY) * 4
                 )
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: TiltPosterParallaxTokens.Palette.holoMirrored,
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+                .fill(TiltPosterParallaxTokens.Palette.embossLight)
+                .mask(titleMask)
+                .offset(
+                    x: TiltPosterParallaxTokens.Render.titleLightX + CGFloat(tiltX) * 2,
+                    y: TiltPosterParallaxTokens.Render.titleLightY + CGFloat(tiltY) * 2
                 )
-                .frame(
-                    width: titleWidth * TiltPosterParallaxTokens.Holo.period * 10,
-                    height: TiltPosterParallaxTokens.Typeface.posterTitle * 1.5
-                )
+            LinearGradient(colors: TiltPosterParallaxTokens.Palette.gold, startPoint: .topLeading, endPoint: .bottomTrailing)
+                .mask(titleMask)
+            Rectangle()
+                .fill(LinearGradient(colors: TiltPosterParallaxTokens.Palette.holoMirrored, startPoint: .leading, endPoint: .trailing))
+                .frame(width: titleWidth * TiltPosterParallaxTokens.Holo.period * 10, height: height)
                 .offset(x: holoOffset)
-                .mask(titleText)
+                .mask(titleMask)
                 .blendMode(.overlay)
                 .opacity(holoOpacity)
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [.clear, TiltPosterParallaxTokens.Palette.foil, .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: TiltPosterParallaxTokens.Render.foilHalfWidth * 2, height: TiltPosterParallaxTokens.Typeface.posterTitle * 1.5)
+                .fill(LinearGradient(colors: [.clear, TiltPosterParallaxTokens.Palette.foil, .clear], startPoint: .leading, endPoint: .trailing))
+                .frame(width: TiltPosterParallaxTokens.Render.foilHalfWidth * 2, height: height)
                 .offset(x: foilOffset)
+                .mask(titleMask)
                 .blendMode(.screen)
-                .mask(titleText)
         }
-        .frame(width: titleWidth + TiltPosterParallaxTokens.Render.foilHalfWidth * 2, height: TiltPosterParallaxTokens.Typeface.posterTitle * 1.5)
-        .transformEffect(CGAffineTransform(a: 1, b: 0, c: TiltPosterParallaxTokens.Layout.titleSkew, d: 1, tx: 0, ty: 0))
-        .position(
-            x: width / 2 + CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.title,
-            y: height * TiltPosterParallaxTokens.Layout.titleY - TiltPosterParallaxTokens.Typeface.posterTitle * 0.35
-                + CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.title
+        .frame(width: width, height: height)
+        .offset(
+            x: CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.title,
+            y: CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.title
         )
     }
 
-    private var titleText: some View {
-        Text(TiltPosterParallaxTokens.Copy.title)
-            .font(.custom(TiltPosterParallaxTokens.Typeface.script, fixedSize: TiltPosterParallaxTokens.Typeface.posterTitle).weight(.bold))
-            .fixedSize()
+    private var titleMask: some View {
+        TiltPosterParallaxTitleMask(
+            lines: TiltPosterParallaxTokens.Copy.posterTitle,
+            width: width,
+            height: height,
+            firstBaseline: height * TiltPosterParallaxTokens.Layout.titleY,
+            lineStep: TiltPosterParallaxTokens.Typeface.posterLine,
+            fontName: TiltPosterParallaxTokens.Typeface.serif,
+            fontSize: TiltPosterParallaxTokens.Typeface.posterTitle
+        )
     }
 
     private var holoOpacity: Double {
@@ -313,6 +286,66 @@ private struct TiltPosterParallaxWordmark: View {
     }
 }
 
+private struct TiltPosterParallaxTitleMask: View {
+    let lines: [String]
+    let width: CGFloat
+    let height: CGFloat
+    let firstBaseline: CGFloat
+    let lineStep: CGFloat
+    let fontName: String
+    let fontSize: CGFloat
+
+    var body: some View {
+        Canvas { context, _ in
+            let uiFont = UIFont(name: fontName, size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+            for (index, line) in lines.enumerated() {
+                let text = context.resolve(Text(line).font(.custom(fontName, fixedSize: fontSize)).foregroundStyle(.white))
+                let measured = text.measure(in: CGSize(
+                    width: CGFloat.greatestFiniteMagnitude,
+                    height: CGFloat.greatestFiniteMagnitude
+                ))
+                context.draw(
+                    text,
+                    at: CGPoint(
+                        x: (width - measured.width) / 2,
+                        y: firstBaseline + CGFloat(index) * lineStep - uiFont.ascender
+                    ),
+                    anchor: .topLeading
+                )
+            }
+        }
+        .frame(width: width, height: height)
+    }
+}
+
+private struct TiltPosterParallaxPosterCredit: View {
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Canvas { context, _ in
+            let name = TiltPosterParallaxTokens.Typeface.medium
+            let size = TiltPosterParallaxTokens.Typeface.credit
+            let uiFont = UIFont(name: name, size: size) ?? UIFont.systemFont(ofSize: size, weight: .medium)
+            let text = context.resolve(
+                Text(TiltPosterParallaxTokens.Copy.posterCredit)
+                    .font(.custom(name, fixedSize: size))
+                    .foregroundStyle(TiltPosterParallaxTokens.Palette.posterInk)
+            )
+            let measured = text.measure(in: CGSize(
+                width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude
+            ))
+            context.draw(
+                text,
+                at: CGPoint(x: (width - measured.width) / 2, y: height - 18 - uiFont.ascender),
+                anchor: .topLeading
+            )
+        }
+        .frame(width: width, height: height)
+    }
+}
+
 private struct TiltPosterParallaxPosterBack: View {
     let width: CGFloat
     let height: CGFloat
@@ -321,32 +354,21 @@ private struct TiltPosterParallaxPosterBack: View {
 
     var body: some View {
         ZStack {
-            TiltPosterParallaxAssets.plate
-                .resizable()
-                .scaledToFill()
-                .frame(
-                    width: width * TiltPosterParallaxTokens.Layout.plateOverscan,
-                    height: height * TiltPosterParallaxTokens.Layout.plateOverscan
-                )
-                .opacity(TiltPosterParallaxTokens.Back.plateOpacity)
-                .blur(radius: TiltPosterParallaxTokens.Back.plateBlur)
             LinearGradient(colors: TiltPosterParallaxTokens.Palette.back, startPoint: .top, endPoint: .bottom)
             Text(TiltPosterParallaxTokens.Copy.title)
-                .font(.custom(TiltPosterParallaxTokens.Typeface.script, fixedSize: TiltPosterParallaxTokens.Typeface.backTitle).weight(.bold))
-                .foregroundStyle(
-                    LinearGradient(colors: TiltPosterParallaxTokens.Palette.gold, startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-                .position(x: width / 2, y: height * TiltPosterParallaxTokens.Back.titleY - TiltPosterParallaxTokens.Typeface.backTitle * 0.3)
+                .font(.custom(TiltPosterParallaxTokens.Typeface.serif, fixedSize: TiltPosterParallaxTokens.Typeface.backTitle))
+                .foregroundStyle(LinearGradient(colors: TiltPosterParallaxTokens.Palette.gold, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .position(x: width / 2, y: height * TiltPosterParallaxTokens.Back.titleY - 6)
             Capsule()
                 .fill(TiltPosterParallaxTokens.Palette.backRule)
                 .frame(width: TiltPosterParallaxTokens.Back.rule, height: 1)
                 .position(x: width / 2, y: height * TiltPosterParallaxTokens.Back.ruleY)
             ForEach(TiltPosterParallaxTokens.Copy.credits) { credit in
                 Text(credit.text)
-                    .font(
-                        .custom(TiltPosterParallaxTokens.Typeface.ui, fixedSize: TiltPosterParallaxTokens.Typeface.credit)
-                            .weight(credit.strong ? .bold : .medium)
-                    )
+                    .font(.custom(
+                        credit.strong ? TiltPosterParallaxTokens.Typeface.semibold : TiltPosterParallaxTokens.Typeface.medium,
+                        fixedSize: TiltPosterParallaxTokens.Typeface.credit
+                    ))
                     .foregroundStyle(credit.strong ? TiltPosterParallaxTokens.Palette.backInk : TiltPosterParallaxTokens.Palette.backMute)
                     .position(
                         x: width / 2,
@@ -355,15 +377,22 @@ private struct TiltPosterParallaxPosterBack: View {
                             + credit.gap
                     )
             }
-            glare
+            TiltPosterParallaxPosterGlare(width: width, height: height, tiltX: tiltX, tiltY: tiltY)
             RoundedRectangle(cornerRadius: TiltPosterParallaxTokens.Layout.cardRadius)
                 .stroke(TiltPosterParallaxTokens.Palette.rim, lineWidth: TiltPosterParallaxTokens.Render.rimWidth)
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: TiltPosterParallaxTokens.Layout.cardRadius))
     }
+}
 
-    private var glare: some View {
+private struct TiltPosterParallaxPosterGlare: View {
+    let width: CGFloat
+    let height: CGFloat
+    let tiltX: Double
+    let tiltY: Double
+
+    var body: some View {
         let x = width * (0.5 + CGFloat(tiltX) * TiltPosterParallaxTokens.Parallax.glare)
         let y = height * (TiltPosterParallaxTokens.Render.glareRestY + CGFloat(tiltY) * TiltPosterParallaxTokens.Parallax.glare)
         let opacity = TiltPosterParallaxTokens.Render.glareRestOpacity
@@ -371,7 +400,7 @@ private struct TiltPosterParallaxPosterBack: View {
                 TiltPosterParallaxTokens.Render.glareRange,
                 (abs(tiltX) + abs(tiltY)) * TiltPosterParallaxTokens.Render.glareGain
             )
-        return Circle()
+        Circle()
             .fill(
                 RadialGradient(
                     colors: [TiltPosterParallaxTokens.Palette.glare, .clear],

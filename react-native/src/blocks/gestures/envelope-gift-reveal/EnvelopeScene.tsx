@@ -1,30 +1,65 @@
 /**
- * Drawn layer: the page colour, the envelope (back, folding flap, card inside, front pocket, seal),
- * the gift card on its way out and in place, and the confetti.
+ * Drawn layer: the linen table under the lamp, the envelope (back, liner, folding flap, the card inside, the pocket
+ * with "for Sam" in pen, the wax seal), and the card on its way out, landing, and turning over to the note.
+ * Paper and linen carry their own grain (two small shaders), so nothing reads as a flat fill.
  */
 import {
-  Blur, Canvas, Circle, Group, Image, LinearGradient, RadialGradient, Path, Rect, RoundedRect, Skia, Text, matchFont, useImage, vec,
+  Blur, Canvas, Circle, Group, LinearGradient, Oval, Path, RadialGradient, Rect, RoundedRect, Shader, Skia, Text, useFont, vec,
 } from '@shopify/react-native-skia';
 import { StyleSheet } from 'react-native';
-import { SensorType, interpolateColor, useAnimatedSensor, useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { useDerivedValue } from 'react-native-reanimated';
 
-import { AMBIENT, OPEN, REDUCED_MS, RESET, REVEAL } from './motion';
+import { AMBIENT, OPEN, REVEAL } from './motion';
 import { COLORS, GIFT, LAYOUT, type ScreenLayout } from './theme';
 import { finishMs, type EnvelopeValues } from './use-envelope';
-
-const FAMILY = process.env.EXPO_OS === 'ios' ? 'Helvetica Neue' : 'sans-serif';
-const amountFont = matchFont({ fontFamily: FAMILY, fontSize: 30, fontWeight: 'bold' });
-// The seal carries the shop's initials in a bold wordmark, as the source's seal does.
-const sealFont = matchFont({ fontFamily: FAMILY, fontSize: 22, fontWeight: 'bold' });
-const SEAL_TEXT = 'PT';
-const ART = require('./assets/gift-card-art.jpg');
 
 const EW = LAYOUT.envW;
 const EH = LAYOUT.envH;
 const CW = LAYOUT.cardW;
 const CH = LAYOUT.cardH;
-// Petals in the card's palette: magenta, pink, blush, lime, white, yellow.
-const CONFETTI_COLOURS = ['#E0359A', '#F06BB5', '#FFC1DF', '#C9F23A', '#FFFFFF', '#FFE45C'];
+
+const SERIF = require('./assets/InstrumentSerif-Regular.ttf');
+const HAND = require('./assets/CoveredByYourGrace.ttf');
+const UI = require('./assets/Inter-SemiBold.ttf');
+
+/** Linen: a fine weave, slow mottling, a lamp from the upper left and a vignette. */
+const LINEN = Skia.RuntimeEffect.Make(`
+uniform float2 uSize;
+float h(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+float n(float2 p) {
+  float2 i = floor(p); float2 f = fract(p); float2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h(i), h(i + float2(1.0, 0.0)), u.x), mix(h(i + float2(0.0, 1.0)), h(i + float2(1.0, 1.0)), u.x), u.y);
+}
+half4 main(float2 xy) {
+  float2 q = xy / uSize;
+  float3 base = float3(0.114, 0.106, 0.094);
+  float lamp = exp(-dot(q - float2(0.22, 0.12), q - float2(0.22, 0.12)) * 3.2);
+  float vig = smoothstep(1.15, 0.35, length(q - float2(0.45, 0.42)));
+  float weave = 0.5 + 0.5 * sin(xy.x * 2.6) * sin(xy.y * 2.6);
+  float slub = n(float2(xy.x * 0.05, xy.y * 1.4)) * 0.6 + n(float2(xy.x * 1.4, xy.y * 0.05)) * 0.4;
+  float3 c = base * (0.78 + 0.32 * vig) + float3(0.17, 0.13, 0.08) * lamp;
+  c *= 0.94 + 0.05 * weave + 0.06 * slub + 0.03 * (h(floor(xy * 2.0)) - 0.5);
+  return half4(half3(c), 1.0);
+}
+`)!;
+
+/** Cotton paper's grain, drawn over paper as a faint warm darkening: tooth, mottling and a few fibres. */
+const GRAIN = Skia.RuntimeEffect.Make(`
+uniform float uSeed;
+float h(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+float n(float2 p) {
+  float2 i = floor(p); float2 f = fract(p); float2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h(i), h(i + float2(1.0, 0.0)), u.x), mix(h(i + float2(0.0, 1.0)), h(i + float2(1.0, 1.0)), u.x), u.y);
+}
+half4 main(float2 xy) {
+  float2 p = xy + uSeed;
+  float tooth = h(floor(p * 3.0));
+  float mottle = n(p * 0.07) * 0.6 + n(p * 0.21) * 0.4;
+  float fine = n(p * 0.6 + 31.0);
+  float a = 0.03 * tooth + 0.05 * mottle + 0.025 * fine;
+  return half4(0.30, 0.22, 0.10, 1.0) * a;
+}
+`)!;
 
 const clamp01 = (v: number) => {
   'worklet';
@@ -38,6 +73,11 @@ const easeInOut = (t: number) => {
   'worklet';
   const c = clamp01(t);
   return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
+};
+const easeOutBack = (t: number, k: number) => {
+  'worklet';
+  const u = clamp01(t) - 1;
+  return 1 + (k + 1) * u * u * u + k * u * u;
 };
 
 /** Everything the scene needs for one frame, from the clock. */
@@ -55,122 +95,137 @@ export function frameOf(v: EnvelopeValues, reduced: boolean) {
     fly = reduced ? (after >= 0 ? 1 : 0) : REVEAL.flyEase(clamp01(after / REVEAL.flyMs));
   }
   const r = v.resetAt.get();
-  const reset = r < 0 ? 0 : clamp01((now - r) / (reduced ? REDUCED_MS : RESET.fadeMs));
-  const page = after < 0 ? 0 : clamp01((after + 100) / (reduced ? REDUCED_MS : REVEAL.pageMs));
+  const reset = r < 0 ? 0 : clamp01((now - r) / (reduced ? 200 : 420));
+  const resetOut = clamp01(reset / 0.4);
+  const resetIn = clamp01((reset - 0.43) / (1 - 0.43));
+  const page = after < 0 ? 0 : clamp01((after + 100) / (reduced ? 200 : REVEAL.pageMs));
   const drop = after < 0 || reduced ? (after >= 0 ? 1 : 0) : clamp01((after - 60) / REVEAL.envelopeDropMs);
+  // The card turns over once it has landed; Reduce Motion shows the note side at once.
+  const flipT = after < 0 ? 0 : reduced ? 1 : clamp01((after - REVEAL.flyMs - REVEAL.flipDelay) / REVEAL.flipMs);
   const b = v.breath.get();
   const breath = c.at < 0 && !reduced && b < 700 ? Math.sin((Math.PI * b) / 700) * OPEN.breathDeg : 0;
-  return { now, p, fly, after, reset, page, drop, breath, tilt0: c.at >= 0 ? c.tilt0 : v.tilt.get() };
+  return { now, p, fly, after, reset, resetOut, resetIn, page, drop, flipT, breath, tilt0: c.at >= 0 ? c.tilt0 : v.tilt.get() };
 }
 
 function flapPath() {
-  const b = Skia.PathBuilder.Make();
   const tip = EH * LAYOUT.flapTip;
-  b.moveTo(0, 0).lineTo(EW, 0).lineTo(EW / 2 + 22, tip - 10).quadTo(EW / 2, tip + 4, EW / 2 - 22, tip - 10).close();
-  return b.build();
+  return Skia.PathBuilder.Make()
+    .moveTo(0, 0).lineTo(EW, 0).lineTo(EW / 2 + 26, tip - 12).quadTo(EW / 2, tip + 4, EW / 2 - 26, tip - 12).close().build();
 }
 const FLAP = flapPath();
-// Side panels run from the top corners down to the pocket's top corners (source frame 010).
-const LEFT = Skia.PathBuilder.Make().moveTo(0, 0).lineTo(EW * 0.25, EH * 0.38).lineTo(EW * 0.25, EH).lineTo(0, EH).close().build();
-const RIGHT = Skia.PathBuilder.Make().moveTo(EW, 0).lineTo(EW * 0.75, EH * 0.38).lineTo(EW * 0.75, EH).lineTo(EW, EH).close().build();
-// As measured on the source: the bottom flap's edges rise steeply from the bottom corners and pass under
-// the top flap (its apex is hidden above), leaving narrow side panels.
-/** The front pocket: a trapezoid whose flat top sits at `top` (source frames 001 and 010). */
-const bottomPath = (top: number) => {
-  'worklet';
-  return Skia.PathBuilder.Make().moveTo(0, EH).lineTo(EW * 0.25, top).lineTo(EW * 0.75, top).lineTo(EW, EH).close().build();
-};
-const AMOUNT_Y = CH / 2 - 22;
+const LEFT = Skia.PathBuilder.Make().moveTo(0, 0).lineTo(EW * 0.47, EH * 0.56).lineTo(0, EH).close().build();
+const RIGHT = Skia.PathBuilder.Make().moveTo(EW, 0).lineTo(EW * 0.53, EH * 0.56).lineTo(EW, EH).close().build();
+const POCKET = Skia.PathBuilder.Make().moveTo(0, EH).quadTo(EW * 0.3, EH * 0.5, EW / 2, EH * 0.44).quadTo(EW * 0.7, EH * 0.5, EW, EH).close().build();
 
-function GiftCard({ sweep, amount }: { sweep: SharedValue<number>; amount: SharedValue<string> }) {
-  const art = useImage(ART);
-  // A band of light crosses the glossy art: on arrival, then it rests where device tilt puts it.
-  const bandT = useDerivedValue(() => [{ translateX: (sweep.get() - 0.5) * CW * 1.6 }]);
+/** An irregular blob of wax: a circle whose radius wanders where the wax spread before it was pressed. */
+function waxPath(r: number) {
+  const b = Skia.PathBuilder.Make();
+  const N = 72;
+  for (let k = 0; k <= N; k++) {
+    const a = (k / N) * Math.PI * 2;
+    const rr = r * (1 + 0.05 * Math.sin(5 * a + 0.6) + 0.035 * Math.sin(9 * a + 2.1) + 0.02 * Math.sin(14 * a + 4));
+    if (k === 0) b.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else b.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  return b.close().build();
+}
+const WAX = waxPath(LAYOUT.sealD / 2);
+
+function Grain({ w, h, seed }: { w: number; h: number; seed: number }) {
+  return (
+    <Rect x={0} y={0} width={w} height={h}>
+      <Shader source={GRAIN} uniforms={{ uSeed: seed }} />
+    </Rect>
+  );
+}
+
+/** The card's printed face: a bookshop's gift card, letterpressed in green on heavy cotton. */
+function CardFront() {
+  const shop = useFont(SERIF, 32);
+  const amount = useFont(SERIF, 60);
+  const small = useFont(UI, 9);
   return (
     <Group>
-      <RoundedRect x={-CW / 2 + 10} y={-CH / 2 + 18} width={CW - 20} height={CH - 8} r={LAYOUT.cardR} color="rgba(120,30,60,0.35)">
-        <Blur blur={16} />
-      </RoundedRect>
+      <RoundedRect x={-CW / 2} y={-CH / 2} width={CW} height={CH} r={LAYOUT.cardR} color={COLORS.card} />
       <Group clip={{ rect: { x: -CW / 2, y: -CH / 2, width: CW, height: CH }, rx: LAYOUT.cardR, ry: LAYOUT.cardR }}>
-        <Rect x={-CW / 2} y={-CH / 2} width={CW} height={CH} color={COLORS.cardPink} />
-        {art && <Image image={art} x={-CW / 2} y={-CH / 2} width={CW} height={CH} fit="cover" />}
-        <Rect x={-CW / 2} y={-CH / 2} width={CW} height={CH}>
-          <LinearGradient start={vec(-CW / 2, -CH / 2)} end={vec(CW / 2, CH / 2)}
-            colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0)']} />
-        </Rect>
-        <Group transform={bandT}>
-          <Rect x={-CW * 0.7} y={-CH / 2} width={CW * 1.4} height={CH} blendMode="softLight">
-            <LinearGradient start={vec(-CW * 0.2, -CH / 2)} end={vec(CW * 0.15, CH / 2)}
-              colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)']} />
-          </Rect>
-        </Group>
+        <Group transform={[{ translateX: -CW / 2 }, { translateY: -CH / 2 }]}><Grain w={CW} h={CH} seed={31} /></Group>
       </Group>
-      <Text text={amount} x={-CW / 2 + 20} y={AMOUNT_Y} font={amountFont} color="white" />
+      {/* A double rule inset 12 pt, as a printer would set it. */}
+      <RoundedRect x={-CW / 2 + 12} y={-CH / 2 + 12} width={CW - 24} height={CH - 24} r={3} color={COLORS.letterpress} style="stroke" strokeWidth={1} opacity={0.7} />
+      <RoundedRect x={-CW / 2 + 15} y={-CH / 2 + 15} width={CW - 30} height={CH - 30} r={2} color={COLORS.letterpress} style="stroke" strokeWidth={0.5} opacity={0.5} />
+      {shop && <Text text={GIFT.shop} x={-CW / 2 + 28} y={-CH / 2 + 56} font={shop} color={COLORS.letterpress} />}
+      {small && <Text text={GIFT.shopLine} x={-CW / 2 + 29} y={-CH / 2 + 74} font={small} color={COLORS.cardMute} />}
+      {small && <Text text="GIFT CARD" x={-CW / 2 + 29} y={CH / 2 - 30} font={small} color={COLORS.cardMute} />}
+      {/* Letterpress: the type sits in the paper, a hair of light on its lower edge. */}
+      {amount && <Text text={GIFT.amount} x={CW / 2 - 28 - amount.getTextWidth(GIFT.amount)} y={CH / 2 - 26 + 0.8} font={amount} color="rgba(255,255,255,0.7)" />}
+      {amount && <Text text={GIFT.amount} x={CW / 2 - 28 - amount.getTextWidth(GIFT.amount)} y={CH / 2 - 26} font={amount} color={COLORS.letterpress} />}
+      <RoundedRect x={-CW / 2 + 0.5} y={-CH / 2 + 0.5} width={CW - 1} height={CH - 1} r={LAYOUT.cardR} color={COLORS.cardEdge} style="stroke" strokeWidth={1} />
     </Group>
   );
 }
 
-/** The wax seal: as the flap starts to lift it swells, then cracks into two halves along the flap's line. */
+/** The card's back: Nora's note in blue ink, and the amount small in the corner. */
+function CardBack() {
+  const hand = useFont(HAND, 25);
+  const small = useFont(UI, 9);
+  const amount = useFont(SERIF, 22);
+  return (
+    <Group>
+      <RoundedRect x={-CW / 2} y={-CH / 2} width={CW} height={CH} r={LAYOUT.cardR} color={COLORS.card} />
+      <Group clip={{ rect: { x: -CW / 2, y: -CH / 2, width: CW, height: CH }, rx: LAYOUT.cardR, ry: LAYOUT.cardR }}>
+        <Group transform={[{ translateX: -CW / 2 }, { translateY: -CH / 2 }]}><Grain w={CW} h={CH} seed={77} /></Group>
+      </Group>
+      {hand && GIFT.note.map((line, i) => (
+        <Text key={i} text={line} x={-CW / 2 + 26 + (i === GIFT.note.length - 1 ? 150 : 0) + (i % 2) * 2} y={-CH / 2 + 44 + i * 32 + (i === GIFT.note.length - 1 ? 4 : 0)}
+          font={hand} color={COLORS.pen} opacity={0.92} />
+      ))}
+      {amount && <Text text={GIFT.amount} x={CW / 2 - 22 - amount.getTextWidth(GIFT.amount)} y={-CH / 2 + 34} font={amount} color={COLORS.letterpress} />}
+      {small && <Text text="FABLE & FERN" x={CW / 2 - 22 - small.getTextWidth('FABLE & FERN')} y={-CH / 2 + 48} font={small} color={COLORS.cardMute} />}
+      <RoundedRect x={-CW / 2 + 0.5} y={-CH / 2 + 0.5} width={CW - 1} height={CH - 1} r={LAYOUT.cardR} color={COLORS.cardEdge} style="stroke" strokeWidth={1} />
+    </Group>
+  );
+}
+
+/** The wax seal: an oxblood blob pressed with an N. As the flap lifts it swells, then cracks along the flap's line. */
 function Seal({ split }: { split: { get(): number } }) {
   const r = LAYOUT.sealD / 2;
+  const mono = useFont(SERIF, 30);
+  const w = mono ? mono.getTextWidth('N') : 0;
   const face = (
     <>
-      <Circle cx={0} cy={0} r={r} color={COLORS.ink} />
-      <Text text={SEAL_TEXT} x={-sealFont.getTextWidth(SEAL_TEXT) / 2 - 1} y={8} font={sealFont} color={COLORS.sealMark} />
+      <Path path={WAX}>
+        <RadialGradient c={vec(-r * 0.35, -r * 0.4)} r={r * 1.6} colors={[COLORS.waxHigh, COLORS.wax, COLORS.waxLow]} positions={[0, 0.45, 1]} />
+      </Path>
+      {/* The die's ring, pressed in: dark on its upper inner edge, lit on its lower. */}
+      <Circle cx={0} cy={0} r={r * 0.7} color={COLORS.waxLow} style="stroke" strokeWidth={1.6} opacity={0.75} />
+      <Circle cx={0.6} cy={0.8} r={r * 0.7} color={COLORS.waxHigh} style="stroke" strokeWidth={0.8} opacity={0.6} />
+      {mono && <Text text="N" x={-w / 2 + 0.7} y={10.8} font={mono} color={COLORS.waxHigh} opacity={0.7} />}
+      {mono && <Text text="N" x={-w / 2} y={10} font={mono} color={COLORS.waxLow} />}
+      <Oval x={-r * 0.62} y={-r * 0.7} width={r * 0.5} height={r * 0.26} color="rgba(255,235,225,0.32)"><Blur blur={1.5} /></Oval>
     </>
   );
-  const pop = useDerivedValue(() => [{ scale: 1 + 0.12 * Math.sin(Math.PI * clamp01(split.get() * 2.5)) }]);
-  const leftT = useDerivedValue(() => [{ translateX: -14 * split.get() }, { translateY: 10 * split.get() * split.get() }, { rotate: -0.35 * split.get() }]);
-  const rightT = useDerivedValue(() => [{ translateX: 14 * split.get() }, { translateY: 12 * split.get() * split.get() }, { rotate: 0.4 * split.get() }]);
+  const pop = useDerivedValue(() => [{ scale: 1 + 0.08 * Math.sin(Math.PI * clamp01(split.get() * 2.5)) }]);
+  const leftT = useDerivedValue(() => [{ translateX: -12 * split.get() }, { translateY: 10 * split.get() * split.get() }, { rotate: -0.3 * split.get() }]);
+  const rightT = useDerivedValue(() => [{ translateX: 12 * split.get() }, { translateY: 12 * split.get() * split.get() }, { rotate: 0.36 * split.get() }]);
   const halves = useDerivedValue(() => 1 - clamp01((split.get() - 0.55) / 0.45));
   return (
     <Group transform={[{ translateX: EW / 2 }, { translateY: EH * LAYOUT.sealY }]}>
-      <Circle cx={0} cy={3} r={r} color="rgba(60,80,0,0.25)" opacity={halves}><Blur blur={4} /></Circle>
+      <Path path={WAX} color="rgba(40,10,10,0.35)" transform={[{ translateY: 2.5 }]} opacity={halves}><Blur blur={3} /></Path>
       <Group transform={pop} opacity={halves}>
-        <Group transform={leftT} clip={Skia.XYWHRect(-r - 2, -r - 2, r + 2.5, r * 2 + 4)}>{face}</Group>
-        <Group transform={rightT} clip={Skia.XYWHRect(0, -r - 2, r + 2, r * 2 + 4)}>{face}</Group>
+        <Group transform={leftT} clip={Skia.XYWHRect(-r - 4, -r - 4, r + 4.5, r * 2 + 8)}>{face}</Group>
+        <Group transform={rightT} clip={Skia.XYWHRect(0, -r - 4, r + 4, r * 2 + 8)}>{face}</Group>
       </Group>
     </Group>
   );
 }
 
-function ConfettiLayer({ v, which }: { v: EnvelopeValues; which: number }) {
-  const path = useDerivedValue(() => {
-    const c = v.confetti.get();
-    const b = Skia.PathBuilder.Make();
-    for (let o = 0; o < c.length; o += 8) {
-      if (c[o + 6] <= 0 || c[o + 7] !== which) continue;
-      const a = c[o + 4];
-      const f = Math.min(1, c[o + 6] / 0.5);
-      // Petals: a lens shape whose width follows its spin, so each one flutters as it falls.
-      const hw = 7 * f;
-      const hh = 3.6 * f * (0.25 + 0.75 * Math.abs(Math.cos(a * 1.3)));
-      const ca = Math.cos(a);
-      const sa = Math.sin(a);
-      const x = c[o];
-      const y = c[o + 1];
-      b.moveTo(x - ca * hw, y - sa * hw);
-      b.quadTo(x - sa * hh * 2, y + ca * hh * 2, x + ca * hw, y + sa * hw);
-      b.quadTo(x + sa * hh * 2, y - ca * hh * 2, x - ca * hw, y - sa * hw);
-      b.close();
-    }
-    return b.build();
-  });
-  return <Path path={path} color={CONFETTI_COLOURS[which]} />;
-}
-
 export function EnvelopeScene({ v, width, height, reduced, lay }: { v: EnvelopeValues; width: number; height: number; reduced: boolean; lay: ScreenLayout }) {
+  const hand = useFont(HAND, 30);
   const envTop = lay.envTop;
   const finalTop = lay.cardTop;
   const ex = (width - EW) / 2;
   const frame = useDerivedValue(() => frameOf(v, reduced));
-  const rotation = useAnimatedSensor(SensorType.ROTATION, { interval: 16 });
-  const roll = useDerivedValue(() => (reduced ? 0 : Math.max(-0.35, Math.min(0.35, rotation.sensor.get().roll))));
-  const page = useDerivedValue(() => {
-    const f = frame.get();
-    return interpolateColor(f.page * (1 - f.reset), [0, 1], [COLORS.lime, COLORS.white]);
-  });
-  // Ambient: the sealed envelope floats ±4 pt; it settles while it is being opened.
+  // Ambient: the sealed envelope rises and settles 2 pt on the table's air; still while it is being opened.
   const float = useDerivedValue(() => {
     const f = frame.get();
     if (reduced) return 0;
@@ -180,141 +235,131 @@ export function EnvelopeScene({ v, width, height, reduced, lay }: { v: EnvelopeV
   const envTransform = useDerivedValue(() => {
     const f = frame.get();
     const d = f.reset > 0 ? 0 : f.drop;
-    // As the flap opens the envelope settles down a little (source frames 001 → 010).
-    const settle = f.reset > 0 ? 0 : OPEN.settlePt * clamp01(f.p / OPEN.flapShare);
-    return [{ translateX: ex }, { translateY: envTop + settle + d * d * 460 + float.get() }, { scale: f.reset > 0 ? 0.96 + 0.04 * f.reset : 1 }];
-  });
-  // A slow highlight drifts across the lime page.
-  const glowC = useDerivedValue(() => {
-    const t = frame.get().now / AMBIENT.glowMs;
-    return vec(width * (0.5 + 0.35 * Math.sin(2 * Math.PI * t)), height * (0.35 + 0.12 * Math.cos(2 * Math.PI * t * 0.7)));
-  });
-  // Kept very faint so the page colour at rest matches the source (pixel gate); it reads only as slow light.
-  const glowOpacity = useDerivedValue(() => (reduced ? 0 : AMBIENT.glowAmount * (1 - frame.get().page)));
-  const sweep = useDerivedValue(() => {
-    const f = frame.get();
-    const drift = reduced ? 0 : 0.12 * Math.sin((2 * Math.PI * f.now) / 6000);
-    const resting = 0.5 + 0.8 * roll.get() + drift;
-    if (f.after < 0 || reduced) return resting;
-    const u = clamp01((f.after - REVEAL.flyMs * 0.7) / REVEAL.sweepMs);
-    return u < 1 ? -0.4 + 1.8 * u + (resting - 1.4) * u * u : resting;
-  });
-  const amount = useDerivedValue(() => {
-    const f = frame.get();
-    if (f.after < 0 || reduced) return GIFT.amount;
-    const u = clamp01((f.after - REVEAL.flyMs * 0.8) / REVEAL.countMs);
-    const eased = 1 - Math.pow(1 - u, 3);
-    return `$${Math.round(GIFT.value * eased)}`;
+    const settle = f.reset > 0 ? 0 : 16 * clamp01(f.p / OPEN.flapShare);
+    return [{ translateX: ex }, { translateY: envTop + settle + d * d * 520 + float.get() }, { scale: f.reset > 0 ? 0.96 + 0.04 * f.resetIn : 1 }];
   });
   const envOpacity = useDerivedValue(() => {
     const f = frame.get();
-    return f.reset > 0 ? f.reset : 1 - f.drop;
+    return f.reset > 0 ? f.resetIn : 1 - f.drop;
   });
   const angle = useDerivedValue(() => {
     const f = frame.get();
     if (f.reset > 0) return 0;
     return clamp01(f.p / OPEN.flapShare) * 180 + f.breath;
   });
-  // The seal cracks only when the finger lifts the flap (not on the idle breath), so the rest state stays the source's.
   const split = useDerivedValue(() => {
     const f = frame.get();
     const lifted = f.reset > 0 ? 0 : clamp01(f.p / OPEN.flapShare) * 180;
     return clamp01(lifted / (reduced ? 30 : OPEN.sealSplitDeg));
   });
-  // The flap is paper: its lower part lags the fold, so it curls as it lifts.
+  // Paper: the flap's lower part lags the fold, so it curls as it lifts.
   const fold = EH * LAYOUT.flapTip * 0.55;
   const tipT = useDerivedValue(() => {
     const lag = reduced ? 0 : OPEN.curlDeg * Math.sin((Math.PI * Math.min(180, angle.get())) / 180);
     return [{ translateY: fold }, { perspective: 700 }, { rotateX: (lag * Math.PI) / 180 }, { translateY: -fold }];
   });
-  // The front pocket's V: hidden under the closed flap, it opens down to 0.4 of the height as the flap lifts (source).
-  // Constant: it read the frame only to re-run, which rebuilt the path every frame.
-  const bottom = useDerivedValue(() => bottomPath(OPEN.pocketApex * EH));
   const flapTransform = useDerivedValue(() => [{ perspective: 900 }, { rotateX: (-angle.get() * Math.PI) / 180 }]);
   const flapFront = useDerivedValue(() => (angle.get() < 90 ? 1 : 0));
-  // Past 90° the flap folds away behind the envelope (source): it fades as it goes over.
-  const flapBack = useDerivedValue(() => (angle.get() >= 90 ? 1 - clamp01((angle.get() - 90) / 25) : 0));
+  // Past 90° the inside of the flap shows, its liner up, standing above the envelope.
+  const flapBack = useDerivedValue(() => (angle.get() >= 90 ? 1 : 0));
   const cardPose = useDerivedValue(() => {
     const f = frame.get();
     const out = f.reset > 0 ? 0 : clamp01((f.p - OPEN.flapShare) / (1 - OPEN.flapShare));
-    const insideY = envTop + OPEN.settlePt * clamp01(f.p / OPEN.flapShare) * (f.reset > 0 ? 0 : 1) + 33 + (CH * LAYOUT.cardInScale) / 2 - out * OPEN.cardRise;
+    const insideY = envTop + 16 * clamp01(f.p / OPEN.flapShare) * (f.reset > 0 ? 0 : 1) + 18 + (CH * LAYOUT.cardInScale) / 2 - out * OPEN.cardRise;
     const finalY = finalTop + CH / 2;
     const k = f.fly;
-    // A small extra lift mid-flight so the card arcs instead of sliding.
     const arc = -36 * Math.sin(Math.PI * k);
+    const turn = easeOutBack(f.flipT, REVEAL.flipBack);
     return {
       y: insideY + (finalY - insideY) * k + arc,
-      s: LAYOUT.cardInScale + (1 - LAYOUT.cardInScale) * easeInOut(k),
+      s: (LAYOUT.cardInScale + (1 - LAYOUT.cardInScale) * easeInOut(k)) * (1 + REVEAL.flipLift * Math.sin(Math.PI * clamp01(f.flipT))),
       rot: f.tilt0 * (1 - k),
+      flip: turn * Math.PI,
       front: f.after >= 0 && f.reset === 0,
     };
   });
   const cardTransform = useDerivedValue(() => [
     { translateX: width / 2 }, { translateY: cardPose.get().y }, { rotate: (cardPose.get().rot * Math.PI) / 180 }, { scale: cardPose.get().s },
+    { perspective: 1100 }, { rotateY: cardPose.get().flip },
   ]);
   const insideCardTransform = useDerivedValue(() => [
     { translateX: EW / 2 }, { translateY: cardPose.get().y - envTop }, { rotate: (cardPose.get().rot * Math.PI) / 180 }, { scale: cardPose.get().s },
   ]);
   const insideOpacity = useDerivedValue(() => (cardPose.get().front ? 0 : 1));
-  const frontOpacity = useDerivedValue(() => (cardPose.get().front ? 1 - frame.get().reset : 0));
+  const frontOpacity = useDerivedValue(() => (cardPose.get().front ? 1 - frame.get().resetOut : 0));
+  const faceUp = useDerivedValue(() => (Math.cos(cardPose.get().flip) >= 0 ? 1 : 0));
+  const faceDown = useDerivedValue(() => 1 - faceUp.get());
+  // Its shadow on the table spreads as the card lifts to turn over.
+  const shadowT = useDerivedValue(() => {
+    const pose = cardPose.get();
+    const lift = Math.sin(Math.PI * clamp01(frame.get().flipT));
+    return [{ translateX: width / 2 + 4 }, { translateY: pose.y + 14 + 10 * lift }, { scaleX: Math.max(0.15, Math.abs(Math.cos(pose.flip))) * pose.s }, { scaleY: pose.s }];
+  });
+  const shadowO = useDerivedValue(() => frontOpacity.get() * (1 - 0.35 * Math.sin(Math.PI * clamp01(frame.get().flipT))));
 
   return (
     <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Rect x={0} y={0} width={width} height={height} color={page} />
-      <Rect x={0} y={0} width={width} height={height} opacity={glowOpacity}>
-        <RadialGradient c={glowC} r={width * 0.8} colors={['rgba(255,255,255,0.32)', 'rgba(255,255,255,0)']} />
+      <Rect x={0} y={0} width={width} height={height}>
+        <Shader source={LINEN} uniforms={{ uSize: vec(width, height) }} />
       </Rect>
       <Group transform={envTransform} opacity={envOpacity}>
-        <RoundedRect x={14} y={30} width={EW - 28} height={EH - 10} r={14} color={COLORS.shadow}><Blur blur={26} /></RoundedRect>
-        <RoundedRect x={0} y={0} width={EW} height={EH} r={10}>
-          <LinearGradient start={vec(0, 0)} end={vec(0, EH)} colors={[COLORS.sideHigh, COLORS.bottomLow]} />
-        </RoundedRect>
+        {/* Its shadow on the linen: soft, down and right of the lamp. */}
+        <RoundedRect x={10} y={22} width={EW - 8} height={EH - 8} r={6} color={COLORS.shadow}><Blur blur={18} /></RoundedRect>
+        {/* The inside: darker paper behind the card. */}
+        <RoundedRect x={0} y={0} width={EW} height={EH} r={4} color={COLORS.paperInside} />
         <Group opacity={flapBack} transform={flapTransform}>
-          <Path path={FLAP}>
-            <LinearGradient start={vec(0, 0)} end={vec(0, EH * LAYOUT.flapTip)} colors={[COLORS.limeInside, COLORS.limeLow]} />
-          </Path>
+          <Path path={FLAP} color={COLORS.paperLow} />
+          {/* The liner: deep green tissue with a fine gold pattern. */}
+          <Group clip={FLAP} transform={[{ translateX: 6 }, { translateY: 5 }, { scale: 0.96 }]}>
+            <Rect x={0} y={0} width={EW} height={EH} color={COLORS.letterpress} />
+            {Array.from({ length: 22 }, (_, i) => (
+              <Path key={i} path={Skia.PathBuilder.Make().moveTo(i * 18 - 120, 0).lineTo(i * 18 + 60, EH).build()} color="rgba(214,184,120,0.28)" style="stroke" strokeWidth={0.6} />
+            ))}
+          </Group>
         </Group>
-        <Group opacity={insideOpacity} transform={insideCardTransform}><GiftCard sweep={sweep} amount={amount} /></Group>
-        <Group clip={{ rect: { x: 0, y: 0, width: EW, height: EH }, rx: 10, ry: 10 }}>
+        <Group opacity={insideOpacity} transform={insideCardTransform}><CardFront /></Group>
+        <Group clip={{ rect: { x: 0, y: 0, width: EW, height: EH }, rx: 4, ry: 4 }}>
           <Path path={LEFT}>
-            <LinearGradient start={vec(0, EH)} end={vec(EW * 0.3, EH * 0.4)} colors={[COLORS.sideLow, COLORS.sideHigh]} />
+            <LinearGradient start={vec(0, 0)} end={vec(EW * 0.47, EH * 0.56)} colors={[COLORS.paperHigh, COLORS.paper]} />
           </Path>
-          <Path path={RIGHT} color={COLORS.sideRight} />
-          <Path path={bottom}>
-            <LinearGradient start={vec(0, EH)} end={vec(0, 0)} colors={[COLORS.bottomLow, COLORS.bottomHigh]} />
+          <Path path={RIGHT}>
+            <LinearGradient start={vec(EW, 0)} end={vec(EW * 0.53, EH * 0.56)} colors={[COLORS.paper, COLORS.paperLow]} />
           </Path>
-          {/* Key light from the top left catches the pocket's upper-left area, as in the source. */}
-          <Path path={bottom}>
-            <RadialGradient c={vec(EW * 0.28, EH * 0.5)} r={EW * 0.42} colors={['rgba(246,255,150,0.55)', 'rgba(246,255,150,0)']} />
+          {/* Folds: a soft shade along each edge, never a drawn outline; the pocket lies over the side flaps. */}
+          <Path path={LEFT} color={COLORS.paperShade} style="stroke" strokeWidth={1.2}><Blur blur={1.2} /></Path>
+          <Path path={POCKET}>
+            <LinearGradient start={vec(0, EH * 0.45)} end={vec(EW * 0.4, EH)} colors={[COLORS.paperHigh, COLORS.paper]} />
           </Path>
-          {/* Soft creases where the paper folds, not drawn outlines. */}
-          <Path path={bottom} color={COLORS.crease} style="stroke" strokeWidth={1.5}><Blur blur={1.2} /></Path>
+          <Path path={POCKET} color={COLORS.crease} style="stroke" strokeWidth={2}><Blur blur={1.6} /></Path>
+          <Grain w={EW} h={EH} seed={3} />
+          {hand && <Text text={GIFT.to} x={EW - 24 - hand.getTextWidth(GIFT.to)} y={EH - 28} font={hand} color={COLORS.pen} opacity={0.9} />}
         </Group>
         <Group opacity={flapFront} transform={flapTransform}>
-          <Path path={FLAP} color="rgba(80,100,0,0.18)" transform={[{ translateY: 4 }]}><Blur blur={5} /></Path>
+          <Path path={FLAP} color="rgba(60,40,10,0.22)" transform={[{ translateY: 3 }]}><Blur blur={4} /></Path>
           <Group clip={Skia.XYWHRect(0, 0, EW, fold)}>
             <Path path={FLAP}>
-              <LinearGradient start={vec(0, 0)} end={vec(EW, EH * LAYOUT.flapTip)} colors={[COLORS.flapHigh, COLORS.flapLow]} />
+              <LinearGradient start={vec(0, 0)} end={vec(EW * 0.6, EH * LAYOUT.flapTip)} colors={[COLORS.paperHigh, COLORS.paper]} />
             </Path>
-            <Path path={FLAP}>
-              <RadialGradient c={vec(EW * 0.24, EH * 0.14)} r={EW * 0.38} colors={['rgba(246,255,140,0.6)', 'rgba(246,255,140,0)']} />
-            </Path>
+            <Group clip={FLAP}><Grain w={EW} h={EH} seed={11} /></Group>
           </Group>
           <Group transform={tipT}>
             <Group clip={Skia.XYWHRect(0, fold, EW, EH)}>
               <Path path={FLAP}>
-                <LinearGradient start={vec(0, 0)} end={vec(EW, EH * LAYOUT.flapTip)} colors={[COLORS.flapHigh, COLORS.flapLow]} />
+                <LinearGradient start={vec(0, 0)} end={vec(EW * 0.6, EH * LAYOUT.flapTip)} colors={[COLORS.paperHigh, COLORS.paper]} />
               </Path>
-              <Path path={FLAP}>
-                <RadialGradient c={vec(EW * 0.24, EH * 0.14)} r={EW * 0.38} colors={['rgba(246,255,140,0.6)', 'rgba(246,255,140,0)']} />
-              </Path>
+              <Group clip={FLAP}><Grain w={EW} h={EH} seed={11} /></Group>
             </Group>
             <Seal split={split} />
           </Group>
         </Group>
       </Group>
-      <Group opacity={frontOpacity} transform={cardTransform}><GiftCard sweep={sweep} amount={amount} /></Group>
-      {CONFETTI_COLOURS.map((_, i) => <ConfettiLayer key={i} v={v} which={i} />)}
+      <Group opacity={shadowO} transform={shadowT}>
+        <RoundedRect x={-CW / 2 + 8} y={-CH / 2} width={CW - 16} height={CH - 4} r={10} color={COLORS.shadow}><Blur blur={20} /></RoundedRect>
+      </Group>
+      <Group opacity={frontOpacity} transform={cardTransform}>
+        <Group opacity={faceUp}><CardFront /></Group>
+        <Group opacity={faceDown} transform={[{ scaleX: -1 }]}><CardBack /></Group>
+      </Group>
     </Canvas>
   );
 }

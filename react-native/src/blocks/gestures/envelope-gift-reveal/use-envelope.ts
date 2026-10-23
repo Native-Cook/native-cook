@@ -210,7 +210,7 @@ export function useEnvelope(width: number, centreY: number, envTop: number, auto
 
     const s = script.get();
     // The flap lifts a little now and then while sealed, to say it opens.
-    breath.set((s.on ? s.t : now) % OPEN.breathMs);
+    breath.set(((s.on ? s.t : now) + OPEN.breathLead) % OPEN.breathMs);
     if (!autoPlay) return;
     if (!s.on) {
       const idle = !s.touching && !touch.get().active;

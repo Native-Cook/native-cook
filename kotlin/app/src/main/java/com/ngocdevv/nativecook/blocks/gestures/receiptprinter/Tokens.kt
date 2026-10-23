@@ -8,21 +8,14 @@ object Tokens {
         const val width = 402f
         const val height = 874f
         const val safeTop = 62f
-        const val maxFrameDeltaMs = 100f
-    }
-
-    object ALPHA {
-        const val paperShade = 0.05f
-        const val menu = 0.94f
-        const val develop = 0.9f
-        const val indicator = 0.28f
+        const val maxFrameDeltaMs = 250f
     }
 
     object COLOR {
         val bg = color(0xFFEFEFEF)
         val card = color(0xFFE5E5E5)
         val cardPressed = color(0xFFFFFFFF)
-        val ink = color(0xFF111111)
+        val ink = color(0xFF1F2226)
         val inkSoft = color(0xFF8A8A8A)
         val date = color(0xFF767676)
         val inkFaint = color(0xFFA8A8A8)
@@ -30,7 +23,7 @@ object Tokens {
         val slot = color(0xFF1E1E1E)
         val slotSheen = color(0xFF3A3A3A)
         val slit = color(0xFF8E8E8E)
-        val paper = color(0xFFFFFFFF)
+        val paper = color(0xFFFAF8F2)
         val paperShade = color(0x0D000000)
         val dash = color(0xFFBDBDBD)
         val grid = color(0xFFD9D9D9)
@@ -39,7 +32,7 @@ object Tokens {
         val zone = color(0xFF7EE06E)
         val tag = color(0xFF111111)
         val tagInk = color(0xFFFFFFFF)
-        val menu = color(0xF0FFFFFF)
+        val menu = color(0xFFFFFFFF)
         val shadow = color(0xFF000000)
         val buttonDark = color(0xFF111111)
         val buttonLight = color(0xFFFFFFFF)
@@ -49,18 +42,6 @@ object Tokens {
         val indicator = color(0x47000000)
 
     }
-    object FONT {
-        const val regular="ReceiptPrinter-Mono"
-        const val medium="ReceiptPrinter-MonoMedium"
-        const val bold="ReceiptPrinter-MonoBold"
-        const val heavy="ReceiptPrinter-MonoExtraBold"
-        const val regularAsset="receiptprinter_mono_regular"
-        const val mediumAsset="receiptprinter_mono_medium"
-        const val boldAsset="receiptprinter_mono_bold"
-        const val heavyAsset="receiptprinter_mono_extrabold"
-    }
-    fun mono(bold: Boolean = false) = if (bold) FONT.bold else FONT.regular
-
     const val CAP_TOP = 0.29f
     object TYPE {
         const val title=27.5f
@@ -102,9 +83,9 @@ object Tokens {
         const val radius=12f
         const val dateInset=12f
         const val dateCap=14.5f
-        const val iconTop=50f
-        const val iconW=46f
-        const val iconH=33f
+        const val iconTop=42f
+        const val iconW=78f
+        const val iconH=44f
         const val kmCapFromBottom=29f
         data class Menu(
             val x: Float,
@@ -174,47 +155,47 @@ object Tokens {
         val dashes=listOf(363f,410f,505f,751f,947f,1181f)
         val rows=listOf(
         ReceiptRow(222.3f,"RUN RECEIPT","center",size=TYPE.rcTitle,bold=true),
-        ReceiptRow(272f,"ORDER:#6235","center",size=TYPE.body),
-        ReceiptRow(296.3f,"JANUARY 28, 2026","center",size=TYPE.body),
-        ReceiptRow(321.3f,"INDOOR – EASY","center",size=TYPE.body),
+        ReceiptRow(272f,"RUN #0418","center",size=TYPE.body),
+        ReceiptRow(296.3f,"WED, JANUARY 28, 2026","center",size=TYPE.body),
+        ReceiptRow(321.3f,"RIVERSIDE LOOP – TEMPO","center",size=TYPE.body),
         ReceiptRow(381.7f,"ITEM","left",60f,TYPE.head,true),
         ReceiptRow(381.7f,"PACE","left",172f,TYPE.head,true),
         ReceiptRow(381.7f,"ZONE","left",217f,TYPE.head,true),
         ReceiptRow(381.7f,"TIME","left",262f,TYPE.head,true),
         ReceiptRow(381.7f,"HR","right",340f,TYPE.head,true),
-        ReceiptRow(435.3f,"1 KM","left",60f,TYPE.body),
-        ReceiptRow(435.3f,"09'21\"","left",163f,TYPE.body),
-        ReceiptRow(435.3f,"09:21","left",258f,TYPE.body),
-        ReceiptRow(435.3f,"0","right",340f,TYPE.body),
-        ReceiptRow(470.5f,"1.08 KM","left",60f,TYPE.body),
-        ReceiptRow(470.5f,"09'59\"","left",163f,TYPE.body),
-        ReceiptRow(470.5f,"00:50","left",258f,TYPE.body),
-        ReceiptRow(470.5f,"0","right",340f,TYPE.body),
+        ReceiptRow(435.3f,"5 KM","left",60f,TYPE.body),
+        ReceiptRow(435.3f,"05'28\"","left",163f,TYPE.body),
+        ReceiptRow(435.3f,"27:21","left",258f,TYPE.body),
+        ReceiptRow(435.3f,"154","right",340f,TYPE.body),
+        ReceiptRow(470.5f,"1.21 KM","left",60f,TYPE.body),
+        ReceiptRow(470.5f,"05'11\"","left",163f,TYPE.body),
+        ReceiptRow(470.5f,"06:17","left",258f,TYPE.body),
+        ReceiptRow(470.5f,"168","right",340f,TYPE.body),
         ReceiptRow(558.7f,"PACE","left",60f,TYPE.head,true),
-        ReceiptRow(561f,"09'21\"/KM~09'59\"/KM | 09'24\"/KM","right",340f,TYPE.chartNote,color=COLOR.inkSoft),
+        ReceiptRow(561f,"05'04\"–05'42\"/KM | AVG 05'25\"","right",340f,TYPE.chartNote,color=COLOR.inkSoft),
         ReceiptRow(715f,"0KM","left",60f,TYPE.tiny,color=COLOR.inkSoft),
-        ReceiptRow(715f,"1.1KM","right",340f,TYPE.tiny,color=COLOR.inkSoft),
+        ReceiptRow(715f,"6.2KM","right",340f,TYPE.tiny,color=COLOR.inkSoft),
         ReceiptRow(789f,"TOTAL:","left",60f,TYPE.total,true),
-        ReceiptRow(789f,"1.08 KM","right",340f,TYPE.total,true),
+        ReceiptRow(789f,"6.21 KM","right",340f,TYPE.total,true),
         ReceiptRow(827f,"DURATION","left",60f,TYPE.body),
-        ReceiptRow(827f,"00:10:12","right",340f,TYPE.body),
+        ReceiptRow(827f,"00:33:38","right",340f,TYPE.body),
         ReceiptRow(851.7f,"AVG PACE","left",60f,TYPE.body),
-        ReceiptRow(851.7f,"09'24\"/KM","right",340f,TYPE.body),
+        ReceiptRow(851.7f,"05'25\"/KM","right",340f,TYPE.body),
         ReceiptRow(876.3f,"BEST 1K","left",60f,TYPE.body),
-        ReceiptRow(876.3f,"09'21\"/KM","right",340f,TYPE.body),
-        ReceiptRow(901.3f,"CALORIES","left",60f,TYPE.body),
-        ReceiptRow(901.3f,"73 KCAL","right",340f,TYPE.body),
+        ReceiptRow(876.3f,"05'09\"/KM","right",340f,TYPE.body),
+        ReceiptRow(901.3f,"AVG HR","left",60f,TYPE.body),
+        ReceiptRow(901.3f,"156 BPM","right",340f,TYPE.body),
         ReceiptRow(983f,"*** DUPLICATE COPY ***","center",size=TYPE.body,bold=true),
         ReceiptRow(1018.3f,"KEEP FOR YOUR RECORDS","center",size=TYPE.small,color=COLOR.inkSoft),
-        ReceiptRow(1210.3f,"OFFICE HOUR","center",size=TYPE.small,bold=true),
-        ReceiptRow(1223.7f,"WED–JAN 18:51","center",size=TYPE.small,bold=true),
-        ReceiptRow(1261.7f,"A LIGHT RUN MOVES THINGS FORWARD.","center",size=TYPE.small,bold=true),
+        ReceiptRow(1210.3f,"PRINTED","center",size=TYPE.small,bold=true),
+        ReceiptRow(1223.7f,"WED 28 JAN 18:51","center",size=TYPE.small,bold=true),
+        ReceiptRow(1261.7f,"EVEN PACE, STRONG FINISH.","center",size=TYPE.small,bold=true),
         ReceiptRow(1294.7f,"GENERATED LOCALLY VIA STRIDE OS.","center",size=TYPE.tiny,color=COLOR.inkFaint)
         )
         const val paragraphCap=1053f
         const val paragraphPitch=15.6f
         val paragraph=listOf("Every run leaves a trace. Run Receipt","turns it into something you can keep and","share, capturing distance, pace, and","effort as a simple receipt of movement –","a small record of where you ran and how","the moment felt. Learn more at","receipt.strideos.run.")
-        val fast=Fast(97f,431.3f,36f,17.7f,3.5f,9.5f)
+        val fast=Fast(120f,466.5f,34f,17.7f,3.5f,9.5f)
         val zone=Zone(231.3f,listOf(440.2f,475.3f),4.2f)
         val chart=Chart(585f,705f,689.6f,2.4f,6,4)
         val edge=Edge(12.8f,6f)
@@ -233,26 +214,28 @@ object Tokens {
         const val shadowRadius = 10f
         const val shadowOffsetY = 3f
     }
-    data class RunCard(val date:List<String>,val km:String)
-    val CARDS=listOf(RunCard(listOf("JAN","28"),"1.08KM"),
-    RunCard(listOf("JAN","27"),"0.9KM"),
-    RunCard(listOf("JAN","26"),"0.87KM"),
-    RunCard(listOf("JAN","24"),"0.85KM"),
-    RunCard(listOf("JAN","23"),"0.93KM"),
-    RunCard(listOf("2025","MAY 11"),"1.06KM"),
-    RunCard(listOf("2025","MAY 10"),"0.7KM"),
-    RunCard(listOf("2025","APR 28"),"0.47KM"),
-    RunCard(listOf("2025","APR 26"),"1KM"),
-    RunCard(listOf("2025","APR 24"),"0.66KM"),
-    RunCard(listOf("2025","APR 22"),"0.69KM"),
-    RunCard(listOf("2025","APR 21"),"0.49KM"),
-    RunCard(listOf("2025","MAR 24"),"0.62KM"),
-    RunCard(listOf("2025","MAR 23"),"0.81KM"),
-    RunCard(listOf("2025","MAR 22"),"0.55KM"))
-    val PILLS=listOf("0.85KM","0.87KM","1.06KM")
+    data class RunCard(val date:List<String>,val km:String,val seed:Int)
+    val CARDS=listOf(
+        RunCard(listOf("WED","28 JAN"),"6.21 KM",3),
+        RunCard(listOf("SUN","25 JAN"),"12.40 KM",11),
+        RunCard(listOf("THU","22 JAN"),"5.02 KM",5),
+        RunCard(listOf("TUE","20 JAN"),"8.15 KM",8),
+        RunCard(listOf("SAT","17 JAN"),"10.33 KM",2),
+        RunCard(listOf("WED","14 JAN"),"6.18 KM",3),
+        RunCard(listOf("MON","12 JAN"),"4.40 KM",14),
+        RunCard(listOf("SAT","10 JAN"),"9.87 KM",6),
+        RunCard(listOf("THU","8 JAN"),"5.55 KM",9),
+        RunCard(listOf("TUE","6 JAN"),"7.20 KM",12),
+        RunCard(listOf("SUN","4 JAN"),"11.06 KM",4),
+        RunCard(listOf("FRI","2 JAN"),"5.00 KM",7),
+        RunCard(listOf("WED","31 DEC"),"6.42 KM",10),
+        RunCard(listOf("MON","29 DEC"),"8.90 KM",1),
+        RunCard(listOf("SAT","27 DEC"),"3.25 KM",13),
+    )
+    val PILLS=listOf("91.4 KM","12 RUNS","5'29\"/KM")
     object COPY {
         const val title="RUN RECEIPT"
-        const val subtitle="Year distance: 7.4 KM"
+        const val subtitle="2026 so far · tap a run to print it"
         const val long="LONG RECEIPT"
         const val short="SHORT RECEIPT"
         const val save="SAVE"
@@ -269,7 +252,6 @@ object Tokens {
     object SCREEN {
         const val gridOutMs=260f
         const val slotInMs=220f
-        const val gridInMs=420f
     }
     val ISLAND_SPRING = PRESS.Spring(damping = 17f, stiffness = 230f, mass = 1f)
     object FEED {
@@ -290,10 +272,13 @@ object Tokens {
     }
     object RETRACT {
         const val ms=520f
+        const val gridLeadMs=130f
+        const val gridInMs=680f
+        const val reducedMs=200f
     }
     const val LOOP_MS=10000f
     object AUTOPLAY {
-        const val resumeDelayMs=3500f
+        const val resumeDelayMs=2000f
         const val pressAt=500f
         const val pickAt=1300f
         data class Scroll(val start:Float,val end:Float,val by:Float)
@@ -318,7 +303,6 @@ object Tokens {
         const val tugMs=120f
 
     }
-    const val USER_RESUME_DELAY_MS=2000f
     const val QA_SLOWMO=1f
     const val DEBUG_FREEZE_MS=-1f
     object TOUCH {
@@ -341,13 +325,18 @@ object Tokens {
     object PAPER {
         const val rasterScale = 3f
         const val grainFrequency = 0.9f
-        const val grainOctaves = 2
-        const val grainThreshold = 0.52f
         const val shadowOpacity = 0.16f
         const val liftedShadowOpacity = 0.30f
         const val shadowRadius = 14f
         const val shadowOffsetY = 4f
         const val maxScrollFootGap = 48f
+    }
+    object PACE {
+        const val avg = 325f
+        const val fast = 280f
+        const val slow = 360f
+        const val km = 6.21f
+        const val samples = 63
     }
     object POLISH {
         val easeOut=listOf(0.23f,1f,0.32f,1f)
@@ -358,7 +347,6 @@ object Tokens {
         const val pressScale=0.97f
         const val pressInMs=100f
         const val pressOutMs=160f
-        const val returnMs=380f
         const val armedLed=1f
     }
 }

@@ -1,70 +1,91 @@
-/** Every motion value of the block. Distances in pt, times in ms unless named in seconds. */
-import { Easing } from 'react-native-reanimated';
+/**
+ * Every number the motion uses. Springs are (duration ms, damping ratio) and are stepped by the model each frame, so
+ * the slab, the rows and the gauge read the same values. Ease-out enters, ease-in-out moves across, nothing eases in.
+ */
+export const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+export const EASE_IN_OUT = [0.77, 0, 0.175, 1] as const;
 
-/** Animation review (20 Oct): the animate-expo table curves; Reanimated's built-ins and the default in-out quad are weaker. */
-export const EASE = {
-  out: Easing.bezier(0.23, 1, 0.32, 1),
-  inOut: Easing.bezier(0.77, 0, 0.175, 1),
+export type Spring = { duration: number; dampingRatio: number };
+
+export const SPRINGS = {
+  /** A row joining the slab: one soft overshoot, like paper settling. */
+  join: { duration: 460, dampingRatio: 0.72 },
+  /** A row letting go: no bounce. */
+  leave: { duration: 260, dampingRatio: 1 },
+  /** The slab lifting while a finger holds it. */
+  lift: { duration: 520, dampingRatio: 0.85 },
+  /** Selection chrome (number to disk). */
+  mode: { duration: 360, dampingRatio: 1 },
+  /** Reduce Motion: everything settles critically in 200 ms. */
+  reduced: { duration: 200, dampingRatio: 1 },
 } as const;
+
+/** Leaving selection, the whole sheet fades as one piece (ms). */
+export const SHEET_FADE_MS = 240;
+
 export const SELECT = {
-  longPress: 320,
-  dragSlop: 8, // vertical travel on the circles column before a range drag starts
+  longPress: 300,
+  /** Vertical travel on the number column before a range drag starts (selection mode). */
+  dragSlop: 8,
   autoScrollMax: 720, // pt/s at the very edge
-  coastDecay: 3.5, // 1/s: momentum after a drag released while auto-scrolling
+  coastDecay: 3.5, // 1/s
   coastStop: 20, // pt/s
+  /** Lift while selecting but not holding. */
+  restLift: 0.35,
 } as const;
 
-export const SPRING = {
-  band: { damping: 22, stiffness: 380, mass: 0.7 },
-  circles: { damping: 24, stiffness: 300, mass: 0.8 },
-  toolbar: { damping: 22, stiffness: 260, mass: 1 },
-  collapse: { damping: 26, stiffness: 260, mass: 1 },
-  trash: { damping: 7, stiffness: 380, mass: 0.6 },
-  ripple: { damping: 20, stiffness: 200, mass: 1 },
+export const DOWNLOAD = {
+  /** One row's fill, and the gap before the next starts (s). */
+  row: 0.9,
+  stagger: 0.11,
+  /** After the last episode lands: its check draws in, then selection ends by itself (s). */
+  settle: 0.4,
+  /** Check marks fading in or out (s); the ring leaves twice as fast. */
+  mark: 0.24,
 } as const;
 
 export const TIMING = {
-  corner: 140,
-  bandFade: 120,
-  circleSlide: 16,
-  circleStagger: 18,
-  toolbarRise: 72,
-  fab: 200,
-  roll: 160,
-  rollLift: 10,
-  reduced: 180,
-  scrollHome: 600,
+  fingerFade: 0.15,
   press: 120,
-  trashUp: 80,
-  toolStagger: 0.05, // morph progress between tools appearing
-  breathPeriod: 3.25, // s; four per 13 s loop
-  gloss: 460, // a light sweep across a band when its row joins
-  ripple: 340, // the circle's ring when a row is picked
-  streamOut: 300, // a deleted row slides out
-  streamStagger: 55,
-  restore: 320,
+  swap: 200, // panel text
+  reduced: 180,
+  /** A control changing state (the button's colour, Cancel hiding while downloading), and a press letting go (ms). */
+  state: 200,
 } as const;
 
-/** Autoplay: one scripted finger on one clock, seconds. Rows are indices into TASKS. */
-/** QA only: hides the demo's finger for the pixel gate. Ship false. */
-export const QA_HIDE_FINGER = false;
+/** The plane on the card: its glyph scale (24 pt grid → 18 pt), and its fade back to the gate when the loop resets. */
+export const PLANE = { scale: 0.75, back: 300 } as const;
 
-export const LOOP_MS = 13_000;
-export const RESUME_MS = 3_500;
+/**
+ * The boarding pass that ends a download: it rises from the button on a spring (no bounce past its place; a light
+ * object settling), the scrim fades in under it; it leaves faster than it came (ease-out, 220 ms) and drops 24 pt.
+ */
+export const PASS = {
+  rise: { duration: 520, dampingRatio: 0.86 },
+  from: 120,
+  scale: 0.96,
+  scrimIn: 260,
+  out: 220,
+  drop: 24,
+} as const;
+
+/** The timeline: a row's time fades in once its segment is half grown; the landing marker's fade (ms). */
+export const TIMELINE = { timeFrom: 0.4, timeSpan: 0.4, land: 200 } as const;
+
+/** Press feedback on the panel's button: scale on press-in; Reduce Motion dims instead of moving. */
+export const PRESS = { scale: 0.97, dim: 0.85, ms: 120 } as const;
+
+/** Autoplay: one scripted finger on one clock, in seconds from rest. Rows index EPISODES. */
+export const LOOP_MS = 10_000;
+export const RESUME_MS = 2_000;
 export const DEMO = {
-  fingerFade: 0.15,
-  hold: { row: 5, down: 0.6 }, // long press; selection starts at down + longPress
-  drag: [
-    { at: 1.9, row: 5 }, // holds a moment first, so the toolbar has settled (the source's state a)
-    { at: 2.6, row: 9 },
-    { at: 3.0, row: 7 },
-    { at: 3.55, row: 12 },
-  ],
-  release: 3.75,
-  tap: { row: 1, at: 4.1 },
-  edge: { row: 14, down: 4.9, reach: 5.6, up: 6.9 }, // drag on the circles into the bottom edge and hold
-  done: { at: 7.2 },
-  scrollHome: 7.5,
-  remove: { from: 8, to: 9, down: 8.7, up: 9.5, trash: 10.1, restore: 11.8 }, // select Train and Tetto, delete them, put them back
+  hold: { row: 0, down: 0.6 }, // long press; selection starts at down + longPress
+  // Five episodes are 4h 43m: 42 minutes short of the flight. One more tap covers it and the landing drops in.
+  drag: { from: 0, to: 4, start: 1.05, end: 2.3 },
+  release: 2.52,
+  taps: [{ row: 5, at: 3.6 }],
+  download: { at: 4.8 },
+  reset: { at: 9.1 },
+  /** Scroll home when the script takes over again after a touch (s). */
   tidy: 0.6,
 } as const;

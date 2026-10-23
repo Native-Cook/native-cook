@@ -1,45 +1,36 @@
 import SwiftUI
 
-/// Every colour, size, string and motion value of the block, copied from the React Native block's
+/// Every colour, size, string and motion value of the block, copied from the approved React Native
 /// `theme.ts` and `motion.ts`. Sizes are points on a 402 pt wide screen, scaled by width / 402.
-///
 enum MoodOrbJarTokens {
     static let stageWidth = 402.0
-    /// QA-only replica switch, at its shipped value (`theme.ts REPLICA`).
-    static let replica = false
-
-    // MARK: Colours (theme.ts COLORS, the shipped values)
 
     enum Palette {
-        static let background = Color(hex: 0xF4FDFE)
-        static let backgroundBottom = Color(hex: 0xE3F0FB)
-        static let card = Color(hex: 0xF7FCFF)
-        static let cardHex: UInt32 = 0xF7FCFF
-        static let label = Color(hex: 0x3A3A3F)
-        static let secondary = Color(hex: 0x8F9298)
-        static let cardShadow = Color.rgba(60, 100, 160, 0.08)
-        static let ink = Color(hex: 0x16233A)
-        static let mute = Color.rgba(22, 35, 58, 0.55)
-        static let faint = Color.rgba(22, 35, 58, 0.35)
-        static let glass = Color.rgba(255, 255, 255, 0.38)
-        static let glassBack = Color.rgba(214, 230, 246, 0.55)
-        static let glassEdge = Color.rgba(255, 255, 255, 0.95)
-        static let glassShade = Color.rgba(110, 150, 200, 0.28)
-        static let floorShadow = Color.rgba(70, 110, 170, 0.18)
-        static let lid: [Color] = ([0x8E949C, 0xD8DDE3, 0xF7F8FA, 0xB4BAC2, 0x7C828A] as [UInt32])
-            .map { Color(hex: $0) }
-        static let lidStops = [0.0, 0.2, 0.42, 0.75, 1.0]
-        static let lidRidge = Color.rgba(60, 66, 74, 0.25)
-        static let print = Color(hex: 0x0E0E10)
-        static let danger = Color(hex: 0xF4545E)
-        static let dangerInk = Color(hex: 0xFFFFFF)
-        static let dotsBackground = Color(hex: 0xEEF1F5)
-        static let sheetLine = Color.rgba(22, 35, 58, 0.1)
-        static let dotsInk = Color(hex: 0x5B616B)
-        static let aim = Color.rgba(22, 35, 58, 0.18)
+        static let background = Color(hex: 0xF3EFE8)
+        static let backgroundBottom = Color(hex: 0xE7E0D3)
+        static let card = Color(hex: 0xFBF9F5)
+        static let cardHex: UInt32 = 0xFBF9F5
+        static let cardEdge = Color.rgba(60, 48, 30, 0.07)
+        static let label = Color(hex: 0x4A4338)
+        static let secondary = Color(hex: 0x8A8173)
+        static let cardShadow = Color.rgba(80, 60, 30, 0.10)
+        static let ink = Color(hex: 0x2A251E)
+        static let mute = Color.rgba(42, 37, 30, 0.58)
+        static let glassBody = Color.rgba(196, 210, 204, 0.16)
+        static let glassEdge = Color.rgba(92, 112, 108, 0.42)
+        static let glassEdgeSoft = Color.rgba(92, 112, 108, 0.16)
+        static let floorShadow = Color.rgba(70, 55, 30, 0.22)
+        static let caustic = Color.rgba(255, 236, 196, 0.75)
+        static let lid = ([0x6E6A63, 0xC9C4BA, 0xF1EEE8, 0xA9A398, 0x5E5A53] as [UInt32]).map { Color(hex: $0) }
+        static let lidStops = [0.0, 0.22, 0.45, 0.78, 1.0]
+        static let lidRidge = Color.rgba(40, 34, 26, 0.22)
+        static let danger = Color(hex: 0xB9563E)
+        static let dangerInk = Color.white
+        static let dotsBackground = Color(hex: 0xF1EDE6)
+        static let sheetLine = Color.rgba(42, 37, 30, 0.1)
+        static let dotsInk = Color(hex: 0x5E574C)
+        static let aim = Color.rgba(42, 37, 30, 0.22)
     }
-
-    // MARK: Moods, from awful to great (theme.ts MOODS)
 
     struct Mood {
         let name: String
@@ -47,134 +38,92 @@ enum MoodOrbJarTokens {
         let light: UInt32
         let deep: UInt32
         let tags: String
-        let assetName: String
     }
 
     static let moods: [Mood] = [
-        Mood(name: "Awful", base: 0xA24CE6, light: 0xE0B0FF, deep: 0x6A22A8, tags: "Angry, Overwhelmed", assetName: "MoodOrbJar-orb-awful.png"),
-        Mood(name: "Bad", base: 0x5E7DF6, light: 0xBCCBFF, deep: 0x2F4CC2, tags: "Disgusted, Friends", assetName: "MoodOrbJar-orb-bad.png"),
-        Mood(name: "Neutral", base: 0x3FC6E6, light: 0xB4F0FF, deep: 0x1689A8, tags: "Work, Tired", assetName: "MoodOrbJar-orb-neutral.png"),
-        Mood(name: "Good", base: 0x57D27A, light: 0xC2F5CF, deep: 0x22964A, tags: "Calm, Partner", assetName: "MoodOrbJar-orb-good.png"),
-        Mood(name: "Great", base: 0xF4545E, light: 0xFFC2B8, deep: 0xB8243A, tags: "Family, Sunshine", assetName: "MoodOrbJar-orb-great.png")
+        Mood(name: "Awful", base: 0x6B6F8C, light: 0xC3C5DA, deep: 0x363954, tags: "Overwhelmed, Late night"),
+        Mood(name: "Bad", base: 0x5F86A8, light: 0xBCD2E4, deep: 0x2F4F6B, tags: "Tired, Commute"),
+        Mood(name: "Neutral", base: 0xB5A486, light: 0xEDE3CF, deep: 0x7A6B50, tags: "Work, Errands"),
+        Mood(name: "Good", base: 0x7EA67C, light: 0xCFE2CA, deep: 0x46694A, tags: "Calm, Long walk"),
+        Mood(name: "Great", base: 0xE0965A, light: 0xF8D4AE, deep: 0xA55B26, tags: "Family, Sunshine")
     ]
 
     enum Space {
         static let extraSmall = 4.0
-        static let small = 8.0
         static let cardPadding = 12.0
-        static let large = 16.0
-        static let cardGap = 18.0
-        static let avatarTop = 25.0
     }
-
-    // MARK: Layout (theme.ts LAYOUT)
 
     enum Layout {
         static let side = 16.0
         static let header = 44.0
         static let icon = 44.0
-        static let lidWidth = 192.0 // lid.png, 576 x 110 px
+        static let lidWidth = 192.0
         static let lidHeight = 36.7
-        static let lidOverlap = 10.0 // the lid sits this far down over the neck
-        static let jarTop = 47.0 // the mouth, below the header
-        static let jarImageWidth = 280.0 * 1.01 // jar.png, 840 x 1010 px
-        static let jarImageHeight = 326.7
-        static let jarImageMouthY = 10.0
+        static let lidOverlap = 10.0
+        static let jarTop = 47.0
         static let jarWidth = 276.0 * 1.01
-        static let jarHeight = 300.0 // mouth to the bottom of the glass base
+        static let jarHeight = 300.0
         static let base = 2.0
         static let wall = 6.0
         static let shoulder = 70.0
         static let corner = 46.0
         static let mouthHalf = 84.0 * 1.01
-        static let printSize = 30.0
-        static let printStroke = 5.0
-        static let printY = 0.724
-        static let labelY = 0.12 // the month and count label, of the jar's height below the mouth
+        static let labelY = 0.12
         static let pickerTop = 400.0
         static let pickerHeight = 96.0
-        static let pickerOrb = 20.2 // radius
-        static let pickerOrbY = 41.0 // from the card's top
-        static let slotGap = 67.33 // between picker orb centres
-        static let slotDx = 0.8 // the row's centre, right of the screen's
+        static let pickerOrb = 20.2
+        static let pickerOrbY = 41.0
+        static let slotGap = 67.33
+        static let slotDx = 0.8
         static let slotLabelHeight = 63.0
-        static let labelSize = 13.0
+        static let labelSize = 12.0
         static let cardRadius = 16.0
-        static let entriesTop = 512.0
-        static let entryHeight = 106.0
-        static let sectionHeight = 26.0
-        static let rowHeight = 68.0
-        static let hairlineInset = 70.0
-        static let entryGap = 18.0
-        static let entryOrb = 22.0 // radius
-        static let orb = 25.0 // radius in the jar
+        static let entriesTop = 508.0
+        static let entryHeight = 64.0
+        static let entryGap = 8.0
+        static let entryOrb = 18.0
+        static let orb = 25.0
     }
 
-    /// The seeded pile: the mood of each orb, in the order the pile is dropped (theme.ts PILE_MOODS).
     static let pileMoods = [3, 0, 1, 2, 0, 1, 2, 4, 0, 1, 2, 0, 3, 2, 0, 3]
 
-    /// The accepted reference pile: x/y on the 1206 px-wide source frame, mood and face turn.
-    static let replicaPile: [(x: Double, y: Double, mood: Int, turn: Double)] = [
-        (484, 899, 3, 0), (634, 885, 1, -4), (942, 884, 2, 128), (311, 919, 0, -84),
-        (554, 1019, 4, 0), (717, 1009, 2, 116), (867, 1015, 0, -90), (272, 1061, 0, -16),
-        (418, 1024, 0, 44), (632, 1154, 0, -40), (295, 1205, 3, 12), (489, 1145, 1, -4),
-        (785, 1140, 1, 100), (937, 1146, 1, -45), (415, 1279, 0, -75), (566, 1276, 1, -90),
-        (711, 1281, 0, 0), (852, 1270, 2, -8)
-    ]
-    static let replicaPlateY = 490.0
-    static let replicaPlateHeight = 950.0
-    static let replicaCut = 2.0
-
-    // MARK: Copy (theme.ts COPY)
-
     enum Copy {
-        static let today = "Today"
-        static let entriesWord = "entries"
+        static let title = "Mood jar"
         static let month = "OCTOBER"
-        static let replicaEntry = (tags: "Ashamed, Partner", time: "4:21 PM")
-        static let print = "US?"
         static let back = "Back"
         static let calendar = "Calendar"
         static let more = "More"
         static let undo = "Undo"
         static let now = "Just now"
 
-        static func add(_ mood: String) -> String {
-            "Add \(mood)"
-        }
+        static func add(_ mood: String) -> String { "Add \(mood)" }
 
-        /// The two entries the screen starts with (mood index, tags, time).
         static let entries: [(mood: Int, tags: String, time: String)] = [
-            (1, "Disgusted, Friends", "4:20 PM"),
-            (2, "Work, Tired", "1:05 PM")
+            (3, "Calm, Long walk", "4:20 PM"),
+            (2, "Work, Errands", "1:05 PM")
         ]
     }
 
-    // MARK: Motion (motion.ts), seconds unless the name says otherwise
-
     enum Motion {
         static let step = 1.0 / 120.0
-        static let maxSteps = 30 // per frame: the sim keeps wall-clock time through dropped frames
+        static let maxSteps = 30
 
         enum Pile {
-            static let count = 16
-            static let seed = 11
             static let settleSteps = 900
-            static let home = 60.0 // spring back to the slot
-            static let damping = 4.0 // per second
+            static let home = 60.0
+            static let damping = 4.0
             static let passes = 3
-            static let restSpeed = 18.0 // a landed orb slower than this...
-            static let restTime = 0.35 // ...for this long becomes part of the pile
+            static let restSpeed = 18.0
+            static let restTime = 0.35
         }
 
         enum Throw {
             static let gravity = 2200.0
-            static let apex = 70.0 // the solved arc peaks this far above the mouth
-            static let solved = 0.75 // share of the solved launch in the final velocity
-            static let minFlick = 380.0 // upward speed that counts as a flick
-            static let lift = 1.15 // held orb scale
-            static let spin = 6.0 // radians per second of spin in flight
-            static let regrow = 0.3 // the picker's orb grows back
+            static let apex = 70.0
+            static let solved = 0.75
+            static let minFlick = 380.0
+            static let lift = 1.15
+            static let regrow = 0.3
             static let maxSpeed = 2400.0
         }
 
@@ -186,33 +135,31 @@ enum MoodOrbJarTokens {
             static let rowDamping = 28.0
         }
 
-        /// The lid lifts straight up and floats, tilting a little on the way: 0 closed ... 1 lifted.
         enum Lid {
             static let open = 1.0
             static let lift = 20.0
             static let tilt = 0.09
             static let stiffness = 120.0
-            static let damping = 9.0 // overshoots, then floats
-            static let hold = 2.4
+            static let damping = 9.0
+            static let hold = 1.1
         }
 
         enum Soft {
-            static let stiffness = 420.0 // squash spring: overshoots into a stretch
+            static let stiffness = 420.0
             static let damping = 14.0
-            static let perSpeed = 1.0 / 2600.0 // squash per pt/s of sudden deceleration
+            static let perSpeed = 1.0 / 2600.0
             static let max = 0.28
-            static let landing = 0.15 // the first impact squashes at least this much
-            static let trigger = 140.0 // pt/s of deceleration in one step that counts as an impact
-            static let hard = 900.0 // landing speed above this: heavy haptic
-            static let soft = 350.0 // below this: light
+            static let landing = 0.15
+            static let trigger = 140.0
+            static let hard = 900.0
+            static let soft = 350.0
         }
 
         enum Tilt {
-            static let slosh = 14.0 // pt of pile slosh at full phone tilt
-            static let glass = 6.0 // pt of glass highlight drift at full phone tilt
+            static let slosh = 14.0
+            static let glass = 6.0
         }
 
-        /// Shared element: the landed orb lifts out, arcs to the list, the card grows from it.
         enum Ghost {
             static let duration = 0.85
             static let lift = 0.3
@@ -234,54 +181,40 @@ enum MoodOrbJarTokens {
 
         enum Hop {
             static let every = 2.0
-            static let phase = 1.0
+            static let phase = 0.5
             static let speed = 70.0
+            static let last = 6.0
         }
 
-        enum Aim {
-            static let points = 14
-            static let step = 0.045
-        }
-
+        enum Aim { static let points = 14 }
         enum Trail {
-            static let copies = 4
             static let gap = 0.028
-            static let alpha: [Double] = [0.32, 0.2, 0.12, 0.06]
+            static let alpha = [0.32, 0.2, 0.12, 0.06]
         }
+        enum Reduced { static let fade = 0.2 }
 
-        enum Reduced {
-            static let fade = 0.2
-        }
-
-        // Autoplay: 12 s.
-        static let loopMS = 12_000.0
-        static let resumeMS = 3_500.0
+        static let loopMS = 10_000.0
+        static let resumeMS = 2_000.0
 
         enum Script {
             static let mood = 4
             static let pick = [1.0, 1.35]
             static let pickBy = [-30.0, -80.0]
             static let release = [-500.0, -1500.0]
-            static let swipe = [7.0, 7.55]
+            static let swipe = [5.6, 6.15]
             static let swipeBy = -150.0
         }
 
-        // QA only, at their shipped values.
         static let replicaHold = -1.0
         static let qaSpeed = 1.0
-
-        // Entry list animations (Reanimated FadeInDown / FadeOut / LinearTransition, ms).
         static let rowEnter = 0.26
         static let rowExit = 0.16
         static let rowLayout = 0.22
         static let countEnter = 0.26
         static let countExit = 0.2
-        static let rowFadeOffset = 25.0 // FadeInDown's travel
+        static let rowFadeOffset = 25.0
     }
 
-    /// The pool: the pile plus four orbs that can be in the air at once.
-    static let pileCount = replicaPile.count
+    static let pileCount = 18
     static let poolCount = pileCount + 4
-
-    static let orbImageScale = 144.0 / 132.0 // the orb art is 144 px with a 132 px orb
 }

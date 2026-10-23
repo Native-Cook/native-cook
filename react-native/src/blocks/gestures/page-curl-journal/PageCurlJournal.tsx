@@ -1,4 +1,5 @@
 import { Canvas, Fill, ImageShader, Shader, makeImageFromView, type SkImage } from '@shopify/react-native-skia';
+import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -19,7 +20,7 @@ import {
   FADE_MS, FOIL, GRAIN, HOLD_A, IDLE_RESUME_MS, LIFT, LOOP_MS, NUDGE, QA_HOLD, QA_SPEED, QA_START, RIFFLE, SCRIPT, STACK, TURN,
   TWINKLE, ms, sp,
 } from './motion';
-import { COPY, CURL, REF, SPACE, STACK_INK, TYPE } from './theme';
+import { COPY, CURL, PAPER, REF, SERIF, SPACE, STACK_INK, TYPE } from './theme';
 
 type Props = { autoPlay?: boolean };
 
@@ -35,7 +36,7 @@ const NUDGING = 6;
 
 const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1);
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
-const NUDGE_AT = 12200; // autoplay: the idle nudge on the title page after the riffle
+const NUDGE_AT = LOOP_MS + 1; // autoplay: no idle nudge inside the 10 s loop
 
 const HAPTIC_TICK = 0;
 const HAPTIC_HALF = 1;
@@ -60,7 +61,19 @@ function useSlot(width: number): Slot {
   };
 }
 
+/** The book's type is bundled; the pages are snapshotted, so nothing is drawn before it is loaded. */
 export function PageCurlJournal({ autoPlay = false }: Props) {
+  const reduced = useReducedMotion();
+  const [loaded, failed] = useFonts({
+    [SERIF.roman]: require('./assets/Newsreader.ttf'),
+    [SERIF.italic]: require('./assets/NewsreaderItalic.ttf'),
+  });
+  if (!loaded && !failed) return <View style={styles.root} />;
+  // Reduce Motion: no demo; a finger still turns the pages (they cross-fade).
+  return <Journal autoPlay={autoPlay && !reduced} />;
+}
+
+function Journal({ autoPlay }: { autoPlay: boolean }) {
   const { width, height } = useWindowDimensions();
   const s = width / REF.width;
   const reduced = useReducedMotion();
@@ -696,7 +709,7 @@ export function PageCurlJournal({ autoPlay = false }: Props) {
         {/* The binding's shadow and the edges of the pages still to turn sit over everything, like the book itself. */}
         <LinearGradient
           pointerEvents="none"
-          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)']}
+          colors={['rgba(70,48,24,0.08)', 'rgba(70,48,24,0)']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={[styles.spine, { width: SPACE.md * s }]}
@@ -710,7 +723,7 @@ export function PageCurlJournal({ autoPlay = false }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: PAPER.base },
   foil: { position: 'absolute', zIndex: 2 },
   spine: { position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 6 },
   stack: { position: 'absolute', top: 0, bottom: 0, backgroundColor: STACK_INK, zIndex: 6 },

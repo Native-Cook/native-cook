@@ -5,7 +5,7 @@ import { CassetteDeck } from './CassetteDeck';
 export default function CassetteDeckDemo() {
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <CassetteDeck autoPlay />
     </>
   );

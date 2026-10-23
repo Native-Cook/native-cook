@@ -3,7 +3,7 @@
  * home; overlapping bubbles are pushed apart by mass (r²); a dragged bubble is kinematic and shoves the rest.
  * Homes come from a deterministic packing, so the same radii always give the same cluster.
  */
-import { BURST, HOLD, IDLE, LOOP_MS, PHYSICS, QA_HOLD, SCATTER, STAGGER, WAVE } from './motion';
+import { BURST, HOLD, IDLE, LOOP_MS, PHYSICS, QA_HOLD, RIPPLE, STAGGER, WAVE } from './motion';
 import { LAYOUT, PERSONAL, QUIET, SOCIAL, type Habit } from './theme';
 
 export const ENTITIES: (Habit & { set: number; quiet?: boolean })[] = [
@@ -157,31 +157,6 @@ export function setTab(s: Sim, tab: number): void {
   s.events.push(EVENT.count);
 }
 
-/** Detail view: the tapped bubble moves to (x, y) and grows to r; the rest leave. */
-export function openFocus(s: Sim, i: number, x: number, y: number, r: number): void {
-  'worklet';
-  s.focus = i;
-  // Shared element: the tapped bubble flies up and grows; the others scatter outward from it as they shrink away.
-  for (let k = 0; k < COUNT; k++) {
-    s.rTarget[k] = k === i ? r : 0;
-    if (k === i) continue;
-    const dx = s.x[k] - s.x[i];
-    const dy = s.y[k] - s.y[i];
-    const d = Math.max(1, Math.hypot(dx, dy));
-    s.hx[k] = s.x[k] + (dx / d) * SCATTER.distance;
-    s.hy[k] = s.y[k] + (dy / d) * SCATTER.distance;
-  }
-  s.hx[i] = x;
-  s.hy[i] = y;
-}
-
-export function closeFocus(s: Sim): void {
-  'worklet';
-  s.focus = -1;
-  for (let k = 0; k < COUNT; k++) s.rTarget[k] = baseRadius(k, s.tab, s.doneTarget[k] > 0.5);
-  packHomes(s);
-}
-
 /** Which bubble is under (x, y), cluster coordinates. The quiet dial never takes touches. */
 export function hitTest(s: Sim, x: number, y: number): number {
   'worklet';
@@ -224,7 +199,7 @@ export function touchMove(s: Sim, x: number, y: number): void {
   if (Math.hypot(x - s.sx, y - s.sy) > HOLD.moveTolerance) s.mode = 2;
 }
 
-/** Returns the bubble a short, still tap landed on (to open its detail), or -1. */
+/** Returns the bubble a short, still tap landed on (to show its name), or -1. */
 export function touchUp(s: Sim, vx: number, vy: number, reduced: boolean): number {
   'worklet';
   const i = s.held;
@@ -350,7 +325,7 @@ export function stepSim(s: Sim, ms: number, reduced: boolean): void {
     }
     if (s.burst >= 0) {
       s.burstMs += dms;
-      if (s.burstMs > BURST.sparkMs) s.burst = -1;
+      if (s.burstMs > RIPPLE.ms) s.burst = -1;
     }
   }
 }
@@ -365,6 +340,22 @@ export function doneCount(s: Sim): { done: number; total: number } {
     if (s.doneTarget[i] > 0.5) done += 1;
   }
   return { done, total };
+}
+
+/** Back to the day as it began: nothing done, Social, every bubble home. */
+export function resetDay(s: Sim): void {
+  'worklet';
+  s.held = -1;
+  s.charge = 0;
+  s.ring = -1;
+  s.focus = -1;
+  for (let i = 0; i < COUNT; i++) s.doneTarget[i] = 0;
+  if (s.tab !== 0) setTab(s, 0);
+  else {
+    for (let i = 0; i < COUNT; i++) s.rTarget[i] = baseRadius(i, 0, false);
+    packHomes(s);
+  }
+  s.events.push(EVENT.count);
 }
 
 /** Deep copy for publishing through a shared value. */

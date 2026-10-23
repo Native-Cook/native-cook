@@ -1,19 +1,20 @@
 package com.ngocdevv.nativecook.blocks.gestures.glassdisconboarding
 
-import android.graphics.BitmapFactory
-import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -30,79 +32,69 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.ngocdevv.nativecook.R
 import com.ngocdevv.nativecook.shared.rememberReducedMotion
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Pull a frosted glass dome upward to reveal Wavo, then drag its bead down to rewind. The exact same engine inputs
- * drive the deterministic autoplay loop. A real touch stops it; the engine resumes after the specified quiet time.
+ * Strolls' first screen. Pull the glass dome into a magnifier, then release it to open the map beneath it.
+ * Both screens are pre-rendered once; each frame changes only lens uniforms, route trim, hint, and demo finger.
  */
 @Composable
 fun GlassDiscOnboarding(autoPlay: Boolean = false, modifier: Modifier = Modifier) {
-    val density = LocalDensity.current
-    val densityValue = density.density
-    val view = LocalView.current
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val view = LocalView.current
     val reducedMotion = rememberReducedMotion()
-    val tilt = rememberGlassDiscOnboardingTilt(enabled = !reducedMotion)
-    val bubbleAtlas = remember(context) {
-        requireNotNull(BitmapFactory.decodeResource(context.resources, R.drawable.glassdisconboarding_bubbles)) {
-            "Glass Disc Onboarding requires the baked 6 × 4 bubble atlas."
-        }
-    }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val widthPx = constraints.maxWidth
-        val heightPx = constraints.maxHeight
-        val buttons = remember(widthPx, heightPx, densityValue) {
-            glassDiscOnboardingButtonRects(widthPx.toFloat(), heightPx.toFloat(), densityValue)
+    BoxWithConstraints(
+        modifier
+            .fillMaxSize()
+            .background(Color(GlassDiscOnboardingTheme.Color.Page)),
+    ) {
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        if (width <= 0 || height <= 0) return@BoxWithConstraints
+        val top = WindowInsets.statusBars.getTop(density)
+        val bottom = WindowInsets.navigationBars.getBottom(density)
+        val layout = remember(width, height, density.density, top, bottom) {
+            GlassDiscOnboardingLayout.make(width, height, density.density, top, bottom)
         }
-        val texture = remember(widthPx, heightPx, densityValue) {
-            GlassDiscOnboardingTexture.make(widthPx, heightPx, densityValue)
-        }
-        val engine = remember(widthPx, heightPx, densityValue) {
-            GlassDiscOnboardingEngine(
-                widthPx = widthPx.toFloat(),
-                heightPx = heightPx.toFloat(),
-                density = densityValue,
-                ready = true,
-                autoPlay = autoPlay,
-                reduceMotion = reducedMotion,
-                onHaptic = { kind -> view.performHapticFeedback(glassDiscOnboardingHaptic(kind)) },
+        val pages = remember(context, layout) { GlassDiscOnboardingPages.create(context, layout) }
+        val controller = remember(layout, autoPlay, reducedMotion) {
+            GlassDiscOnboardingController(
+                layout = layout,
+                autoPlay = autoPlay && !reducedMotion,
+                reducedMotion = reducedMotion,
+                onHaptic = { haptic ->
+                    val constant = when (haptic) {
+                        GlassDiscOnboardingController.Haptic.Grab -> HapticFeedbackConstants.CLOCK_TICK
+                        GlassDiscOnboardingController.Haptic.Commit,
+                        GlassDiscOnboardingController.Haptic.Back,
+                        -> HapticFeedbackConstants.CONTEXT_CLICK
+                    }
+                    view.performHapticFeedback(constant)
+                },
             )
         }
-        val renderer = remember { GlassDiscOnboardingRenderer() }
-        val ctas = remember { List(2) { GlassDiscOnboardingCtaState() } }
-        val tick = remember { mutableLongStateOf(0L) }
-        var community by remember(engine) { mutableStateOf(engine.snapshot().stage == GlassDiscOnboardingStage.Community) }
+        val renderer = remember(context, layout, pages) { GlassDiscOnboardingRenderer(context, layout, pages) }
+        val tick = remember(controller) { mutableLongStateOf(0L) }
+        var wake by remember(controller) { mutableLongStateOf(0L) }
+        var mapOpen by remember(controller) { mutableStateOf(controller.isOpen) }
 
-        SideEffect {
-            engine.autoPlay = autoPlay
-            engine.reduceMotion = reducedMotion
-            engine.ready = true
-        }
-        LaunchedEffect(engine) {
+        LaunchedEffect(controller, wake) {
             var previous = 0L
-            while (true) {
+            while (controller.needsFrames) {
                 withFrameNanos { now ->
-                    val dt = if (previous == 0L) {
-                        0f
-                    } else {
-                        ((now - previous) / 1_000_000_000f).coerceIn(0f, GlassDiscOnboardingTokens.PORT.maximumFrameSeconds)
-                    }
+                    val delta = if (previous == 0L) 0f else ((now - previous) / 1_000_000_000f).coerceIn(0f, 0.05f)
                     previous = now
-                    engine.update(dt, now / 1_000_000L)
-                    val stage = engine.snapshot().stage == GlassDiscOnboardingStage.Community
-                    if (stage != community) community = stage
+                    controller.update(delta)
+                    if (mapOpen != controller.isOpen) mapOpen = controller.isOpen
                     tick.longValue++
                 }
             }
@@ -113,125 +105,82 @@ fun GlassDiscOnboarding(autoPlay: Boolean = false, modifier: Modifier = Modifier
                 Modifier
                     .fillMaxSize()
                     .semantics(mergeDescendants = true) {
-                        contentDescription = if (community) {
-                            "${GlassDiscOnboardingTheme.COPY.headline} ${GlassDiscOnboardingTheme.COPY.sub.joinToString(" ")}" 
+                        contentDescription = if (mapOpen) {
+                            "Canal loop map. 3.2 kilometres, 45 minutes, easy."
                         } else {
-                            "${GlassDiscOnboardingTheme.COPY.intro.joinToString(" ")}. ${GlassDiscOnboardingTheme.COPY.hint}"
+                            "Strolls. Walks worth taking, five minutes from your door. Swipe up to explore."
                         }
-                        stateDescription = if (community) "Community screen" else "Introduction"
-                        if (community) heading() else role = Role.Button
-                        onClick(if (community) GlassDiscOnboardingTheme.COPY.back else GlassDiscOnboardingTheme.COPY.enter) {
-                            val now = SystemClock.uptimeMillis()
-                            if (community) engine.startOver(now) else engine.enter(now)
+                        stateDescription = if (mapOpen) "Map open" else "Introduction"
+                        role = Role.Button
+                        onClick(label = if (mapOpen) "Back" else "Explore") {
+                            if (mapOpen) controller.accessibilityBack() else controller.accessibilityEnter()
+                            wake++
+                            tick.longValue++
                             true
                         }
                     }
-                    .pointerInput(engine, densityValue) {
+                    .pointerInput(controller) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             val tracker = VelocityTracker()
                             tracker.addPointerInputChange(down)
-                            val start = down.position
-                            engine.onTouchDown(start.x, start.y, down.uptimeMillis)
-                            var ended = false
+                            controller.onPointerDown(down.position.x, down.position.y)
+                            tick.longValue++
+                            var released = false
                             try {
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     tracker.addPointerInputChange(change)
                                     if (!change.pressed) {
-                                        val velocity = tracker.calculateVelocity()
-                                        engine.onTouchUp(velocity.y, cancelled = false, nowMillis = change.uptimeMillis)
-                                        ended = true
+                                        controller.onPointerUp(tracker.calculateVelocity().y, cancelled = false)
+                                        wake++
+                                        tick.longValue++
+                                        released = true
                                         change.consume()
                                         break
                                     }
                                     if (change.position != change.previousPosition) {
-                                        engine.onTouchMove(change.position.x, change.position.y, change.uptimeMillis)
+                                        controller.onPointerMove(change.position.x, change.position.y)
+                                        tick.longValue++
                                     }
                                     change.consume()
                                 }
                             } finally {
-                                if (!ended) engine.onTouchUp(0f, cancelled = true, nowMillis = SystemClock.uptimeMillis())
+                                if (!released) {
+                                    controller.onPointerUp(0f, cancelled = true)
+                                    wake++
+                                    tick.longValue++
+                                }
                             }
                         }
                     },
             ) {
-                // Snapshot reads stay in the draw scope: state progression invalidates only this canvas, not its UI tree.
                 @Suppress("UNUSED_VARIABLE")
                 val frameNumber = tick.longValue
-                val frame = engine.snapshot()
-                val native = drawContext.canvas.nativeCanvas
-                GlassDiscOnboardingCopy.drawBackdrop(native, size.width, size.height, densityValue, frame)
-                GlassDiscOnboardingCopy.drawUnderGlass(native, size.width, size.height, densityValue, frame, reducedMotion)
-                val fingerLight = if (frame.finger.alpha > GlassDiscOnboardingTokens.VIEW.fingerTiltThreshold) {
-                    (frame.finger.x - size.width / 2f) / max(size.width, 1f)
-                } else {
-                    0f
-                }
-                val lightX = (tilt.roll * GlassDiscOnboardingTokens.VIEW.tiltMultiplier + fingerLight).coerceIn(-1f, 1f)
-                val lightY = (tilt.pitch * GlassDiscOnboardingTokens.VIEW.tiltMultiplier).coerceIn(-1f, 1f)
-                renderer.draw(native, frame, texture, bubbleAtlas, lightX, lightY)
-                GlassDiscOnboardingCopy.drawForeground(native, size.width, size.height, densityValue, frame)
-                val ctaRise = if (reducedMotion) 0f else (1f - frame.restAlpha) * (1f - frame.restAlpha) * (1f - frame.restAlpha) * GlassDiscOnboardingMotion.UPGRADE.rise * densityValue
-                drawGlassDiscOnboardingCtas(native, buttons, densityValue, frame.restAlpha, ctas, SystemClock.uptimeMillis(), ctaRise)
+                renderer.draw(drawContext.canvas.nativeCanvas, controller.snapshot(), autoPlay && !reducedMotion)
             }
 
-            if (community) {
-                val frame = engine.snapshot()
-                val ctaRise = if (reducedMotion) 0f else (1f - frame.restAlpha) * (1f - frame.restAlpha) * (1f - frame.restAlpha) * GlassDiscOnboardingMotion.UPGRADE.rise * densityValue
-                GlassDiscOnboardingCtaTouchTarget(buttons.light, GlassDiscOnboardingTheme.COPY.email, densityValue, ctaRise, ctas[0], engine)
-                GlassDiscOnboardingCtaTouchTarget(buttons.dark, GlassDiscOnboardingTheme.COPY.phone, densityValue, ctaRise, ctas[1], engine)
+            if (mapOpen) {
+                val edge = layout.dp(GlassDiscOnboardingTheme.Layout.Edge)
+                val topPx = layout.top + layout.dp(GlassDiscOnboardingTheme.Layout.SearchY)
+                val sizePx = layout.dp(GlassDiscOnboardingTheme.Layout.SearchHeight)
+                Box(
+                    Modifier
+                        .offset { IntOffset(edge.roundToInt(), topPx.roundToInt()) }
+                        .size((sizePx / density.density).dp)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Back"
+                            onClick {
+                                controller.accessibilityBack()
+                                wake++
+                                tick.longValue++
+                                true
+                            }
+                        },
+                )
             }
         }
     }
-}
-
-@Composable
-private fun GlassDiscOnboardingCtaTouchTarget(rect: android.graphics.RectF, label: String, density: Float, offsetY: Float, state: GlassDiscOnboardingCtaState, engine: GlassDiscOnboardingEngine) {
-    val target = android.graphics.RectF(rect).apply { offset(0f, offsetY) }
-    Box(
-        Modifier
-            .size((target.width() / density).dp, (target.height() / density).dp)
-            .semantics {
-                role = Role.Button
-                contentDescription = label
-            }
-            .pointerInput(state, engine) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    engine.interruptAutoPlay(down.uptimeMillis, touchDown = true)
-                    state.down(down.position.x + target.left, down.uptimeMillis)
-                    var released = false
-                    try {
-                        do {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) {
-                                state.up(change.uptimeMillis)
-                                engine.interruptAutoPlay(change.uptimeMillis, touchDown = false)
-                                released = true
-                                change.consume()
-                                break
-                            }
-                            change.consume()
-                        } while (true)
-                    } finally {
-                        if (!released) {
-                            val now = SystemClock.uptimeMillis()
-                            state.up(now)
-                            engine.interruptAutoPlay(now, touchDown = false)
-                        }
-                    }
-                }
-            }
-            .offset { IntOffset(target.left.roundToInt(), target.top.roundToInt()) },
-    )
-}
-
-private fun glassDiscOnboardingHaptic(kind: GlassDiscOnboardingHaptic): Int = when (kind) {
-    GlassDiscOnboardingHaptic.Tick -> HapticFeedbackConstants.CLOCK_TICK
-    GlassDiscOnboardingHaptic.Commit -> HapticFeedbackConstants.CONTEXT_CLICK
-    GlassDiscOnboardingHaptic.Land -> HapticFeedbackConstants.VIRTUAL_KEY
-    GlassDiscOnboardingHaptic.Back -> HapticFeedbackConstants.CLOCK_TICK
 }
