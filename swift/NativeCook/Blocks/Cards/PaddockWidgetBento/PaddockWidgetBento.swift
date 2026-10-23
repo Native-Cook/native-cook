@@ -33,6 +33,46 @@ private struct PaddockWidgetBentoScrollSnapshot: Equatable {
 private typealias Theme = PaddockWidgetBentoTheme
 private typealias Motion = PaddockWidgetBentoMotion
 
+/// A pausable display clock that follows UIKit activation, independently of SwiftUI's scene timeline.
+private final class PaddockWidgetBentoDisplayClock: ObservableObject {
+    @Published private(set) var time = ProcessInfo.processInfo.systemUptime
+    private(set) var controller = PaddockWidgetBentoController()
+    private var displayLink: CADisplayLink?
+
+    func update(controller: PaddockWidgetBentoController, running: Bool) {
+        self.controller = controller
+        if running, displayLink == nil {
+            let target = Target()
+            target.clock = self
+            let link = CADisplayLink(target: target, selector: #selector(Target.tick(_:)))
+            link.preferredFramesPerSecond = 60
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+        displayLink?.isPaused = !running
+        time = ProcessInfo.processInfo.systemUptime
+    }
+
+    func stop() { displayLink?.invalidate(); displayLink = nil }
+    deinit { displayLink?.invalidate() }
+
+    private final class Target: NSObject {
+        weak var clock: PaddockWidgetBentoDisplayClock?
+        @objc func tick(_ link: CADisplayLink) { clock?.time = ProcessInfo.processInfo.systemUptime }
+    }
+}
+
+/// Only the motion layer observes frame times; the screen's state changes at event boundaries.
+private struct PaddockWidgetBentoTimeline<Content: View>: View {
+    @ObservedObject var clock: PaddockWidgetBentoDisplayClock
+    let content: (TimeInterval, PaddockWidgetBentoController) -> Content
+
+    var body: some View {
+        content(clock.time, clock.controller)
+            .onDisappear { clock.stop() }
+    }
+}
+
 /// The device's safe area read from the key window: a GeometryReader under `.ignoresSafeArea()` reports zero.
 enum PaddockWidgetBentoSafeArea {
     @MainActor static var insets: EdgeInsets {
@@ -53,6 +93,7 @@ struct PaddockWidgetBento: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(\.scenePhase) private var scenePhase
     @State private var controller = PaddockWidgetBentoController()
+    @State private var displayClock = PaddockWidgetBentoDisplayClock()
     @State private var appeared = false
     @State private var clockActive = false
     @State private var revision = 0
@@ -91,7 +132,9 @@ struct PaddockWidgetBento: View {
     private let touchShift = PaddockWidgetBentoMotion.slotY[0] - Theme.Layout.quick.height / 2
 
     var body: some View {
-        GeometryReader { proxy in
+        // Register wake invalidations on this view, before GeometryReader defers its content.
+        let _ = revision
+        return GeometryReader { proxy in
             let scale = proxy.size.width / Theme.referenceWidth
             let safe = PaddockWidgetBentoSafeArea.insets
             ZStack(alignment: .top) {
@@ -133,10 +176,17 @@ struct PaddockWidgetBento: View {
             .sheet(item: $destination) { sheet($0) }
             .onChange(of: destination) { _, value in destinationChanged(value) }
             .onChange(of: scenePhase) { _, phase in lifecycleChanged(phase) }
+            // XCTest can leave SwiftUI's scene phase inactive while UIKit has activated the app.
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                lifecycleChanged(.active)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                lifecycleChanged(.inactive)
+            }
             .onChange(of: quiet) { _, value in quietChanged(value) }
             .onChange(of: autoPlay) { _, value in let time = now; controller.setAutoPlay(value, now: time); wake(at: time) }
             .onAppear { appearIfNeeded() }
-            .onDisappear { cancelTasks(); controller.setActive(false, now: now) }
+            .onDisappear { cancelTasks(); clockActive = false; controller.setActive(false, now: now) }
         }
     }
 
@@ -181,14 +231,12 @@ struct PaddockWidgetBento: View {
     }
 
     private func motionLayer(scale: CGFloat) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !clockActive)) { _ in
-            let _ = revision
-            let time = now
-            var sampler = controller
+        PaddockWidgetBentoTimeline(clock: displayClock) { time, renderController in
+            var sampler = renderController
             let frame = sampler.frame(now: time)
             let pit = pitTime(frame, at: time)
             let peel = peelState(frame, at: time)
-            ZStack(alignment: .topLeading) {
+            return ZStack(alignment: .topLeading) {
                 PaddockWidgetBentoPitTrails(scale: scale, pit: pit, frame: frame)
                 PaddockWidgetBentoStaticGrid(scale: scale, guideVisible: guideVisible, pit: pit, peel: peel, onAction: handleAction) {
                     PaddockWidgetBentoPanSurface(
@@ -207,7 +255,6 @@ struct PaddockWidgetBento: View {
                 }
             }
             .frame(width: Theme.referenceWidth * scale, height: Theme.Layout.gridHeight * scale, alignment: .topLeading)
-            .onChange(of: cadenceKind(at: time), initial: true) { _, _ in wake(at: time) }
         }
     }
 
@@ -487,6 +534,7 @@ struct PaddockWidgetBento: View {
         activeOwner = owner; activeCard = id
         // UITouch timestamps share the system-uptime clock; delivery may be delayed by scrolling.
         controller.beginPress(id: id, y: referenceY, owner: owner, now: timestamp)
+        wake(at: now)
     }
 
     private func rawTouchHold(owner: Int, referenceY: Double) {
@@ -579,7 +627,7 @@ struct PaddockWidgetBento: View {
         controller.setAutoPlay(autoPlay, now: time)
         controller.setQuiet(quiet, now: time)
         controller.setVisible(selectedTab == .home && feedAtTop && destination == nil, now: time)
-        controller.setActive(scenePhase == .active, now: time)
+        controller.setActive(UIApplication.shared.applicationState == .active, now: time)
         wake(at: time)
     }
 
@@ -604,12 +652,6 @@ struct PaddockWidgetBento: View {
     /// True while the jiggle or a held sticker needs frames until an event ends them.
     private var continuousMotion: Bool { peelHeld || (controller.isEditing && !reduceMotion) }
 
-    private func cadenceKind(at time: TimeInterval) -> Int {
-        let interval = controller.cadence(now: time)
-        if continuousMotion || livePitStart != nil || peelReleaseStart != nil || (interval.map { $0 <= 1.0 / 55 } ?? false) { return 1 }
-        return interval == nil ? 0 : 2
-    }
-
     private func syncCadence(at time: TimeInterval) {
         wakeTask?.cancel(); wakeTask = nil
         let interval = controller.cadence(now: time)
@@ -618,10 +660,14 @@ struct PaddockWidgetBento: View {
         if let start = livePitStart { extraEnd = start + Motion.Pit.duration }
         if let start = peelReleaseStart { extraEnd = max(extraEnd ?? 0, start + peelReleaseTotal) }
         clockActive = continuousMotion || fast || extraEnd != nil
+        displayClock.update(controller: controller, running: clockActive)
         var wait: TimeInterval?
         if !continuousMotion {
             if let extraEnd { wait = max(0.001, extraEnd - time) }
-            if let interval, !fast { wait = min(wait ?? interval, interval) }
+            // Schedule both ends of a motion window, independently of the display clock.
+            // Like the React Native runtime, the controller owns every wake; the timeline only draws.
+            let boundary = fast ? (controller.frameWindowEnd(now: time) ?? interval) : interval
+            if let boundary { wait = min(wait ?? boundary, max(0.001, boundary)) }
         }
         guard let wait else { return }
         wakeTask = Task { @MainActor in

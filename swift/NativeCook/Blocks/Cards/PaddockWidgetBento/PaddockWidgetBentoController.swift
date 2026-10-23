@@ -385,6 +385,8 @@ struct PaddockWidgetBentoController {
     func frameWindowEnd(now: TimeInterval) -> TimeInterval? {
         if isDragging { return nil }
         if let transition { return max(0, transition.startedAt + transition.duration - now) }
+        guard isActive, isVisible, !isQuiet, autoPlay, !isEditing, frozenAt == nil,
+              restartAt == nil else { return nil }
         let time = max(0, now - timelineAnchor).truncatingRemainder(dividingBy: PaddockWidgetBentoMotion.loopDuration)
         return PaddockWidgetBentoMotion.activeRanges.first(where: { time >= $0.0 && time < $0.1 }).map { $0.1 - time }
     }
