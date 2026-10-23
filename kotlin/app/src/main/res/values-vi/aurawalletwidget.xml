@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aura Wallet Widget only; copy with the block. -->
+<resources>
+    <string name="aurawalletwidget_balance">SỐ DƯ CỦA BẠN</string>
+    <string name="aurawalletwidget_after">SỐ DƯ SAU GỬI</string>
+    <string name="aurawalletwidget_account">Chi tiết tài khoản</string>
+    <string name="aurawalletwidget_settings">Cài đặt</string>
+    <string name="aurawalletwidget_swap">Đổi màu</string>
+    <string name="aurawalletwidget_receive">Nhận</string>
+    <string name="aurawalletwidget_send">Gửi</string>
+    <string name="aurawalletwidget_last">Giao dịch gần nhất</string>
+    <string name="aurawalletwidget_view_all">Xem tất cả</string>
+    <string name="aurawalletwidget_view_all_accessibility">Xem tất cả giao dịch</string>
+    <string name="aurawalletwidget_just_now">Vừa xong</string>
+    <string name="aurawalletwidget_friend_hint">Chạm hai lần để chọn, rồi nhấn Gửi.</string>
+    <string name="aurawalletwidget_hint_rest">Kéo một người bạn xuống để gửi.</string>
+    <string name="aurawalletwidget_hint_armed">Gửi, hoặc kéo để đổi số tiền.</string>
+    <string name="aurawalletwidget_hint_pulling">Thả để gửi $%1$d cho %2$s.</string>
+    <string name="aurawalletwidget_hint_idle_pull">Kéo thêm, hoặc thả để huỷ.</string>
+    <string name="aurawalletwidget_hint_sending">Đang gửi $%1$d cho %2$s.</string>
+    <string name="aurawalletwidget_hint_sent">Đã gửi $%1$d cho %2$s.</string>
+    <string name="aurawalletwidget_announcement">Đã gửi %1$d đô la cho %2$s</string>
+    <string name="aurawalletwidget_spoken_balance">Số dư của bạn, %1$s đô la và %2$s xu</string>
+    <string name="aurawalletwidget_spoken_after">Số dư sau gửi, %1$s đô la và %2$s xu</string>
+    <string name="aurawalletwidget_spoken_receipt">%1$s, vừa xong, trừ %2$s đô la</string>
+    <string name="aurawalletwidget_spoken_initial">Orbit Pro, Jan 17, 20:12, %1$s đô la</string>
+</resources>

@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Free RN",
+    "slug": "native-cook-source-free",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "nativecookfree",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.ngocdevv.nativecook.free",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
+    },
+    "android": {
+      "package": "com.ngocdevv.nativecook.free",
+      "adaptiveIcon": {
+        "backgroundColor": "#121210",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#121210",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      "expo-localization",
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "react-native-webgpu",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

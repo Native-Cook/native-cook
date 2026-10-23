@@ -1,0 +1,24 @@
+/* Bản dịch tiếng Việt của Aura. */
+"balance" = "SỐ DƯ CỦA BẠN";
+"after" = "SỐ DƯ SAU GỬI";
+"account" = "Chi tiết tài khoản";
+"last" = "Giao dịch gần nhất";
+"all" = "Xem tất cả";
+"allAccessible" = "Xem tất cả giao dịch";
+"now" = "Vừa xong";
+"settings" = "Cài đặt";
+"swap" = "Đổi màu";
+"receive" = "Nhận";
+"send" = "Gửi";
+"friendHint" = "Chạm hai lần để chọn, rồi nhấn Gửi.";
+"rest" = "Kéo một người bạn xuống để gửi.";
+"armed" = "Gửi, hoặc kéo để đổi số tiền.";
+"idle-pull" = "Kéo thêm, hoặc thả để huỷ.";
+"pulling" = "Thả để gửi $%d cho %@.";
+"sending" = "Đang gửi $%d cho %@.";
+"sent" = "Đã gửi $%d cho %@.";
+"announcement" = "Đã gửi %d đô la cho %@";
+"balanceAccessible" = "Số dư của bạn, %@ đô la và %@ xu";
+"afterAccessible" = "Số dư sau gửi, %@ đô la và %@ xu";
+"receiptAccessible" = "%@, vừa xong, trừ %@ đô la";
+"initialReceiptAccessible" = "Orbit Pro, Jan 17, 20:12, 60.00 đô la";

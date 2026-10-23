@@ -1,0 +1,7 @@
+"title" = "Walk";
+"subtitle" = "30 days";
+"minutes" = "min";
+"steps" = "steps";
+"hint" = "Hold to charge. Let go early and it cools.";
+"a11y.label" = "Walk, 30 days, %@ steps, heart rate %d";
+"a11y.hint" = "Double-tap to charge to the daily step goal";

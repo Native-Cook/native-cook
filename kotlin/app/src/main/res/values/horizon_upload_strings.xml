@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Horizon Upload copy, matching the original English/Vietnamese strings. -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="horizon_upload_idle">Tap to upload</string>
+    <!-- Keep the source's literal three dots for visual parity. -->
+    <string name="horizon_upload_uploading" tools:ignore="TypographyEllipsis">Uploading ...</string>
+    <string name="horizon_upload_paused">Paused</string>
+    <string name="horizon_upload_done">Uploaded</string>
+    <string name="horizon_upload_stopped">Canceled</string>
+    <string name="horizon_upload_start">Start upload</string>
+    <string name="horizon_upload_pause">Pause upload</string>
+    <string name="horizon_upload_resume">Resume upload</string>
+    <string name="horizon_upload_again">Upload again</string>
+    <string name="horizon_upload_cancel">Cancel upload</string>
+    <string name="horizon_upload_complete_announcement">Upload complete</string>
+    <string name="horizon_upload_canceled_announcement">Upload canceled</string>
+    <string name="horizon_upload_hint">Drag the card. Tap the bar to pause.</string>
+    <string name="horizon_upload_file_name">Project Brief.txt</string>
+    <string name="horizon_upload_file_size">97.23 KB</string>
+</resources>

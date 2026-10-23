@@ -1,0 +1,70 @@
+package com.ngocdevv.nativecook.blocks.gestures.gumballcrank
+
+/** Canonical token projections keep the simulation equations readable. */
+internal object GumballCrankTokens {
+    const val stageWidth = Tokens.STAGE_WIDTH
+    const val step = Tokens.Motion.STEP
+    val maxSteps = Tokens.Motion.MAX_STEPS.toDouble()
+    const val loopDuration = Tokens.Motion.UP_LOOP_MS / 1000.0
+    const val loopTolerance = Tokens.PORT.loopTolerance
+    // The cross-platform contract resumes two seconds after direct interaction.
+    const val touchResetDelay = Tokens.PORT.touchResetDelay
+    const val returnDuration = Tokens.PORT.returnDuration
+    const val reducedFade = Tokens.Motion.REDUCED.fade
+    val fullTurn = Tokens.Motion.CRANK.turn
+    val detentAngle = Tokens.Motion.CRANK.detent
+    const val wobbleStiffness = Tokens.Motion.CRANK.overshoot.stiffness
+    const val wobbleDamping = Tokens.Motion.CRANK.overshoot.damping
+    const val wobbleKick = Tokens.Motion.CRANK.overshoot.kick
+    const val grabRadius = Tokens.Motion.KNOB.grab
+    const val friction = Tokens.Motion.KNOB.friction
+    const val catchSpin = Tokens.Motion.KNOB.catchSpin
+    const val commitSpin = Tokens.Motion.KNOB.commitSpin
+    const val finishDuration = Tokens.Motion.KNOB.finish
+    const val maxSpin = Tokens.Motion.KNOB.maxSpin
+    const val backMax = Tokens.Motion.KNOB.backMax
+    const val squashDuration = Tokens.Motion.UP_T.squash
+    val outStart = Tokens.Motion.UP_T.out[0]
+    val outDuration = Tokens.Motion.UP_T.out[1] - Tokens.Motion.UP_T.out[0]
+    const val confettiAt = Tokens.Motion.UP_T.confetti
+    val morphStart = Tokens.Motion.UP_T.morph[0]
+    val morphDuration = Tokens.Motion.UP_T.morph[1] - Tokens.Motion.UP_T.morph[0]
+    const val dispenseDone = Tokens.Motion.UP_T.done
+    const val collectAt = Tokens.Motion.UP_T.collect
+    val couponOutStart = Tokens.Motion.UP_T.couponOut[0]
+    val couponOutDuration = Tokens.Motion.UP_T.couponOut[1] - Tokens.Motion.UP_T.couponOut[0]
+    const val backDuration = Tokens.Motion.UP_T.back
+    const val sweepDuration = Tokens.Motion.UP_T.sweep
+    const val idleSweepDuration = Tokens.Motion.UP_T.idleSweep
+    const val confettiCount = Tokens.Motion.CONFETTI.count
+    const val confettiSpeed = Tokens.Motion.CONFETTI.speed
+    const val confettiSpread = Tokens.Motion.CONFETTI.spread
+    const val confettiGravity = Tokens.Motion.CONFETTI.gravity
+    const val confettiSpin = Tokens.Motion.CONFETTI.spin
+    val coinsFrom = Tokens.Motion.COINS.from.toInt()
+    val coinsAdd = Tokens.Motion.COINS.add.toInt()
+    val demoTurnStart = Tokens.Motion.UP_SCRIPT.turn[0]
+    val demoTurnDuration = Tokens.Motion.UP_SCRIPT.turn[1] - Tokens.Motion.UP_SCRIPT.turn[0]
+    val demoTurnAngle = Tokens.Motion.UP_SCRIPT.angle
+    const val demoRadius = Tokens.Motion.UP_SCRIPT.radius
+    const val collectScriptAt = Tokens.Motion.UP_SCRIPT.collectAt
+    const val knobCenterX = Tokens.REPLICA_ART.knob.x + Tokens.REPLICA_ART.knob.size / 2.0
+    const val knobCenterY = Tokens.REPLICA_ART.knob.y + Tokens.REPLICA_ART.knob.size / 2.0
+    const val exitX = Tokens.REPLICA_ART.exit.x
+    const val exitY = Tokens.REPLICA_ART.exit.y
+    const val potX = Tokens.REPLICA_ART.pot.cx
+    const val potY = Tokens.REPLICA_ART.pot.cy
+    const val panelCenterX = Tokens.UP.panel.x + Tokens.UP.panel.w / 2.0
+    const val panelCenterY = Tokens.UP.panel.y + Tokens.UP.panel.h / 2.0
+    const val panelWidth = Tokens.UP.panel.w
+    const val panelHeight = Tokens.UP.panel.h
+    const val cardCenterX = Tokens.UP.card.x + Tokens.UP.card.w / 2.0
+    const val cardCenterY = Tokens.UP.card.y + Tokens.UP.card.h / 2.0
+    const val cardWidth = Tokens.UP.card.w
+    const val cardHeight = Tokens.UP.card.h
+    const val tubBackScale = Tokens.UP.tubBack
+    const val peelAngle = Tokens.UP.peel
+    const val sweepStartX = Tokens.REPLICA_ART.globe.x - Tokens.REPLICA_ART.globe.r - 40.0
+    const val sweepTravel = Tokens.REPLICA_ART.globe.r * 2.0 + 80.0
+    const val hiddenX = Tokens.PORT.hiddenX
+}

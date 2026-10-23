@@ -1,0 +1,12 @@
+/* Page hint under the pills. */
+"hint" = "Tap to read. Hold to stoke the flame.";
+/* Replays the arrival of the three notes. */
+"deliver" = "Deliver again";
+/* Status line of a note once it has been read. */
+"seen" = "Seen just now";
+/* VoiceOver hint on each note. */
+"a11y.pill.hint" = "Double-tap to mark read or unread";
+/* Status lines of the three notes. */
+"line.kiln" = "You made a sale";
+"line.tide" = "$2,000 commission";
+"line.bloom" = "Deployed in 24h";

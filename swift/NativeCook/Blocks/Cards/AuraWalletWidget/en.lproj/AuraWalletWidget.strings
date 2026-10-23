@@ -1,0 +1,24 @@
+/* Aura's copy. Names and the invented transaction remain as written. */
+"balance" = "YOUR BALANCE";
+"after" = "BALANCE AFTER";
+"account" = "Account details";
+"last" = "Last transaction";
+"all" = "View all";
+"allAccessible" = "View all transactions";
+"now" = "Just now";
+"settings" = "Settings";
+"swap" = "Swap";
+"receive" = "Receive";
+"send" = "Send";
+"friendHint" = "Double tap to choose, then Send.";
+"rest" = "Pull a friend down to send.";
+"armed" = "Send, or pull to change the amount.";
+"idle-pull" = "Pull further, or let go to cancel.";
+"pulling" = "Let go to send $%d to %@.";
+"sending" = "Sending $%d to %@.";
+"sent" = "Sent $%d to %@.";
+"announcement" = "Sent %d dollars to %@";
+"balanceAccessible" = "Your balance, %@ dollars and %@ cents";
+"afterAccessible" = "Balance after, %@ dollars and %@ cents";
+"receiptAccessible" = "%@, just now, minus %@ dollars";
+"initialReceiptAccessible" = "Orbit Pro, Jan 17, 20:12, 60.00 dollars";

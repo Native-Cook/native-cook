@@ -1,0 +1,14 @@
+/* Horizon Upload: nhãn hiển thị và tác vụ VoiceOver. */
+"idle" = "Chạm để tải lên";
+"uploading" = "Đang tải lên ...";
+"paused" = "Đã tạm dừng";
+"done" = "Đã tải lên";
+"stopped" = "Đã huỷ";
+"start" = "Bắt đầu tải lên";
+"pause" = "Tạm dừng tải lên";
+"resume" = "Tiếp tục tải lên";
+"again" = "Tải lên lại";
+"cancel" = "Huỷ tải lên";
+"complete" = "Tải lên hoàn tất";
+"canceled" = "Đã huỷ tải lên";
+"hint" = "Kéo thẻ thử xem. Chạm thanh tiến độ để tạm dừng.";

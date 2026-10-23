@@ -1,0 +1,58 @@
+// The two colour clouds of the light sheet, sampled from the pin's own frames (12 × 24 over the
+// sheet, text left out; below the cloud the rows repeat the sheet's own colour): A behind
+// "Discover your gift amount", B behind the amount.
+export const CLOUD_GRID = { cols: 12, rows: 24 };
+
+export const CLOUD_A_FIELD: string[][] = [
+  ['#f2f2f5', '#f3f3f6', '#f4f4f7', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9'],
+  ['#f1f2f5', '#f0f0f4', '#f4f4f7', '#f5f5f9', '#f4f4f7', '#f4f4f7', '#f4f4f9', '#f4f4f9', '#f4f4f9', '#f4f4f9', '#f4f4fa', '#f4f4f9'],
+  ['#f3f3f6', '#f3f3f6', '#f4f4f7', '#f4f4f7', '#f4f4f7', '#f0f3f7', '#eff2f7', '#eff2f7', '#eff2f7', '#eff2f9', '#f0f3f9', '#f0f3f9'],
+  ['#f4f4f7', '#f4f4f6', '#f3f3f5', '#f0f0f3', '#edeff3', '#eceef3', '#ebecf5', '#e7ebf5', '#e6ebf5', '#e7ecf6', '#e9eef7', '#eef1f7'],
+  ['#f3f3f5', '#f2f2f2', '#efefed', '#e9ece8', '#e5e8e7', '#dfe5e9', '#dae1ed', '#d7dff0', '#d6dff3', '#dae2f6', '#dfe6f7', '#e5ebf7'],
+  ['#f2f2ef', '#edeee6', '#e6e9de', '#dfe3d7', '#d5ddd5', '#cbd7da', '#c1d1e0', '#bbcde7', '#bccded', '#c1d2f2', '#ccdaf5', '#d9e1f7'],
+  ['#edeee5', '#e4e8d7', '#dae0c8', '#cdd6bd', '#c0cbbb', '#b0c2c2', '#a3bacf', '#9ab6da', '#9ab7e3', '#a4beea', '#b2c9f2', '#c6d7f5'],
+  ['#e7ebdb', '#dbe0c4', '#ccd4ae', '#bbc59d', '#a8b79d', '#97ada9', '#88a2bb', '#7da0cd', '#7ea1d9', '#86abe4', '#9ab8eb', '#b2c9f2'],
+  ['#e4e7d0', '#d3d9b4', '#c0c894', '#abb682', '#97a784', '#859a96', '#7592ab', '#6b8cbf', '#6990cf', '#739adb', '#88ace6', '#a3c0ee'],
+  ['#e1e3ca', '#d0d3a6', '#bbc085', '#a5ab73', '#909a75', '#7e8f86', '#70849d', '#6481b5', '#6084c6', '#6891d4', '#7da2e2', '#9abaed'],
+  ['#dedbbe', '#cbc994', '#b7b477', '#a69d62', '#958d62', '#898276', '#777c90', '#6d7ba0', '#647fb9', '#698acc', '#789bdb', '#91b3e9'],
+  ['#e1dbbe', '#d1c694', '#bead70', '#b29b60', '#a4885b', '#977e6a', '#8e7a7e', '#777a99', '#7382ad', '#778dc5', '#86a0da', '#9fb9e7'],
+  ['#e7dbc3', '#dac599', '#ccae73', '#be9558', '#b58553', '#a97d5d', '#a17a6d', '#997c85', '#9086a1', '#9097bd', '#9dadd4', '#b2c2e7'],
+  ['#ede2d3', '#e7d0ae', '#deb883', '#d49f61', '#cc8b50', '#c48251', '#bd815f', '#b78978', '#b49899', '#b6acbb', '#bfc1d7', '#ced5ea'],
+  ['#f1e5d9', '#edd6ba', '#e7be91', '#e1a96d', '#da9658', '#d48d52', '#d18d5d', '#cf9773', '#cca896', '#d0bcb9', '#d7d1d7', '#dedfeb'],
+  ['#f3e9e0', '#f2dcc8', '#edcca5', '#e9b884', '#e5a96c', '#e0a064', '#dfa269', '#dfac7f', '#e0bb9e', '#e2cdc0', '#e6dddc', '#e9e8ed'],
+  ['#f4ede7', '#f4e4d4', '#f3d9bd', '#efcba3', '#ecc08f', '#e9b986', '#e8ba8a', '#e9c29b', '#eccfb4', '#eddcd0', '#eee6e4', '#f1edf1'],
+  ['#f5f0ee', '#f4ece4', '#f4e4d4', '#f3dbc3', '#f0d6b5', '#f0d1af', '#f0d2b2', '#f0d7bc', '#f2dfcd', '#f2e7e0', '#f3edea', '#f4f2f5'],
+  ['#f4f2f4', '#f6f0ee', '#f4ede7', '#f4e8de', '#f3e5d6', '#f3e2d1', '#f3e2d3', '#f3e6d9', '#f3ebe4', '#f4eeeb', '#f4f0f2', '#f4f2f5'],
+  ['#f4f2f4', '#f6f0ee', '#f4ede7', '#f4e8de', '#f3e5d6', '#f3e2d1', '#f3e2d3', '#f3e6d9', '#f3ebe4', '#f4eeeb', '#f4f0f2', '#f4f2f5'],
+  ['#f4f2f4', '#f6f0ee', '#f4ede7', '#f4e8de', '#f3e5d6', '#f3e2d1', '#f3e2d3', '#f3e6d9', '#f3ebe4', '#f4eeeb', '#f4f0f2', '#f4f2f5'],
+  ['#f4f2f4', '#f6f0ee', '#f4ede7', '#f4e8de', '#f3e5d6', '#f3e2d1', '#f3e2d3', '#f3e6d9', '#f3ebe4', '#f4eeeb', '#f4f0f2', '#f4f2f5'],
+  ['#f4f2f4', '#f6f0ee', '#f4ede7', '#f4e8de', '#f3e5d6', '#f3e2d1', '#f3e2d3', '#f3e6d9', '#f3ebe4', '#f4eeeb', '#f4f0f2', '#f4f2f5'],
+  ['#f4f2f4', '#f6f0ee', '#f4ede7', '#f4e8de', '#f3e5d6', '#f3e2d1', '#f3e2d3', '#f3e6d9', '#f3ebe4', '#f4eeeb', '#f4f0f2', '#f4f2f5'],
+];
+
+export const CLOUD_B_FIELD: string[][] = [
+  ['#f2f2f5', '#f3f3f6', '#f4f4f7', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9'],
+  ['#f1f1f4', '#f0f0f4', '#f4f4f7', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9'],
+  ['#f3f3f9', '#f3f3f9', '#f3f3f9', '#f4f4f9', '#f4f4fa', '#f4f4f9', '#f4f4f7', '#f4f4f7', '#f5f5f9', '#f5f5f9', '#f5f5f9', '#f5f5f9'],
+  ['#f3f3f9', '#f0f3f9', '#f0f3f9', '#f0f3f9', '#f0f3f9', '#f0f3f9', '#f3f3f9', '#f4f4f7', '#f4f4f7', '#f4f4f7', '#f5f5f9', '#f5f5f9'],
+  ['#eff0f9', '#edeff7', '#ebedf7', '#e9ecf6', '#e8ecf6', '#ebecf6', '#edeff5', '#eff0f4', '#f2f2f4', '#f3f3f5', '#f4f4f6', '#f4f4f7'],
+  ['#e7ecf8', '#e2e7f6', '#dce2f6', '#d9e1f4', '#dae1f2', '#dde2ee', '#e1e6ec', '#e7e9ea', '#ebede9', '#efefed', '#f2f2f2', '#f3f3f5'],
+  ['#dde2f6', '#cfdbf4', '#c4d3f2', '#bdceed', '#c0cfe6', '#c5d2df', '#d0d8db', '#d8ded6', '#dfe4d8', '#e7e9de', '#edeee6', '#f0f0ee'],
+  ['#cad7f4', '#b6caef', '#a7bde8', '#9eb5df', '#a0b5d8', '#a8baca', '#b6c1be', '#c4cbb6', '#d1d6b9', '#dbdfc3', '#e5e6d3', '#ecede1'],
+  ['#b7cbef', '#9eb8e6', '#89a8df', '#7f9dd2', '#839bc3', '#90a1b0', '#a0ab9d', '#b1b691', '#c1c392', '#cfd1a2', '#ddddba', '#e7e7d4'],
+  ['#abc0eb', '#8ba9e1', '#7898d2', '#718cc4', '#768ab0', '#858f98', '#979881', '#a7a570', '#b6b46f', '#c6c383', '#d7d3a1', '#e4e1c2'],
+  ['#9eb4e3', '#839cd6', '#748ac4', '#7382af', '#7c809b', '#8d847f', '#9b8d65', '#a69754', '#b3a054', '#c0b261', '#d0c581', '#dfd8a9'],
+  ['#a5b6de', '#8b9ecc', '#7f8cba', '#8481a0', '#947d84', '#a07e68', '#ad8452', '#b48b47', '#bb9846', '#c6aa56', '#d3be74', '#e0d39f'],
+  ['#b4bedb', '#9fa7c4', '#9693ad', '#9e8890', '#a67f73', '#ae7d5a', '#b78248', '#bc8a3e', '#c5943f', '#d0a751', '#dbbc6f', '#e5d19b'],
+  ['#cfd1de', '#c0bbc4', '#b9a7a6', '#ba9485', '#c08967', '#c58250', '#ca823f', '#cf8b3b', '#d79842', '#dfad59', '#e6c380', '#edd7ab'],
+  ['#dfdbde', '#d7cac3', '#d2b6a0', '#d2a47b', '#d2945e', '#d48b49', '#d8893f', '#da913d', '#e19f48', '#e8b263', '#edc688', '#f2dab1'],
+  ['#ebe4e0', '#e6d8c8', '#e4c6a5', '#e1b581', '#e1a662', '#e19b50', '#e29947', '#e59e49', '#eaad59', '#eebc74', '#f2cf98', '#f5ddbd'],
+  ['#f2e9e5', '#efe1d1', '#efd4b4', '#edc693', '#edb978', '#ebb267', '#ecae60', '#edb364', '#f2bd74', '#f3ca8c', '#f5d8ad', '#f6e4cd'],
+  ['#f4efec', '#f4e9df', '#f4e0c9', '#f4d7af', '#f3cd99', '#f2c789', '#f3c383', '#f4c889', '#f5cd95', '#f6d8ad', '#f6e1c5', '#f7e9dd'],
+  ['#f6f2f3', '#f5eee9', '#f5e9de', '#f6e2cc', '#f5ddbd', '#f6d9b1', '#f5d7ad', '#f6d9b0', '#f6ddba', '#f6e2ca', '#f7e9db', '#f6efe9'],
+  ['#f6f2f3', '#f5eee9', '#f5e9de', '#f6e2cc', '#f5ddbd', '#f6d9b1', '#f5d7ad', '#f6d9b0', '#f6ddba', '#f6e2ca', '#f7e9db', '#f6efe9'],
+  ['#f6f2f3', '#f5eee9', '#f5e9de', '#f6e2cc', '#f5ddbd', '#f6d9b1', '#f5d7ad', '#f6d9b0', '#f6ddba', '#f6e2ca', '#f7e9db', '#f6efe9'],
+  ['#f6f2f3', '#f5eee9', '#f5e9de', '#f6e2cc', '#f5ddbd', '#f6d9b1', '#f5d7ad', '#f6d9b0', '#f6ddba', '#f6e2ca', '#f7e9db', '#f6efe9'],
+  ['#f6f2f3', '#f5eee9', '#f5e9de', '#f6e2cc', '#f5ddbd', '#f6d9b1', '#f5d7ad', '#f6d9b0', '#f6ddba', '#f6e2ca', '#f7e9db', '#f6efe9'],
+  ['#f6f2f3', '#f5eee9', '#f5e9de', '#f6e2cc', '#f5ddbd', '#f6d9b1', '#f5d7ad', '#f6d9b0', '#f6ddba', '#f6e2ca', '#f7e9db', '#f6efe9'],
+];

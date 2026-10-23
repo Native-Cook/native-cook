@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Heart Like Burst block (blocks/animations/heartlikeburst). -->
+<resources>
+    <string name="heartlikeburst_heart_action_like">Thích</string>
+    <string name="heartlikeburst_heart_action_unlike">Bỏ thích</string>
+    <string name="heartlikeburst_heart_state_liked">Đã thích</string>
+    <string name="heartlikeburst_heart_state_unliked">Chưa thích</string>
+
+    <!-- The original app's Theme.XHeart. The block's View is created with this theme through a
+         ContextThemeWrapper, so the window items have no effect here; the host window is already
+         black-barred and edge to edge. -->
+    <style name="heartlikeburst_Theme_XHeart" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:colorAccent">#E2264D</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

@@ -1,0 +1,141 @@
+import { BottomSheetBackdrop, BottomSheetBackdropProps, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
+import React, { useCallback, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import { ButtonScale } from '../components/ui/button-scale';
+import { FabricColors } from '../components/ui/fabric-colors';
+// The original loaded this with React.lazy and no Suspense boundary, which only held the sheet's first
+// commit back until the module arrived. The host app opens a block inside a Suspense boundary, where the
+// same lazy load would blank the whole block for a frame, so the module is imported directly.
+import FlagWave from '../components/ui/flag-wave';
+import { Header } from '../components/ui/header';
+import { ListDescription } from '../components/ui/list-desc';
+import { PriceAnimation, PriceAnimationRef } from '../components/ui/price-animation';
+import { SegmentedControl } from '../components/ui/segmented-control';
+
+const Data: {
+  name: string;
+  color: [number, number, number];
+  price: string
+}[] = [
+    { name: 'Yearly', color: FabricColors.rose, price: "25" },
+    { name: 'Monthly', color: FabricColors.darkBlue, price: "18" },
+  ];
+
+export default function SubScreen() {
+  const [selected, setSelected] = useState(Data[0]);
+  const everybodyStaggeredTextRef = useRef<PriceAnimationRef>(null);
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const handlePresentModalPress = useCallback(() => {
+    bottomSheetModalRef.current?.present();
+    setTimeout(() => {
+      everybodyStaggeredTextRef.current?.animate()
+    }, 600)
+  }, []);
+
+  const renderBottomSheetBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop disappearsOnIndex={-1} appearsOnIndex={0} {...props} />
+    ),
+    [],
+  )
+
+  const deeperZoomInDown = ZoomIn
+    .springify()
+    .damping(10)
+    .mass(0.7)
+    .stiffness(10)
+    .energyThreshold(6e-8);
+
+
+
+  const deeperFadeInDown = FadeInDown.springify()
+    .damping(10)
+    .mass(1)
+    .stiffness(10)
+    .energyThreshold(6e-8)
+    .withInitialValues({
+      transform: [{ translateY: 180 }]
+    })
+
+
+  return (
+    <View style={styles.fillCenter}>
+      <ButtonScale label='Purchase' onPress={handlePresentModalPress} />
+      <BottomSheetModal
+        backdropComponent={renderBottomSheetBackdrop}
+        handleIndicatorStyle={styles.handleIndicator}
+        backgroundStyle={styles.bottomSheetBackground}
+        ref={bottomSheetModalRef}>
+        <BottomSheetView style={[styles.fill, styles.bottomSheetViewPadding]}>
+          <Animated.View entering={FadeInDown.springify()
+            .damping(10)
+            .mass(1)
+            .stiffness(10)
+            .energyThreshold(6e-8)} style={styles.fill}>
+            <Header />
+            <SegmentedControl
+              data={Data}
+              onPress={item => {
+                setSelected(item);
+                everybodyStaggeredTextRef.current?.toggle();
+              }}
+              selected={selected}
+              height={38}
+            />
+            <Animated.View style={styles.subscriptionCard} entering={deeperFadeInDown}>
+              <Animated.View entering={deeperZoomInDown} style={[styles.subscriptionCard, styles.subscriptionCardInner]}>
+                <FlagWave color={selected.color} />
+                <View style={styles.priceInfo}>
+                  <PriceAnimation content={selected.price} ref={everybodyStaggeredTextRef} />
+                  <Text style={styles.priceInfoLabel}>All round secure payment</Text>
+                </View>
+              </Animated.View>
+            </Animated.View>
+          </Animated.View>
+          <ListDescription />
+          <ButtonScale entering={deeperFadeInDown} />
+        </BottomSheetView>
+      </BottomSheetModal>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1
+  },
+  fillCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  handleIndicator: {
+    backgroundColor: "#D3D3D3",
+    marginTop: 4,
+    width: "12%"
+  },
+  bottomSheetBackground: {
+    borderRadius: 42
+  },
+  bottomSheetViewPadding: {
+    paddingBottom: 36
+  },
+  subscriptionCard: {
+    borderRadius: 28,
+    overflow: "hidden"
+  },
+  subscriptionCardInner: {
+    marginHorizontal: 32
+  },
+  priceInfo: {
+    position: "absolute",
+    bottom: 24,
+    left: 24
+  },
+  priceInfoLabel: {
+    color: "#FFFFFF",
+    fontSize: 13
+  }
+})

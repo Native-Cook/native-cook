@@ -1,0 +1,6 @@
+Manrope, Mikhail Sharanda and contributors. SIL Open Font License 1.1.
+Static font binary (only Medium is shipped, for status labels):
+https://raw.githubusercontent.com/expo/google-fonts/main/font-packages/manrope/500Medium/Manrope_500Medium.ttf
+License: https://github.com/google/fonts/blob/main/ofl/manrope/OFL.txt
+PostScript name: Manrope-Medium.
+File names and percentages use the platform system face at regular weight.

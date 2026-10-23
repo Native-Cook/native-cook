@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flare Notifications block (blocks/animations/flarenotifications). -->
+<resources>
+    <string name="flarenotifications_kiln_line">You made a sale</string>
+    <string name="flarenotifications_tide_line">$2,000 commission</string>
+    <string name="flarenotifications_bloom_line">Deployed in 24h</string>
+    <string name="flarenotifications_seen">Seen just now</string>
+    <!-- TalkBack reads a custom click label as "Double-tap to …", which gives the RN accessibilityHint. -->
+    <string name="flarenotifications_pill_action">mark read or unread</string>
+    <string name="flarenotifications_hint">Tap to read. Hold to stoke the flame.</string>
+    <string name="flarenotifications_deliver_again">Deliver again</string>
+    <!-- Shown instead of the block before Android 13, which has no runtime shaders. -->
+    <string name="flarenotifications_unsupported">Flare Notifications needs Android 13 or newer.</string>
+</resources>

@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "5B2C7B1E-6D1F-4F0A-9A2B-1C3D4E5F6A7B",
+      "name" : "Recording",
+      "options" : {
+        "preferredScreenCaptureFormat" : "screenRecording",
+        "uiTestingScreenshotsLifetime" : "keepAlways",
+        "userAttachmentLifetime" : "keepAlways"
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "maximumTestExecutionTimeAllowance" : 600,
+    "testExecutionOrdering" : "lexical",
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:NativeCook.xcodeproj",
+        "identifier" : "A1D0C0DE0000000000000033",
+        "name" : "RecordBlocks"
+      }
+    }
+  ],
+  "version" : 1
+}

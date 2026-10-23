@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Referral Reward Card only; copy with the block. -->
+<resources>
+    <string name="referralrewardcard_title">Mời bạn bè</string>
+    <string name="referralrewardcard_subtitle">Mời bạn bè để nhận điểm thưởng.</string>
+    <string name="referralrewardcard_hint">Kéo hàng ảnh để xem một người bạn.</string>
+    <string name="referralrewardcard_refer">Mời bạn bè ngay</string>
+    <string name="referralrewardcard_reset">Bắt đầu lại</string>
+    <string name="referralrewardcard_invite">Mời</string>
+    <string name="referralrewardcard_friends">Bạn bè</string>
+    <string name="referralrewardcard_pending">Chưa mời</string>
+    <string name="referralrewardcard_pending_short">Chưa mời</string>
+    <string name="referralrewardcard_joined">Đã tham gia · +25 điểm</string>
+    <string name="referralrewardcard_caption">%1$d/3 phần thưởng</string>
+    <string name="referralrewardcard_rewards">Phần thưởng: đã mở %1$d trên 3</string>
+    <string name="referralrewardcard_points">%1$d điểm</string>
+    <string name="referralrewardcard_announcement">%1$s đã tham gia. %2$d điểm.</string>
+    <string name="referralrewardcard_value_joined">%1$s, đã tham gia, %2$d trên 7</string>
+    <string name="referralrewardcard_value_pending">%1$s, chưa mời, %2$d trên 7</string>
+    <string name="referralrewardcard_next">Bạn tiếp theo</string>
+    <string name="referralrewardcard_previous">Bạn trước</string>
+    <string name="referralrewardcard_toggle">Mở hoặc đóng thông tin người bạn</string>
+    <string name="referralrewardcard_invite_name">Mời %1$s</string>
+</resources>

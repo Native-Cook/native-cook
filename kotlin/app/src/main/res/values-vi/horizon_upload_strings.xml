@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Horizon Upload copy, matching the original English/Vietnamese strings. -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="horizon_upload_idle">Chạm để tải lên</string>
+    <!-- Keep the source's literal three dots for visual parity. -->
+    <string name="horizon_upload_uploading" tools:ignore="TypographyEllipsis">Đang tải lên ...</string>
+    <string name="horizon_upload_paused">Đã tạm dừng</string>
+    <string name="horizon_upload_done">Đã tải lên</string>
+    <string name="horizon_upload_stopped">Đã huỷ</string>
+    <string name="horizon_upload_start">Bắt đầu tải lên</string>
+    <string name="horizon_upload_pause">Tạm dừng tải lên</string>
+    <string name="horizon_upload_resume">Tiếp tục tải lên</string>
+    <string name="horizon_upload_again">Tải lên lại</string>
+    <string name="horizon_upload_cancel">Huỷ tải lên</string>
+    <string name="horizon_upload_complete_announcement">Tải lên hoàn tất</string>
+    <string name="horizon_upload_canceled_announcement">Đã huỷ tải lên</string>
+    <string name="horizon_upload_hint">Kéo thẻ thử xem. Chạm thanh tiến độ để tạm dừng.</string>
+    <string name="horizon_upload_file_name">Project Brief.txt</string>
+    <string name="horizon_upload_file_size">97.23 KB</string>
+</resources>

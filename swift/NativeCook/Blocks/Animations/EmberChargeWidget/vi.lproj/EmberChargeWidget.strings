@@ -1,0 +1,7 @@
+"title" = "Đi bộ";
+"subtitle" = "30 ngày";
+"minutes" = "phút";
+"steps" = "bước";
+"hint" = "Giữ để nạp. Thả sớm thì nguội lại.";
+"a11y.label" = "Đi bộ, 30 ngày, %@ bước, nhịp tim %d";
+"a11y.hint" = "Chạm hai lần để nạp số bước tới mục tiêu trong ngày";

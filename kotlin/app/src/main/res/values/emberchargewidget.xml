@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="emberchargewidget_title">Walk</string>
+    <string name="emberchargewidget_subtitle">30 days</string>
+    <string name="emberchargewidget_minutes">min</string>
+    <string name="emberchargewidget_steps">steps</string>
+    <string name="emberchargewidget_hint">Hold to charge. Let go early and it cools.</string>
+    <string name="emberchargewidget_action">Double-tap to charge to the daily step goal</string>
+    <string name="emberchargewidget_label">Walk, 30 days, %1$s steps, heart rate %2$d</string>
+    <string name="emberchargewidget_unsupported">This block needs Android 13 or newer.</string>
+</resources>

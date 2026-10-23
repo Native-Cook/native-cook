@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Particle Sign-In Ring block (blocks/animations/particlesigninring). -->
+<resources>
+    <string name="particlesigninring_user_name">Ngọc Lê</string>
+    <string name="particlesigninring_signing_in">Signing in...</string>
+    <string name="particlesigninring_replay">Replay sign-in animation</string>
+
+    <!-- The original app's AppTheme. The block's Views are created with this theme through a
+         ContextThemeWrapper, so the window items have no effect here; ParticleSignInRingDemo sets
+         the light system bars in code while the block is open. -->
+    <style name="particlesigninring_AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:colorAccent">#111111</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

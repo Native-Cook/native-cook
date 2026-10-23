@@ -1,0 +1,14 @@
+/* Horizon Upload: visible labels and VoiceOver actions. */
+"idle" = "Tap to upload";
+"uploading" = "Uploading ...";
+"paused" = "Paused";
+"done" = "Uploaded";
+"stopped" = "Canceled";
+"start" = "Start upload";
+"pause" = "Pause upload";
+"resume" = "Resume upload";
+"again" = "Upload again";
+"cancel" = "Cancel upload";
+"complete" = "Upload complete";
+"canceled" = "Upload canceled";
+"hint" = "Drag the card. Tap the bar to pause.";

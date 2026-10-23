@@ -1,0 +1,12 @@
+/* Page hint under the pills. */
+"hint" = "Chạm để đọc. Giữ để thổi bùng ngọn lửa.";
+/* Replays the arrival of the three notes. */
+"deliver" = "Gửi lại";
+/* Status line of a note once it has been read. */
+"seen" = "Vừa xem";
+/* VoiceOver hint on each note. */
+"a11y.pill.hint" = "Chạm hai lần để đánh dấu đã đọc hoặc chưa đọc";
+/* Status lines of the three notes. */
+"line.kiln" = "Bạn vừa có đơn hàng";
+"line.tide" = "Hoa hồng $2.000";
+"line.bloom" = "Đã triển khai trong 24h";

@@ -1,0 +1,16 @@
+"title" = "Mời bạn bè";
+"subtitle" = "Mời bạn bè để nhận điểm thưởng.";
+"hint" = "Kéo hàng ảnh để xem một người bạn.";
+"refer" = "Mời bạn bè ngay";
+"reset" = "Bắt đầu lại";
+"invite" = "Mời";
+"friends" = "Bạn bè";
+"unjoined" = "Chưa mời";
+"shortUnjoined" = "Chưa mời";
+"joined" = "Đã tham gia · +25 điểm";
+"rewardNote" = "%d/3 phần thưởng";
+"rewards" = "Phần thưởng: đã mở %d trên 3";
+"points" = "%d điểm";
+"joinAnnouncement" = "%@ đã tham gia. %d điểm.";
+"friendJoined" = "%@, đã tham gia, %d trên 7";
+"friendUnjoined" = "%@, chưa mời, %d trên 7";

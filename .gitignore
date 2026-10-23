@@ -1,0 +1,39 @@
+.DS_Store
+node_modules/
+
+# React Native (Expo)
+react-native/.expo/
+react-native/dist/
+react-native/web-build/
+react-native/expo-env.d.ts
+react-native/ios/
+react-native/android/
+react-native/.kotlin/
+react-native/.metro-health-check*
+react-native/*.tsbuildinfo
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+.env*.local
+npm-debug.*
+
+# Swift (Xcode)
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Kotlin (Gradle)
+kotlin/build/
+kotlin/app/build/
+kotlin/.gradle/
+kotlin/local.properties
+kotlin/.idea/
+kotlin/.kotlin/
+kotlin/captures/
+*.iml
+.externalNativeBuild
+.cxx

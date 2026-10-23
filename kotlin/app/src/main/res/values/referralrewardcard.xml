@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Referral Reward Card only; copy with the block. -->
+<resources>
+    <string name="referralrewardcard_title">Refer friends</string>
+    <string name="referralrewardcard_subtitle">Invite friends to earn reward points.</string>
+    <string name="referralrewardcard_hint">Drag the row to look at a friend.</string>
+    <string name="referralrewardcard_refer">Refer friends now</string>
+    <string name="referralrewardcard_reset">Start over</string>
+    <string name="referralrewardcard_invite">Invite</string>
+    <string name="referralrewardcard_friends">Friends</string>
+    <string name="referralrewardcard_pending">Not invited yet</string>
+    <string name="referralrewardcard_pending_short">Not invited</string>
+    <string name="referralrewardcard_joined">Joined · +25 points</string>
+    <string name="referralrewardcard_caption">%1$d of 3 rewards</string>
+    <string name="referralrewardcard_rewards">Rewards: %1$d of 3 unlocked</string>
+    <string name="referralrewardcard_points">%1$d points</string>
+    <string name="referralrewardcard_announcement">%1$s joined. %2$d points.</string>
+    <string name="referralrewardcard_value_joined">%1$s, joined, %2$d of 7</string>
+    <string name="referralrewardcard_value_pending">%1$s, not invited yet, %2$d of 7</string>
+    <string name="referralrewardcard_next">Next friend</string>
+    <string name="referralrewardcard_previous">Previous friend</string>
+    <string name="referralrewardcard_toggle">Open or close friend details</string>
+    <string name="referralrewardcard_invite_name">Invite %1$s</string>
+</resources>

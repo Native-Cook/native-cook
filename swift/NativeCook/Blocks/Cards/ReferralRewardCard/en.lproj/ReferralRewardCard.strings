@@ -1,0 +1,16 @@
+"title" = "Refer friends";
+"subtitle" = "Invite friends to earn reward points.";
+"hint" = "Drag the row to look at a friend.";
+"refer" = "Refer friends now";
+"reset" = "Start over";
+"invite" = "Invite";
+"friends" = "Friends";
+"unjoined" = "Not invited yet";
+"shortUnjoined" = "Not invited";
+"joined" = "Joined · +25 points";
+"rewardNote" = "%d of 3 rewards";
+"rewards" = "Rewards: %d of 3 unlocked";
+"points" = "%d points";
+"joinAnnouncement" = "%@ joined. %d points.";
+"friendJoined" = "%@, joined, %d of 7";
+"friendUnjoined" = "%@, not invited yet, %d of 7";

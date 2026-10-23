@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="emberchargewidget_title">Đi bộ</string>
+    <string name="emberchargewidget_subtitle">30 ngày</string>
+    <string name="emberchargewidget_minutes">phút</string>
+    <string name="emberchargewidget_steps">bước</string>
+    <string name="emberchargewidget_hint">Giữ để nạp. Thả sớm thì nguội lại.</string>
+    <string name="emberchargewidget_action">Chạm hai lần để nạp số bước tới mục tiêu trong ngày</string>
+    <string name="emberchargewidget_label">Đi bộ, 30 ngày, %1$s bước, nhịp tim %2$d</string>
+    <string name="emberchargewidget_unsupported">Block này cần Android 13 trở lên.</string>
+</resources>
