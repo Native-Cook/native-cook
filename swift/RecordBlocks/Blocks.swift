@@ -288,6 +288,7 @@ final class BlockRecordings: Recorder {
     func test_subitem_tab_bar() throws { try record(slug: "subitem-tab-bar", loop: 10) }
     func test_swipe_deck_toolbar() throws { try record(slug: "swipe-deck-toolbar", loop: 10) }
     func test_switcher_deck_nav() throws { try record(slug: "switcher-deck-nav", loop: 12) }
+    func test_buzz_streaks() throws { try record(slug: "buzz-streaks", loop: 12) }
     func test_find_friends_invite() throws { try record(slug: "find-friends-invite", loop: 7.8) }
     func test_price_tag_welcome() throws { try record(slug: "price-tag-welcome", loop: 8) }
     func test_cloud_basket_essentials() throws { try record(slug: "cloud-basket-essentials", loop: 10) }

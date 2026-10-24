@@ -1,5 +1,7 @@
 # MOTION.md: living illustrations in this project
 
+Recording: `BuzzStreaksDemo.loop` is 12 seconds for Xcode Cloud. The demo passes `recordingLoop` only with the existing `-recording 1` launch flag. The same clock maps raw elapsed time modulo that period and holds the scene at 10.699 until the next cycle; assets are not remounted. Normal demos still stop at the expanded final state. Reduced motion stays still, and background pause preserves raw elapsed time, including the recording rest interval.
+
 > Copy this file next to the project's art (for example `src/art/MOTION.md`) and fill in **Part 2** as you learn the project. Part 1 is the method and stays as it is. The `rossark-motion-skill` reads this file first, and Part 2 overrides the skill's defaults.
 
 ---

@@ -7,6 +7,7 @@ struct BuzzStreaks: View {
     var autoPlay = false
     var enhancedText = true
     var motionProfile: BuzzStreaksMotionProfile = .approved
+    var recordingLoop: TimeInterval? = nil
     private var signature: BuzzStreaksSignature? { motionProfile == .signature && !reduced ? art.signature : nil }
     @Environment(\.accessibilityReduceMotion) private var reduced
     @Environment(\.scenePhase) private var scenePhase
@@ -18,7 +19,17 @@ struct BuzzStreaks: View {
     @State private var resumeOnActive = false
     @State private var tap = 0
 
-    private var clock: Double { min(10.699, max(0, base + (playing ? Date().timeIntervalSince(started) : 0))) }
+    private var rawElapsed: TimeInterval { max(0, base + (playing ? Date().timeIntervalSince(started) : 0)) }
+    private var recordingPeriod: TimeInterval? { Self.validRecordingLoop(recordingLoop) }
+    nonisolated static func validRecordingLoop(_ period: TimeInterval?) -> TimeInterval? {
+        guard let period, period.isFinite, period > 0 else { return nil }
+        return period
+    }
+    nonisolated static func playhead(_ elapsed: TimeInterval, recordingLoop: TimeInterval? = nil) -> TimeInterval {
+        let elapsed = max(0, elapsed)
+        guard let period = validRecordingLoop(recordingLoop) else { return min(10.699, elapsed) }
+        return min(10.699, elapsed.truncatingRemainder(dividingBy: period))
+    }
     private func seek(_ t: Double, play: Bool = false, haptic:Bool = false) {
         base = reduced ? 10.699 : t
         started = Date()
@@ -31,14 +42,14 @@ struct BuzzStreaks: View {
         GeometryReader { proxy in
             let scale = min(proxy.size.width / 360, proxy.size.height / 780)
             TimelineView(.animation(minimumInterval: 1 / 60, paused: !playing || reduced || scenePhase != .active)) { tick in
-                let t = reduced ? 10.699 : min(10.699, max(0, base + (playing ? tick.date.timeIntervalSince(started) : 0)))
+                let t = reduced ? 10.699 : Self.playhead(base + (playing ? tick.date.timeIntervalSince(started) : 0), recordingLoop: recordingLoop)
                 stage(t)
                     .frame(width: 360, height: 780, alignment: .topLeading)
                     .scaleEffect(scale, anchor: .topLeading)
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
                     .offset(x: (proxy.size.width - 360 * scale) / 2,
                             y: (proxy.size.height - 780 * scale) / 2)
-                    .onChange(of: t >= 10.699) { _, ended in if ended { base = 10.699; playing = false } }
+                    .onChange(of: t >= 10.699) { _, ended in if ended && recordingPeriod == nil { base = 10.699; playing = false } }
             }
         }
         .background(Color(red: 0.38, green: 0.14, blue: 0.64).ignoresSafeArea())
@@ -47,7 +58,7 @@ struct BuzzStreaks: View {
         .onAppear { seek(0, play: autoPlay) }
         .onChange(of: reduced) { _, value in if value {seek(10.699)} }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active, playing { resumeOnActive = true; suspended = clock; playing = false; base = suspended }
+            if phase != .active, playing { resumeOnActive = true; suspended = recordingPeriod == nil ? Self.playhead(rawElapsed) : rawElapsed; playing = false; base = suspended }
             else if phase == .active && resumeOnActive && !reduced { started = Date(); playing = true; resumeOnActive = false }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: tap)
