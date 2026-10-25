@@ -59,7 +59,13 @@ struct MagneticLettersName: View {
         return TimelineView(.animation(paused: art == nil || !(auto || awake))) { timeline in
             let _ = engine.step(to: timeline.date, auto: auto)
             ZStack(alignment: .topLeading) {
-                Canvas { ctx, _ in draw(ctx, L) }
+                // Reading the timeline's date makes the canvas redraw every frame; the engine is a
+                // reference SwiftUI cannot watch.
+                let now = timeline.date
+                Canvas { ctx, _ in
+                    _ = now
+                    draw(ctx, L)
+                }
                     .frame(width: size.width, height: size.height)
                     .contentShape(Rectangle())
                     .gesture(drag(L))

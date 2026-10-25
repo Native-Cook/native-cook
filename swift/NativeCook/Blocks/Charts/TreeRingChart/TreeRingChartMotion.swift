@@ -277,6 +277,7 @@ final class TreeRingChartModel {
     private var resumeAt = -1.0
     private var returning = false
     private var last: Date?
+    private var origin: Date?
     private var cached = TreeRingChartPose.loop(0)
     private let haptic = UISelectionFeedbackGenerator()
 
@@ -286,6 +287,7 @@ final class TreeRingChartModel {
         self.reduced = reduced
         manual = !auto
         t = 0
+        origin = nil
     }
 
     /// Steps once per distinct date; several timelines can read the same frame.
@@ -296,10 +298,13 @@ final class TreeRingChartModel {
         let dt = min(max(raw, 0), 0.05)
         clock += dt
         if !manual {
-            t = (t + dt).truncatingRemainder(dividingBy: D.loop)
+            // The loop reads the timeline's date, not a sum of frame steps, so it keeps its period.
+            if origin == nil { origin = date.addingTimeInterval(-t) }
+            t = date.timeIntervalSince(origin!).truncatingRemainder(dividingBy: D.loop)
             cached = TreeRingChartPose.loop(t)
             return cached
         }
+        origin = nil
         if resumeAt > 0 && clock >= resumeAt {
             resumeAt = -1
             backToRest()
