@@ -50,11 +50,16 @@ final class BlockRecordings: Recorder {
     func test_ticket_button() throws { try record(slug: "ticket-button", loop: 3.9) }
     func test_tilt_button() throws { try record(slug: "tilt-button", loop: 6.1) }
     func test_crayon_rubbing_card() throws { try record(slug: "crayon-rubbing-card", loop: 9) }
+    func test_elastic_food_cards() throws { try record(slug: "elastic-food-cards", loop: 5.333333333333333) }
     func test_film_negative_card() throws { try record(slug: "film-negative-card", loop: 8) }
     func test_folded_map_card() throws { try record(slug: "folded-map-card", loop: 8) }
+    func test_fruit_smoothie_carousel() throws { try record(slug: "fruit-smoothie-carousel", loop: 8) }
+    func test_liquid_charge_capsule() throws { try record(slug: "liquid-charge-capsule", loop: 7.5) }
     func test_perforated_coupon_tear() throws { try record(slug: "perforated-coupon-tear", loop: 9) }
     func test_postcard_stamp_cancel() throws { try record(slug: "postcard-stamp-cancel", loop: 9) }
+    func test_sneaker_parallax_shop() throws { try record(slug: "sneaker-parallax-shop", loop: 7.5) }
     func test_thermal_reveal_card() throws { try record(slug: "thermal-reveal-card", loop: 9) }
+    func test_violet_rocker_card() throws { try record(slug: "violet-rocker-card", loop: 10) }
     func test_city_event_hero() throws { try record(slug: "city-event-hero", loop: 10) }
     func test_grass_timer_carousel() throws { try record(slug: "grass-timer-carousel", loop: 8) }
     func test_paddock_widget_bento() throws { try record(slug: "paddock-widget-bento", loop: 9) }

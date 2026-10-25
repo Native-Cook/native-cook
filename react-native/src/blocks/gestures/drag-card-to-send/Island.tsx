@@ -151,8 +151,8 @@ export function Receipt({ lay, v, last, canUndo, reduced, onUndo }: ReceiptProps
       <Pressable onPress={onUndo} disabled={!canUndo} hitSlop={8} pressRetentionOffset={16}
         onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
         accessibilityRole="button" accessibilityLabel="Undo the payment" style={[styles.undoHit, { right: end, top: end }]}>
-        {/* Press transition inline: StyleSheet.create does not type Reanimated's CSS easing objects. */}
-        <Animated.View style={[styles.undo, { transitionProperty: ['transform', 'opacity'], transitionTimingFunction: EASE_OUT_CSS }, pressed ? (reduced ? styles.undoDim : styles.undoPressed) : styles.undoRest]}>
+        {/* Press transitions stay inline because StyleSheet.create types native styles only. */}
+        <Animated.View style={[styles.undo, { transitionProperty: ['transform', 'opacity'], transitionTimingFunction: EASE_OUT_CSS, transitionDuration: pressed ? UNDO_PRESS.inMs : UNDO_PRESS.outMs }, pressed ? (reduced ? styles.undoDim : styles.undoPressed) : styles.undoRest]}>
         <Svg width={RECEIPT.ring} height={RECEIPT.ring}>
           <Circle cx={RECEIPT.ring / 2} cy={RECEIPT.ring / 2} r={RING_R} stroke="rgba(255,255,255,0.22)" strokeWidth={RECEIPT.ringStroke} fill="none" />
           <AnimatedCircle cx={RECEIPT.ring / 2} cy={RECEIPT.ring / 2} r={RING_R} stroke={COLORS.onIsland} strokeWidth={RECEIPT.ringStroke}
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.undo, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
   },
   /** Let go: back faster than it went in. */
-  undoRest: { opacity: 1, transform: [{ scale: 1 }], transitionDuration: UNDO_PRESS.outMs },
-  undoPressed: { opacity: UNDO_PRESS.opacity, transform: [{ scale: UNDO_PRESS.scale }], transitionDuration: UNDO_PRESS.inMs },
-  undoDim: { opacity: UNDO_PRESS.opacity, transform: [{ scale: 1 }], transitionDuration: UNDO_PRESS.inMs },
+  undoRest: { opacity: 1, transform: [{ scale: 1 }] },
+  undoPressed: { opacity: UNDO_PRESS.opacity, transform: [{ scale: UNDO_PRESS.scale }] },
+  undoDim: { opacity: UNDO_PRESS.opacity, transform: [{ scale: 1 }] },
 });
