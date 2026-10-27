@@ -1,0 +1,10 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "transparent_background": true,
+  "assets": [
+    {
+      "file": "four-point-star.webp",
+      "prompt": "Use case: stylized-concept. Asset: a single small orange four-point sparkle for a warm mobile completion celebration, transparent background. Exactly FOUR rounded tapering arms, one toward top, one toward right, one toward bottom, one toward left; a pinched narrow center and softly curved concave valleys between the arms. The entire four-arm shape has a gentle clockwise twist, with the top arm leaning slightly left and the bottom arm leaning slightly right. Unequal organic lengths: top and bottom long, left and right a little shorter. Smooth inflated orange resin or soft glossy clay, shallow 3D thickness, saturated tangerine #FF6B30, soft lighter orange highlight on the upper-left ridge and a subtle darker orange edge below. Straight-on frontal orthographic camera, face fills about75 percent of a square canvas; absolutely no five-point star, no face, no eyes, no text, no borders, no drawn white squiggles, no other objects, no floor or cast shadow. Keep the material simple and quiet, clear silhouette readable at100pixels, like a softly sculpted physical sparkle, not an emoji. Single centered object, actual clean alpha transparency. Original app illustration."
+    }
+  ]
+}

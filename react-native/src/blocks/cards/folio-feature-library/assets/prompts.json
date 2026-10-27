@@ -1,0 +1,30 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "transparent_background": true,
+  "assets": [
+    {
+      "file": "glass-globe.png",
+      "prompt": "Use case: stylized-concept. Asset: original transparent cutout hero object for a premium mobile app exploration card, not a complete UI. Create one single beautiful translucent cobalt-blue globe, spherical glass object in three-quarter studio view, subtle recognizable latitude/longitude curved lines embedded inside, stylized ocean-blue continents in relief with thin white-cyan contours. Rich sapphire center, cyan backlit rim, realistic refractive depth and restrained bright upper-left specular highlights. A small soft blue contact shadow only directly underneath. Centered object occupying about 80% of a square canvas, fully visible, no cropping. Material is solid hand-polished tinted glass, not wireframe, no text, labels, logos, UI frame, stars or unrelated objects. Transparent background with actual alpha. High-quality small-screen product artwork; simple strong silhouette and readable surfaces at 96 pixels. This is original artwork for fictional Native Cook feature library."
+    },
+    {
+      "file": "glass-book.png",
+      "prompt": "Create an original transparent-background 3D product illustration for a mobile feature card. One translucent emerald-green glass orb with a small beautifully detailed open book suspended inside, warm ivory layered paper pages, deep teal hardback cover, gentle page curl, visible central spine. Sphere has polished glass reflections, luminous mint rim, pale lower-left studio reflection, soft tiny contact shadow directly below. Viewed straight-on with slight perspective downward so both pages clearly read. Centered and fully visible, fills 80% of square canvas, no text or lettering, no logo, no UI, no extra objects. High-end tactile real render, simple readable silhouette at120px; clean alpha cutout, not a flat icon, not a sphere full of noise."
+    },
+    {
+      "file": "glass-portrait.png",
+      "prompt": "Create an original transparent-background 3D product illustration for a mobile creative photo feature card. One translucent aquamarine glass orb containing a small framed original anime-style portrait: cheerful young adult with short dark bob hair, peach shirt, warm sunset city background, soft hand-painted editorial style. The portrait is a rectangular picture card tilted slightly, physically embedded inside the orb. Sphere has polished teal reflections, luminous rim and tiny pale contact shadow. Centered and fully visible fills80% of square canvas. No text, lettering, logos, brands,UI, or external decorations. High-end small-screen product asset, readable at120px. Actual transparent alpha background. Do not depict any existing anime character."
+    },
+    {
+      "file": "glass-book-blue.webp",
+      "prompt": "Use case: stylized-concept. Asset type: small mobile library loading icon on a light gray surface. Generate one isolated front-facing circular glass medallion, transparent background, square composition. The circular disc fills 85% of the image with generous transparent padding around a subtle soft shadow. A deep teal-blue glass domed lens with a slim clear reflective rim, bright smooth upper-left white specular highlight and a darker blue right edge. Within the lower third of the lens sits a miniature realistic open cream paper book on a blue surface, spine centered, several thin pages arching upward in a fan. Premium restrained 3D product rendering, crisp circular silhouette, straight-on camera, no perspective tilt, no text, no letters, no logos, no extra objects, no UI. Material should read as smooth translucent blue glass, not a green gem, metallic coin, or illustrated line icon. Entire icon visible; transparent pixels outside the rim and soft shadow."
+    },
+    {
+      "file": "glass-lens-neutral.webp",
+      "prompt": "Edit this asset for the preceding loading state of the same mobile icon. Remove the open book and all interior objects completely. Change only the colored interior to a softly frosted neutral light-gray glass lens. Preserve the exact front-facing circular silhouette, centered placement, size within the canvas, domed-glass thickness, slim reflective rim and the soft white highlight following the upper-left curve. The empty lens must look like a physical shallow glass medallion, pale gray against transparency, with subtle darker gray depth at the lower edge. No blue color, no floor line inside, no text, no drawn outline, no new objects. Keep actual transparent alpha outside the same circular silhouette; restrained soft contact shadow only."
+    },
+    {
+      "file": "glass-lens-green.webp",
+      "prompt": "Edit this asset for the intermediate loading state of the same mobile icon. Remove the open book and all interior objects completely. Recolor only the glass body from blue to deep emerald green #126E4D. Preserve the exact front-facing circular silhouette, centered placement, size within the canvas, domed-glass thickness, slim reflective green rim and the soft white specular highlight following the upper-left curve. The interior is empty smooth glass, no book, no floor line, no text or additional objects. Rich but restrained translucent emerald lens with lighter mint rim, same 3D material and lighting. Keep actual transparent alpha outside the same circular silhouette and soft contact shadow."
+    }
+  ]
+}
