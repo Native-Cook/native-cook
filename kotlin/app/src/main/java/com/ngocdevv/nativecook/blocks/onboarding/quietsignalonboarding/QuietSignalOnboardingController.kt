@@ -105,18 +105,18 @@ internal class QuietSignalOnboardingController(
         if (playback.previewing) return
         val target = next.coerceIn(0, timeline.LAST_PAGE)
         playback.pause()
-        setManual(position().toFloat())
+        applyManual(position().toFloat())
         manualMode = true
         presenceJob?.cancel()
         if (playback.reduced) {
-            setManual(target.toFloat())
+            applyManual(target.toFloat())
             presence = 1f
         } else {
             presenceJob = scope.launch {
                 animate(presence, 0f, animationSpec = tween(PRESENCE_OUT_MS, easing = timeline.EnterEasing)) { value, _ ->
                     presence = value
                 }
-                setManual(target.toFloat())
+                applyManual(target.toFloat())
                 animate(0f, 1f, animationSpec = tween(PRESENCE_IN_MS, easing = timeline.EnterEasing)) { value, _ ->
                     presence = value
                 }
@@ -147,7 +147,7 @@ internal class QuietSignalOnboardingController(
     /** "Back to the introduction": page 5 again, settled, and the loop restarts after the quiet period. */
     fun backToIntroduction() {
         session = false
-        setManual(timeline.LAST_PAGE.toFloat())
+        applyManual(timeline.LAST_PAGE.toFloat())
         manualMode = true
         playback.restart(timeline.ANCHORS[timeline.LAST_PAGE])
     }
@@ -163,7 +163,7 @@ internal class QuietSignalOnboardingController(
         panning = true
         presenceJob?.cancel()
         presence = 1f
-        setManual(position().toFloat())
+        applyManual(position().toFloat())
         startPage = manual
         manualMode = true
         playback.beginGesture()
@@ -172,7 +172,7 @@ internal class QuietSignalOnboardingController(
     /** The pan's `onUpdate`: the pages follow the finger, with resistance past either end. */
     fun panUpdate(translationX: Double, width: Double) {
         if (playback.reduced) return
-        setManual(timeline.rubber(startPage - translationX / width, timeline.LAST_PAGE.toDouble()).toFloat())
+        applyManual(timeline.rubber(startPage - translationX / width, timeline.LAST_PAGE.toDouble()).toFloat())
     }
 
     /**
@@ -189,7 +189,7 @@ internal class QuietSignalOnboardingController(
         val direction = if (!moved) 0 else if ((if (flicked) velocityX else translationX) < 0) 1 else -1
         val target = timeline.clamp(from + direction, 0.0, timeline.LAST_PAGE.toDouble()).toInt()
         if (playback.reduced) {
-            setManual(target.toFloat())
+            applyManual(target.toFloat())
         } else {
             springManual(target.toFloat(), (-velocityX / width).toFloat())
         }
@@ -197,7 +197,7 @@ internal class QuietSignalOnboardingController(
     }
 
     /** Sets [manual] and stops any spring that was moving it. */
-    private fun setManual(value: Float) {
+    private fun applyManual(value: Float) {
         manualJob?.cancel()
         manualJob = null
         manual = value

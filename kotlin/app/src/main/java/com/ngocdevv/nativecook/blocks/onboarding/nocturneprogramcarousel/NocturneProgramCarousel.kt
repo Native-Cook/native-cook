@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.ngocdevv.nativecook.blocks.onboarding.nocturneprogramcarousel
 
 import androidx.activity.compose.LocalActivity
@@ -164,7 +166,7 @@ fun NocturneProgramCarousel(
             val target = next.coerceIn(0, 2)
             playback.pause()
             playback.snapManual(playback.position())
-            playback.setTouching(true)
+            playback.applyTouching(true)
             if (reduced) {
                 playback.snapManual(target.toFloat())
             } else {
@@ -225,7 +227,7 @@ fun NocturneProgramCarousel(
                 onPressOut = pressOut,
                 onBack = {
                     plan = false
-                    playback.setTouching(true)
+                    playback.applyTouching(true)
                     playback.snapManual(page.toFloat())
                     playback.restart(anchors[page])
                 },

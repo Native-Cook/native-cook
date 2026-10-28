@@ -157,7 +157,7 @@ internal class HabitatMotion(
         if (next) restoreManual() else suspendManual()
     }
 
-    fun setReduced(next: Boolean) {
+    fun applyReduced(next: Boolean) {
         reduced = next
         if (next) { influence.cancel(); influence.set(0f) }
     }

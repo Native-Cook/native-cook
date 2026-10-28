@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.ngocdevv.nativecook.blocks.cards.foliofeaturelibrary
 
 import android.app.Activity
@@ -185,7 +187,7 @@ private fun FolioFeatureLibraryContent(
 
     LaunchedEffect(model) { model.pump() }
     LaunchedEffect(foreground) {
-        if (model.foreground != foreground) model.setForeground(foreground)
+        if (model.foreground != foreground) model.applyForeground(foreground)
     }
     DisposableEffect(model) { onDispose { model.dispose() } }
 

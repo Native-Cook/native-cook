@@ -460,7 +460,7 @@ fun HabitatSpecimenCarousel(autoPlay: Boolean = true, previewTime: Float? = null
             motion.autoPlay = autoPlay
             motion.gap = gap
             motion.width = width
-            motion.setReduced(reduced)
+            motion.applyReduced(reduced)
         }
 
         // Feedback: a light tick, then a heavier one with the release after the crouch; a selection tick when a

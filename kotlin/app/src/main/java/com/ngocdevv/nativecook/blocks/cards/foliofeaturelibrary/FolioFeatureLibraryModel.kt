@@ -195,7 +195,7 @@ internal class FolioFeatureLibraryModel(
             val delay = if (value && !reduced) FOLIO_AUTHOR_DELAY else 0.0
             authorTimer = scheduler.at(timeNow + delay, FolioFeatureLibraryScheduler.TIMERS) {
                 authorTimer = null
-                setAuthorReady(value)
+                applyAuthorReady(value)
             }
         }
 
@@ -211,7 +211,7 @@ internal class FolioFeatureLibraryModel(
 
     val topicList: List<String> get() = if (selected.isNotEmpty()) FolioTopics + FolioMoreTopics else FolioTopics
 
-    private fun setAuthorReady(value: Boolean) {
+    private fun applyAuthorReady(value: Boolean) {
         if (value && !authorReady) authorReadyAt = timeNow
         authorReady = value
     }
@@ -321,7 +321,7 @@ internal class FolioFeatureLibraryModel(
         }
     }
 
-    fun setForeground(active: Boolean) {
+    fun applyForeground(active: Boolean) {
         foreground = active
         if (!active) {
             touching = false

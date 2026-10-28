@@ -212,7 +212,8 @@ private fun DrawScope.drawArtLocal(image: ImageBitmap?, r: StageRect) {
 
 /** Draws the art stretched into [r] (dp, relative to the draw origin) like `contentFit="fill"`. */
 private fun DrawScope.drawArt(image: ImageBitmap?, r: StageRect) {
-    withTransform({ scale(density, density, Offset.Zero) }) { drawArtLocal(image, r) }
+    val px = density
+    withTransform({ scale(px, px, Offset.Zero) }) { drawArtLocal(image, r) }
 }
 
 private fun DrawScope.roundRectPath(x: Float, y: Float, w: Float, h: Float, radius: Float) = Path().apply {

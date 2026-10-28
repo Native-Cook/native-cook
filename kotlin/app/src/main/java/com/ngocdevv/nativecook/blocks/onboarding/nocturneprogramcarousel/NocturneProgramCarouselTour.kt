@@ -232,9 +232,10 @@ private fun BuildPlanButton(
             val start = if (t < 6.0) 2.4 else 8.9
             if (reduced || !timelineDriven || t < start || t > start + 0.65) return@Canvas
             val travel = motion.segment(t, start, start + 0.65).toFloat()
-            val band = 64f * density
+            val px = density
+            val band = 64f * px
             withTransform({
-                translate(left = (metrics.width + 64f) * travel * density, top = 0f)
+                translate(left = (metrics.width + 64f) * travel * px, top = 0f)
                 rotate(degrees = 18f, pivot = Offset(-band / 2f, size.height / 2f))
             }) {
                 drawRect(

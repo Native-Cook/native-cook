@@ -196,7 +196,7 @@ private fun TourCard(
                 .fillMaxWidth()
                 .graphicsLayer {
                     val lag = (index - playback.position()).coerceIn(-1f, 1f) * -(metrics.cardWidth * 0.22f)
-                    translationX = if (reduced) 0f else lag * density
+                    translationX = if (reduced) 0f else lag * this.density
                 }
                 .clearAndSetSemantics { },
         ) {

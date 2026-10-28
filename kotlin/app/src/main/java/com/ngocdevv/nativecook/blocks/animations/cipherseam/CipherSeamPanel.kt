@@ -106,10 +106,11 @@ internal fun CipherSeamPanel(
                 drawRect(Brush.verticalGradient(*stops, startY = 0f, endY = size.height))
 
                 // The bowl: an ellipse of the page's colour, `heroWidth` wide and 344 dp tall.
-                val rx = heroWidth * 0.5f * density
-                val ry = 172f * density
+                val px = density
+                val rx = heroWidth * 0.5f * px
+                val ry = 172f * px
                 withTransform({
-                    translate(heroWidth / 2f * density, (cardBottom - 92f) * density)
+                    translate(heroWidth / 2f * px, (cardBottom - 92f) * px)
                     scale(1f, ry / rx, pivot = Offset.Zero)
                 }) {
                     drawCircle(

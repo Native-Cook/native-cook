@@ -235,7 +235,7 @@ internal class NocturneProgramCarouselPlayback(
     }
 
     /** `touching.set`. */
-    fun setTouching(value: Boolean) {
+    fun applyTouching(value: Boolean) {
         touching = value
     }
 
