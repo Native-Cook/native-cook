@@ -1,0 +1,121 @@
+{
+  "asset": "paper-applause-open-roll-right.png",
+  "sha256": "6f7831108ce9f1dfb05b6da7cc9a8f7169e42fcd044d7e52a15ca0660807ade6",
+  "format": "RGBA PNG, straight alpha, sRGB",
+  "pixel_size": [
+    512,
+    512
+  ],
+  "canvas_points": [
+    64,
+    64
+  ],
+  "pixels_per_point": 8,
+  "local_axes": {
+    "+x": "paper feed/right",
+    "+y": "screen down"
+  },
+  "attachment_origin_pixels": [
+    128,
+    200
+  ],
+  "attachment_origin_in_canvas_points": [
+    16,
+    25
+  ],
+  "attachment_seam_local_points": [
+    [
+      0,
+      -17
+    ],
+    [
+      0,
+      17
+    ]
+  ],
+  "attachment_seam_pixels": [
+    [
+      128,
+      64
+    ],
+    [
+      128,
+      336
+    ]
+  ],
+  "attachment_width_points": 34,
+  "pixel_to_local": "x = pixelX / 8 - 16; y = pixelY / 8 - 25",
+  "unrotated_draw_offset_from_join_points": [
+    -16,
+    -25
+  ],
+  "opaque_bounds_pixels_alpha_gt_16": [
+    127,
+    63,
+    386,
+    392
+  ],
+  "opaque_bounds_local_points": [
+    -0.125,
+    -17.125,
+    32.25,
+    24.0
+  ],
+  "face_material_base_hex": "#F57D9E",
+  "reverse_material_base_hex": "#A92C56",
+  "actual_seam_samples": [
+    {
+      "position": "top",
+      "pixel": [
+        130,
+        80
+      ],
+      "rgba": [
+        238,
+        123,
+        154,
+        255
+      ],
+      "hex": "#EE7B9A"
+    },
+    {
+      "position": "center",
+      "pixel": [
+        130,
+        200
+      ],
+      "rgba": [
+        228,
+        117,
+        147,
+        255
+      ],
+      "hex": "#E47593"
+    },
+    {
+      "position": "bottom",
+      "pixel": [
+        130,
+        320
+      ],
+      "rgba": [
+        212,
+        108,
+        136,
+        255
+      ],
+      "hex": "#D46C88"
+    }
+  ],
+  "placement_note": "Place attachment origin at the live body head, then rotate the complete asset about that origin by the body tangent. Do not align by PNG top-left.",
+  "suggested_peak_join_points": [
+    300,
+    188
+  ],
+  "suggested_peak_heading_degrees_clockwise": 14,
+  "seam_note": "Self-shading makes the rendered seam darker than the upstream base coral. Blend only the final body station to these sampled cross-width colours. A sub-point overlap may hide antialiasing at the cut edge.",
+  "geometry_note": "One continuous solidified sheet, broad 34pt left seam, oblique hollow roll to right/down; transparent aperture and matte reverse are physically rendered, not a painted hole. No floor or detached shadow.",
+  "render_provenance": "Orthographic Blender Cycles render with matte face/reverse materials, transparent film and no ground plane.",
+  "project_reference": "Authored as a continuous solidified paper sheet in Blender; the source .blend is not required at runtime.",
+  "usage_note": "Decorative ribbon endcap. Place its attachment origin at the strip head and match the final strip cross-section to the sampled seam palette."
+}

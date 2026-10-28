@@ -7,6 +7,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Animated, { useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
+import { blurEdgeLetter } from './blurEdgeMotion';
 
 // A writing app's welcome screen on near-black. A four-line headline in tall condensed capitals is
 // typed in letter by letter: the last four characters behind the moving front are blurred, faint
@@ -254,8 +255,7 @@ export function BlurEdgeTypeIn({
         if (g.character === '' || g.character === ' ') continue;
         const d = front - g.index;
         if (d <= 0) continue;
-        const u = clamp01(d / EDGE);
-        const k = (1 - u) * (1 - u);
+        const { opacity: u, k } = blurEdgeLetter(d);
         const blur = MAX_BLUR * size * k;
         const x = 24 + g.x + MAX_SHIFT * size * k;
         const baseline = PAD + layout.cap + g.line * layout.step;

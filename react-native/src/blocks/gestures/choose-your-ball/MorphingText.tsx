@@ -223,6 +223,7 @@ export function MorphingText({
   reducedMotion,
   text,
   tracking = 0,
+  weight = "900",
   width,
 }: {
   align?: MorphingTextAlign;
@@ -243,6 +244,8 @@ export function MorphingText({
   text: string;
   /** Extra advance per glyph, in points. Negative tightens, as in CSS. */
   tracking?: number;
+  /** System face weight. The wordmark's identity is the black; other hosts may set their own. */
+  weight?: "400" | "500" | "600" | "700" | "800" | "900";
   width: number;
 }): JSX.Element {
   /**
@@ -251,8 +254,8 @@ export function MorphingText({
    * either clip the widest string or leave the narrowest one undersized.
    */
   const probeFont = useMemo(
-    () => matchFont({ fontFamily: "System", fontSize, fontWeight: "900" }),
-    [fontSize]
+    () => matchFont({ fontFamily: "System", fontSize, fontWeight: weight }),
+    [fontSize, weight]
   );
 
   const fittedSize = useMemo(() => {
@@ -268,8 +271,8 @@ export function MorphingText({
   }, [fitTexts, fontSize, paddingLeft, probeFont, text, tracking, width]);
 
   const font = useMemo(
-    () => matchFont({ fontFamily: "System", fontSize: fittedSize, fontWeight: "900" }),
-    [fittedSize]
+    () => matchFont({ fontFamily: "System", fontSize: fittedSize, fontWeight: weight }),
+    [fittedSize, weight]
   );
   // Tracking scales with the fitted size, or a shrunk headline keeps the spacing
   // of a larger one and comes apart.

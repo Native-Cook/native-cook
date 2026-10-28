@@ -48,7 +48,7 @@ final class QuietSignalOnboardingPanView: UIView, UIGestureRecognizerDelegate {
         fatalError("QuietSignalOnboardingPanView is created in code")
     }
 
-    func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+    override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
         guard recognizer === pan else { return true }
         let travelled = pan.translation(in: self)
         return abs(travelled.x) >= abs(travelled.y)
