@@ -54,6 +54,7 @@ final class BlockRecordings: Recorder {
     func test_ticket_button() throws { try record(slug: "ticket-button", loop: 3.9) }
     func test_tilt_button() throws { try record(slug: "tilt-button", loop: 6.1) }
     func test_glass_dome_showroom() throws { try record(slug: "glass-dome-showroom", loop: 10) }
+    func test_pineapple_lift_product() throws { try record(slug: "pineapple-lift-product", loop: 7) }
     func test_habitat_specimen_carousel() throws { try record(slug: "habitat-specimen-carousel", loop: 13.5) }
     func test_ingot_coin_switch() throws { try record(slug: "ingot-coin-switch", loop: 10) }
     func test_crayon_rubbing_card() throws { try record(slug: "crayon-rubbing-card", loop: 9) }
@@ -176,6 +177,7 @@ final class BlockRecordings: Recorder {
     func test_swap_success_card() throws { try record(slug: "swap-success-card", loop: 9.6) }
     func test_unfolding_signature_pad() throws { try record(slug: "unfolding-signature-pad", loop: 10.4) }
     func test_unlocking_checkout_steps() throws { try record(slug: "unlocking-checkout-steps", loop: 10) }
+    func test_traffic_jam_shake() throws { try record(slug: "traffic-jam-shake", loop: 8) }
     func test_abacus_expense_counter() throws { try record(slug: "abacus-expense-counter", loop: 8) }
     func test_jelly_cube_squish() throws { try record(slug: "jelly-cube-squish", loop: 8) }
     func test_pottery_wheel_shape() throws { try record(slug: "pottery-wheel-shape", loop: 9) }
@@ -248,6 +250,7 @@ final class BlockRecordings: Recorder {
     func test_tone_rewrite_composer() throws { try record(slug: "tone-rewrite-composer", loop: 9) }
     func test_voice_note_composer() throws { try record(slug: "voice-note-composer", loop: 9) }
     func test_pasta_plate_wheel() throws { try record(slug: "pasta-plate-wheel", loop: 8) }
+    func test_pickle_flavour_wipe() throws { try record(slug: "pickle-flavour-wipe", loop: 10) }
     func test_emerald_tier_leaderboard() throws { try record(slug: "emerald-tier-leaderboard", loop: 10) }
     func test_newspaper_pile_reader() throws { try record(slug: "newspaper-pile-reader", loop: 9) }
     func test_aquarium_feed_list() throws { try record(slug: "aquarium-feed-list", loop: 9) }
@@ -283,6 +286,7 @@ final class BlockRecordings: Recorder {
     func test_glass_folder_burst() throws { try record(slug: "glass-folder-burst", loop: 10) }
     func test_origami_fold_list() throws { try record(slug: "origami-fold-list", loop: 11) }
     func test_rubber_chain_list() throws { try record(slug: "rubber-chain-list", loop: 9) }
+    func test_petal_glass_scenes() throws { try record(slug: "petal-glass-scenes", loop: 9) }
     func test_fisheye_memory_wall() throws { try record(slug: "fisheye-memory-wall", loop: 9) }
     func test_tile_disc_radio() throws { try record(slug: "tile-disc-radio", loop: 9) }
     func test_darkroom_tray_develop() throws { try record(slug: "darkroom-tray-develop", loop: 9) }
@@ -346,6 +350,7 @@ final class BlockRecordings: Recorder {
     func test_stacking_toast_feed() throws { try record(slug: "stacking-toast-feed", loop: 10) }
     func test_streak_flame_takeover() throws { try record(slug: "streak-flame-takeover", loop: 9) }
     func test_task_toast_confetti() throws { try record(slug: "task-toast-confetti", loop: 9) }
+    func test_deli_grain_tabs() throws { try record(slug: "deli-grain-tabs", loop: 9.6) }
     func test_bookshelf_spine_nav() throws { try record(slug: "bookshelf-spine-nav", loop: 9) }
     func test_compass_needle_nav() throws { try record(slug: "compass-needle-nav", loop: 8) }
     func test_elevator_floor_nav() throws { try record(slug: "elevator-floor-nav", loop: 9) }
@@ -378,6 +383,7 @@ final class BlockRecordings: Recorder {
     func test_subitem_tab_bar() throws { try record(slug: "subitem-tab-bar", loop: 10) }
     func test_swipe_deck_toolbar() throws { try record(slug: "swipe-deck-toolbar", loop: 10) }
     func test_switcher_deck_nav() throws { try record(slug: "switcher-deck-nav", loop: 12) }
+    func test_moka_flood_welcome() throws { try record(slug: "moka-flood-welcome", loop: 9.5) }
     func test_dither_asterisk_signin() throws { try record(slug: "dither-asterisk-signin", loop: 7) }
     func test_exploded_chip_shield() throws { try record(slug: "exploded-chip-shield", loop: 7) }
     func test_fighter_profile_tour() throws { try record(slug: "fighter-profile-tour", loop: 10) }
@@ -428,6 +434,7 @@ final class BlockRecordings: Recorder {
     func test_value_word_wheel() throws { try record(slug: "value-word-wheel", loop: 8) }
     func test_velocity_marquee() throws { try record(slug: "velocity-marquee", loop: 15) }
     func test_watchful_eyes_permission() throws { try record(slug: "watchful-eyes-permission", loop: 10) }
+    func test_glass_mood_bloom() throws { try record(slug: "glass-mood-bloom", loop: 10) }
     func test_guest_count_figures() throws { try record(slug: "guest-count-figures", loop: 10) }
     func test_keypad_theme_wave() throws { try record(slug: "keypad-theme-wave", loop: 10) }
     func test_crayon_box_picker() throws { try record(slug: "crayon-box-picker", loop: 9) }
@@ -485,6 +492,7 @@ final class BlockRecordings: Recorder {
     func test_truchet_wave_tiles() throws { try record(slug: "truchet-wave-tiles", loop: 16) }
     func test_zen_sand_garden() throws { try record(slug: "zen-sand-garden", loop: 18) }
     func test_walking_steps_buddy() throws { try record(slug: "walking-steps-buddy", loop: 9) }
+    func test_xray_bag_scan() throws { try record(slug: "xray-bag-scan", loop: 9) }
     func test_boba_pearl_progress() throws { try record(slug: "boba-pearl-progress", loop: 10) }
     func test_bread_rising_progress() throws { try record(slug: "bread-rising-progress", loop: 9) }
     func test_candle_burn_timer() throws { try record(slug: "candle-burn-timer", loop: 9) }
@@ -548,6 +556,7 @@ final class BlockRecordings: Recorder {
     func test_sheet_card_handoff() throws { try record(slug: "sheet-card-handoff", loop: 9) }
     func test_stage_card_sheet() throws { try record(slug: "stage-card-sheet", loop: 9) }
     func test_widget_guide_sheet() throws { try record(slug: "widget-guide-sheet", loop: 10.5) }
+    func test_cheese_drip_burger() throws { try record(slug: "cheese-drip-burger", loop: 8) }
     func test_smoke_butterfly_splash() throws { try record(slug: "smoke-butterfly-splash", loop: 8) }
     func test_warp_coin_welcome() throws { try record(slug: "warp-coin-welcome", loop: 7) }
     func test_brush_ink_splash() throws { try record(slug: "brush-ink-splash", loop: 8) }
@@ -564,6 +573,7 @@ final class BlockRecordings: Recorder {
     func test_foil_monogram_splash() throws { try record(slug: "foil-monogram-splash", loop: 9) }
     func test_kinetic_type_splash() throws { try record(slug: "kinetic-type-splash", loop: 9.6) }
     func test_pill_rise_splash() throws { try record(slug: "pill-rise-splash", loop: 11) }
+    func test_stripe_swirl_type() throws { try record(slug: "stripe-swirl-type", loop: 8) }
     func test_inline_pill_reveal() throws { try record(slug: "inline-pill-reveal", loop: 8) }
     func test_embroidery_headline() throws { try record(slug: "embroidery-headline", loop: 9) }
     func test_letterpress_headline() throws { try record(slug: "letterpress-headline", loop: 9) }
