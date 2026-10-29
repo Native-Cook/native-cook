@@ -5,11 +5,11 @@
  worklet; helpers are declared above their callers.
  */
 
-export const LOOP = 9;
+export const LOOP = 9.6;
 export const SCENES = 3;
-/** Each scene owns 3 s of the loop: it rests, then the next one grows out of the glass. */
-export const SCENE_LENGTH = 3;
-export const CHANGE_AT = 1.6;
+/** Each scene owns 3.2 s of the loop: it rests, then the next one grows out of the glass. */
+export const SCENE_LENGTH = 3.2;
+export const CHANGE_AT = 1.8;
 export const CHANGE_LENGTH = 1.4;
 /** Reduced motion: the scenes cross-fade. */
 export const FADE_LENGTH = 0.4;

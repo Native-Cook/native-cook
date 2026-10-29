@@ -51,8 +51,8 @@ import {
  beat at its rim, then out across the screen behind a lens-like front. Ported from the Swift
  reference (PetalGlassScenes.swift).
 
- Loop (LOOP = 9 s): Clarity rests 1.6 s → Depth grows out of the glass (1.4 s) → rests → Echo → back
- to Clarity at 9 s. Drag anywhere to move the card and watch the refraction shift (it springs back);
+ Loop (LOOP = 9.6 s): Clarity rests 1.8 s → Depth grows out of the glass (1.4 s) → rests → Echo → back
+ to Clarity at 9.6 s. Drag anywhere to move the card and watch the refraction shift (it springs back);
  swipe left or right to change the scene. The loop resumes 2 s after the last touch at the shown
  scene's rest. Reduced motion: Clarity, still; swipes cross-fade.
  */

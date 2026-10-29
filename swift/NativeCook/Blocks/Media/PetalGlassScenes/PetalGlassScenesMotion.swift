@@ -3,11 +3,11 @@ import Foundation
 /// Timing and touch model of Petal Glass Scenes. Every value is a pure function of the loop time
 /// (autoPlay) or of the clock since a touch event, so the loop's last frame equals its first.
 enum PetalGlassScenesMotion {
-    static let loop = 9.0
+    static let loop = 9.6
     static let scenes = 3
-    /// Each scene owns 3 s of the loop: it rests, then the next one grows out of the glass.
-    static let sceneLength = 3.0
-    static let changeAt = 1.6
+    /// Each scene owns 3.2 s of the loop: it rests, then the next one grows out of the glass.
+    static let sceneLength = 3.2
+    static let changeAt = 1.8
     static let changeLength = 1.4
     /// Reduced motion: the scenes cross-fade.
     static let fadeLength = 0.4

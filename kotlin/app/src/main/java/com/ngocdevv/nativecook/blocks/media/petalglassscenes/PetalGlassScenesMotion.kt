@@ -17,11 +17,11 @@ import kotlin.math.sqrt
  * frame equals its first.
  */
 object PetalGlassScenesMotion {
-    const val LOOP = 9.0
+    const val LOOP = 9.6
     const val SCENES = 3
-    /** Each scene owns 3 s of the loop: it rests, then the next one grows out of the glass. */
-    const val SCENE_LENGTH = 3.0
-    const val CHANGE_AT = 1.6
+    /** Each scene owns 3.2 s of the loop: it rests, then the next one grows out of the glass. */
+    const val SCENE_LENGTH = 3.2
+    const val CHANGE_AT = 1.8
     const val CHANGE_LENGTH = 1.4
     /** Reduced motion: the scenes cross-fade. */
     const val FADE_LENGTH = 0.4

@@ -286,7 +286,7 @@ final class BlockRecordings: Recorder {
     func test_glass_folder_burst() throws { try record(slug: "glass-folder-burst", loop: 10) }
     func test_origami_fold_list() throws { try record(slug: "origami-fold-list", loop: 11) }
     func test_rubber_chain_list() throws { try record(slug: "rubber-chain-list", loop: 9) }
-    func test_petal_glass_scenes() throws { try record(slug: "petal-glass-scenes", loop: 9) }
+    func test_petal_glass_scenes() throws { try record(slug: "petal-glass-scenes", loop: 9.6) }
     func test_fisheye_memory_wall() throws { try record(slug: "fisheye-memory-wall", loop: 9) }
     func test_tile_disc_radio() throws { try record(slug: "tile-disc-radio", loop: 9) }
     func test_darkroom_tray_develop() throws { try record(slug: "darkroom-tray-develop", loop: 9) }
