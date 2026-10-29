@@ -177,6 +177,7 @@ final class BlockRecordings: Recorder {
     func test_swap_success_card() throws { try record(slug: "swap-success-card", loop: 9.6) }
     func test_unfolding_signature_pad() throws { try record(slug: "unfolding-signature-pad", loop: 10.4) }
     func test_unlocking_checkout_steps() throws { try record(slug: "unlocking-checkout-steps", loop: 10) }
+    func test_frost_chest_opening() throws { try record(slug: "frost-chest-opening", loop: 9.6) }
     func test_traffic_jam_shake() throws { try record(slug: "traffic-jam-shake", loop: 8) }
     func test_abacus_expense_counter() throws { try record(slug: "abacus-expense-counter", loop: 8) }
     func test_jelly_cube_squish() throws { try record(slug: "jelly-cube-squish", loop: 8) }
