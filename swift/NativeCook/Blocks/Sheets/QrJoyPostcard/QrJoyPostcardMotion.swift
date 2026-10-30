@@ -171,7 +171,7 @@ enum QrJoyPostcardMotion {
     current + (aim - current) * (1 - exp(-dt * k))
   }
   @discardableResult static func stepDriver(
-    _ d: inout Driver, _ dt: Double, _ now: Double, _ auto: Bool
+    _ d: inout Driver, _ dt: Double, _ wall: Double, _ now: Double, _ auto: Bool
   ) -> Double {
     if d.mode == 1 {
       d.t += dt * d.rate
@@ -184,9 +184,9 @@ enum QrJoyPostcardMotion {
     } else if d.mode == 2 {
       if auto && now - d.last >= RESUME { d.mode = 0 }
     } else if auto {
-      d.t = (d.t + dt).truncatingRemainder(dividingBy: LOOP)
+      d.t = (d.t + wall).truncatingRemainder(dividingBy: LOOP)
     }
-    d.amb = (d.amb + dt).truncatingRemainder(dividingBy: LOOP)
+    d.amb = (d.amb + wall).truncatingRemainder(dividingBy: LOOP)
     d.tiltX = follow(d.tiltX, d.aimX, 11, dt)
     d.tiltY = follow(d.tiltY, d.aimY, 11, dt)
     let k = 120.0

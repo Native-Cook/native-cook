@@ -64,11 +64,15 @@ final class BookFanSigninClock: ObservableObject {
       }
       return Sample(driver: driver, fade: fade)
     }
-    let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
+    // The loop runs on the wall clock; only the springs take the clamped step. On a slow
+    // machine (Xcode Cloud's simulators) frames longer than 50 ms would otherwise stretch
+    // the 9 s loop, and the recording would not repeat.
+    let wall = max(0, date.map { at.timeIntervalSince($0) } ?? 0.016)
+    let dt = min(wall, 0.05)
     date = at
-    now += dt
+    now += wall
     let before = driver.t
-    driver.step(dt, now, auto)
+    driver.step(dt, wall, now, auto)
     if driver.mode == 1 && driver.rate > 0 && before < M.T.sheet + 0.5
       && driver.t >= M.T.sheet + 0.5 && driver.t < M.T.close
     {

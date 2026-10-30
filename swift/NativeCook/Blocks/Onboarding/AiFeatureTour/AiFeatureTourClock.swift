@@ -18,7 +18,9 @@ final class AiFeatureTourClock: ObservableObject {
     func stop() { resetDate(); audio.stop() }
     func sample(_ date: Date, auto: Bool, pinned: Double?) -> M.Frame {
         if let pinned { return M.frameAt(pinned) }
-        let dt = min(max(previous.map { date.timeIntervalSince($0) } ?? 0.016, 0), 0.05)
+        // Wall clock, not clamped: on a slow machine (Xcode Cloud's simulators) frames longer
+        // than 50 ms would otherwise stretch the 9 s loop, and the recording would not repeat.
+        let dt = max(previous.map { date.timeIntervalSince($0) } ?? 0.016, 0)
         previous = date
         now += dt
         driver.step(dt, now, auto)

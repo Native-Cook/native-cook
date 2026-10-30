@@ -98,7 +98,7 @@ enum BookFanSigninMotion {
     var t = 0.0, mode = 0, stop = 0.0, rate = 1.0, last = -10.0, amb = 0.0
     var scroll = 0.0, scrollV = 0.0, drag = 0.0, dragV = 0.0, dragging = 0
     var ctaAim = 0.0, ctaP = 0.0, pressAim = 0.0, pressP = 0.0
-    mutating func step(_ dt: Double, _ now: Double, _ auto: Bool) {
+    mutating func step(_ dt: Double, _ wall: Double, _ now: Double, _ auto: Bool) {
       if mode == 1 {
         t += dt * rate
         if t >= stop {
@@ -110,9 +110,9 @@ enum BookFanSigninMotion {
       } else if mode == 2 {
         if auto && dragging == 0 && now - last >= RESUME { mode = 0 }
       } else if auto {
-        t = (t + dt).truncatingRemainder(dividingBy: LOOP)
+        t = (t + wall).truncatingRemainder(dividingBy: LOOP)
       }
-      amb = (amb + dt).truncatingRemainder(dividingBy: LOOP)
+      amb = (amb + wall).truncatingRemainder(dividingBy: LOOP)
       if dragging == 0 {
         scroll += scrollV * dt
         scrollV *= exp(-dt * 2.4)

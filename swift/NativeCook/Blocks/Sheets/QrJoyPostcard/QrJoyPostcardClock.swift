@@ -43,11 +43,15 @@ final class QrJoyPostcardClock: ObservableObject {
       }
       return (M.frameAt(M.PEAK), .init(), fade)
     }
-    let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
+    // The loop runs on the wall clock; only the springs take the clamped step. On a slow
+    // machine (Xcode Cloud's simulators) frames longer than 50 ms would otherwise stretch
+    // the 9 s loop, and the recording would not repeat.
+    let wall = max(0, date.map { at.timeIntervalSince($0) } ?? 0.016)
+    let dt = min(wall, 0.05)
     date = at
-    now += dt
+    now += wall
     let before = driver.t
-    let time = M.stepDriver(&driver, dt, now, auto)
+    let time = M.stepDriver(&driver, dt, wall, now, auto)
     let bear = M.bearExtra(&driver, now)
     let shake = M.jiggle(&driver, now)
     if driver.mode == 1 && driver.rate > 0 {
