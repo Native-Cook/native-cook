@@ -30,45 +30,50 @@ final class BookFanSigninArt {
     .outputColorSpace: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
   ])
   private var titleBitmaps: [CGImage] = []
-  private var shadowMasks: [String: (image: CGImage, rect: CGRect)] = [:]
+  private var shadowMasks: [String: CGImage] = [:]
+  private var titleBlurs: [String: CGImage] = [:]
   func blurredRoundedRect(
     _ canvas: CGContext, _ rect: CGRect, radius: Double, sigma: Double, color shadowColor: CGColor
   ) {
-    let key = "\(rect.width)|\(rect.height)|\(radius)|\(sigma)"
-    let mask: (image: CGImage, rect: CGRect)
+    // Every mask is cached, by size rounded to a point and blur to a quarter point: the wall's
+    // light wave and the flights vary them continuously, and one Core Image blur per cover per
+    // frame dropped the block to about 4 fps where Core Image has no GPU (Xcode Cloud's
+    // simulators). A mask a fraction of a point off is stretched to the exact rect.
+    let sigma = (sigma * 4).rounded() / 4
+    let size = CGSize(width: rect.width.rounded(), height: rect.height.rounded())
+    let padding = ceil(sigma * 3)
+    let key = "\(size.width)|\(size.height)|\(radius)|\(sigma)"
+    let mask: CGImage
     if let cached = shadowMasks[key] {
       mask = cached
     } else {
-      let padding = ceil(sigma * 3)
-      let bounds = CGRect(
-        x: -padding, y: -padding, width: rect.width + padding * 2, height: rect.height + padding * 2
-      )
       let format = UIGraphicsImageRendererFormat()
       format.scale = 2
       format.preferredRange = .standard
-      let bitmap = UIGraphicsImageRenderer(size: bounds.size, format: format).image { renderer in
+      let bitmap = UIGraphicsImageRenderer(
+        size: CGSize(width: size.width + padding * 2, height: size.height + padding * 2),
+        format: format
+      ).image { renderer in
         round(
           renderer.cgContext,
-          CGRect(x: padding, y: padding, width: rect.width, height: rect.height), radius, C.page)
+          CGRect(x: padding, y: padding, width: size.width, height: size.height), radius, C.page)
       }
       guard let cgImage = bitmap.cgImage else { return }
       let input = CIImage(cgImage: cgImage)
       let filtered = input.applyingFilter(
         "CIGaussianBlur", parameters: [kCIInputRadiusKey: sigma * 2])
       guard let result = imageContext.createCGImage(filtered, from: input.extent) else { return }
-      mask = (result, bounds)
-      // Fixed wall, button, book and sheet masks stay cached. Flight dimensions vary continuously.
-      let fixedMask =
-        rect.width == 87 || rect.width == 378
-        || (rect.width == 60 && sigma == 6) || (rect.width == 62 && sigma == 7.2)
-      if fixedMask { shadowMasks[key] = mask }
+      mask = result
+      if shadowMasks.count >= 512 { shadowMasks.removeAll(keepingCapacity: true) }
+      shadowMasks[key] = mask
     }
+    let bounds = CGSize(width: rect.width + padding * 2, height: rect.height + padding * 2)
     canvas.saveGState()
-    canvas.translateBy(x: rect.minX + mask.rect.minX, y: rect.minY + mask.rect.maxY)
+    canvas.translateBy(x: rect.minX - padding, y: rect.maxY + padding)
     canvas.scaleBy(x: 1, y: -1)
-    canvas.clip(to: CGRect(origin: .zero, size: mask.rect.size), mask: mask.image)
+    canvas.clip(to: CGRect(origin: .zero, size: bounds), mask: mask)
     canvas.setFillColor(shadowColor)
-    canvas.fill(CGRect(origin: .zero, size: mask.rect.size))
+    canvas.fill(CGRect(origin: .zero, size: bounds))
     canvas.restoreGState()
   }
   let logo: Path
@@ -469,14 +474,19 @@ final class BookFanSigninArt {
       // Focus is a mask blur on a pre-rasterized line, rather than a live page filter.
       if a < 0.98 {
         if titleBitmaps.indices.contains(i) {
-          let input = CIImage(cgImage: titleBitmaps[i])
-          let filter = input.applyingFilter(
-            "CIGaussianBlur", parameters: [kCIInputRadiusKey: 12 * (1 - a)])
+          // Blur radii are cached in half-point steps, for the same reason as the masks.
+          let blur = (24 * (1 - a)).rounded() / 2
+          let key = "\(i)|\(blur)"
+          var blurred = titleBlurs[key]
+          if blurred == nil {
+            let input = CIImage(cgImage: titleBitmaps[i])
+            let filter = input.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: blur])
+            blurred = imageContext.createCGImage(filter, from: input.extent)
+            titleBlurs[key] = blurred
+          }
           canvas.saveGState()
           canvas.setAlpha(a)
-          image(
-            canvas, imageContext.createCGImage(filter, from: input.extent),
-            CGRect(x: 0, y: y + 12 * (1 - a) - 28, width: 402, height: 70))
+          image(canvas, blurred, CGRect(x: 0, y: y + 12 * (1 - a) - 28, width: 402, height: 70))
           canvas.restoreGState()
         }
       } else {
