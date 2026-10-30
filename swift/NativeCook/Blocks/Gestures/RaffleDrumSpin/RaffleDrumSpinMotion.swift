@@ -728,8 +728,11 @@ enum RaffleDrumSpinMotion {
         driver.spinV *= exp(-step * 1.6)
         if abs(driver.spinV) < 0.01 { driver.spinV = 0 }
         if driver.mode == 0 {
-            driver.t = auto ? (driver.t + step).truncatingRemainder(dividingBy: loop) : 0
-            if auto && driver.t < step {
+            // The loop follows the wall clock, not the clamped physics step: on a slow machine
+            // (Xcode Cloud's simulators) frames longer than 50 ms would otherwise stretch the
+            // 10 s loop, and the recording would not repeat every 10 s.
+            driver.t = auto ? (driver.t + dt).truncatingRemainder(dividingBy: loop) : 0
+            if auto && driver.t < dt {
                 driver.from = 0
                 driver.to = 1
             }
