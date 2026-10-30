@@ -237,14 +237,31 @@ final class BookFanSigninArt {
       gradient, start: from, end: to, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
     canvas.restoreGState()
   }
+  // Each cover is copied out of the atlas once, into its own bitmap. Drawing a fresh
+  // `cropping(to:)` view of the atlas made Core Graphics copy the region on every draw, which
+  // held the wall of about 50 covers to 3 to 7 frames a second.
+  private var coverImages: [Int: CGImage] = [:]
+  private func coverImage(_ atlas: CGImage, _ n: Int) -> CGImage? {
+    if let cached = coverImages[n] { return cached }
+    let source = CGRect(x: (n % 5) * 300, y: (n / 5) * 450, width: 300, height: 450)
+    guard let crop = atlas.cropping(to: source),
+      let space = CGColorSpace(name: CGColorSpace.sRGB),
+      let context = CGContext(
+        data: nil, width: 300, height: 450, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return nil }
+    context.draw(crop, in: CGRect(x: 0, y: 0, width: 300, height: 450))
+    let image = context.makeImage()
+    coverImages[n] = image
+    return image
+  }
   func cover(
     _ canvas: CGContext, _ n: Int, _ x: Double, _ y: Double, _ w: Double, _ angle: Double,
     _ sh: Double,
     _ alpha: Double = 1, _ lift: Double = 0
   ) {
     guard let covers else { return }
-    let source = CGRect(x: (n % 5) * 300, y: (n / 5) * 450, width: 300, height: 450)
-    guard let crop = covers.cropping(to: source) else { return }
+    guard let crop = coverImage(covers, n) else { return }
     let h = w * 1.5
     let rect = CGRect(x: -w / 2, y: -h / 2, width: w, height: h)
     canvas.saveGState()
