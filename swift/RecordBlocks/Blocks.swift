@@ -69,6 +69,7 @@ final class BlockRecordings: Recorder {
     func test_iced_drink_switcher() throws { try record(slug: "iced-drink-switcher", loop: 7.5) }
     func test_nut_milk_flavours() throws { try record(slug: "nut-milk-flavours", loop: 7.8) }
     func test_season_tier_medals() throws { try record(slug: "season-tier-medals", loop: 8, sound: true) }
+    func test_zodiac_jelly_dish() throws { try record(slug: "zodiac-jelly-dish", loop: 8, sound: true) }
     func test_blacklight_flight_passport() throws { try record(slug: "blacklight-flight-passport", loop: 9, sound: true) }
     func test_frost_card_controls() throws { try record(slug: "frost-card-controls", loop: 9, sound: true) }
     func test_snow_cloud_forecast() throws { try record(slug: "snow-cloud-forecast", loop: 8) }
@@ -319,6 +320,7 @@ final class BlockRecordings: Recorder {
     func test_rubber_chain_list() throws { try record(slug: "rubber-chain-list", loop: 9) }
     func test_orbit_bubble_friends() throws { try record(slug: "orbit-bubble-friends", loop: 7.2) }
     func test_poster_ring_band() throws { try record(slug: "poster-ring-band", loop: 9) }
+    func test_voice_orb_scanner() throws { try record(slug: "voice-orb-scanner", loop: 9, sound: true) }
     func test_window_seat_destinations() throws { try record(slug: "window-seat-destinations", loop: 8) }
     func test_orbit_stack_archive() throws { try record(slug: "orbit-stack-archive", loop: 9) }
     func test_petal_glass_scenes() throws { try record(slug: "petal-glass-scenes", loop: 9.6) }
@@ -426,6 +428,7 @@ final class BlockRecordings: Recorder {
     func test_switcher_deck_nav() throws { try record(slug: "switcher-deck-nav", loop: 12) }
     func test_glass_icon_orbit() throws { try record(slug: "glass-icon-orbit", loop: 9) }
     func test_night_window_sleep() throws { try record(slug: "night-window-sleep", loop: 9) }
+    func test_swipe_to_order_onboarding() throws { try record(slug: "swipe-to-order-onboarding", loop: 8, sound: true) }
     func test_ai_feature_tour() throws { try record(slug: "ai-feature-tour", loop: 9, sound: true) }
     func test_career_web_onboarding() throws { try record(slug: "career-web-onboarding", loop: 9, sound: true) }
     func test_ghost_float_welcome() throws { try record(slug: "ghost-float-welcome", loop: 9, sound: true) }
