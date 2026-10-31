@@ -73,6 +73,11 @@ final class BookFanSigninClock: ObservableObject {
     now += wall
     let before = driver.t
     driver.step(dt, wall, now, auto)
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+      if before < M.T.open && driver.t >= M.T.open { cue("flight") }
+      if before < M.T.close && driver.t >= M.T.close { cue("flight") }
+    }
     if driver.mode == 1 && driver.rate > 0 && before < M.T.sheet + 0.5
       && driver.t >= M.T.sheet + 0.5 && driver.t < M.T.close
     {

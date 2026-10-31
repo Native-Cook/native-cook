@@ -13,11 +13,12 @@ final class CareerWebOnboardingClock: ObservableObject {
     private var live = Art.Live()
     private var target = 0, hitLink = -1
     private var moved = false
+    private var loopT = 0.0
     private let audio = CareerWebOnboardingAudio()
     func prepare() { audio.prepare() }
     func resetDate() { date = nil }
     func stop() { date = nil; audio.stop() }
-    func reset() { driver = M.Driver(); live = Art.Live(); date = nil; now = 0; target = 0; revision += 1 }
+    func reset() { driver = M.Driver(); live = Art.Live(); date = nil; now = 0; loopT = 0; target = 0; revision += 1 }
 
     func sample(_ at: Date, auto: Bool, reduced: Bool, pinned: Double?) -> (M.Frame, Art.Live) {
         let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
@@ -25,6 +26,14 @@ final class CareerWebOnboardingClock: ObservableObject {
         if let pinned { driver.mode = 0; driver.t = pinned; driver.amb = pinned }
         let frame = M.frameAt(driver.t)
         let grow = M.stepDriver(&driver, pinned != nil || reduced ? 0 : dt, now, auto && !reduced && pinned == nil, frame.grow)
+        // The site's recording plays the sounds a touch would make (DemoSound).
+        if DemoSound.inAutoPlay && auto && !reduced && pinned == nil && driver.mode == 0 {
+            let t = driver.t
+            func crossed(_ at: Double) -> Bool { t >= loopT ? (loopT < at && t >= at) : (at > loopT || at <= t) }
+            if crossed(M.T.pick) { audio.play("attach", reduced: false) }
+            if crossed(M.T.tug[1]) || crossed(M.T.ungrow[0]) { audio.play("pluck", reduced: false) }
+            loopT = t
+        }
         for i in 0..<7 {
             let home = M.nodeHome(i, driver.t, driver.amb)
             live.px[i] = home.x + driver.ox[i]; live.py[i] = home.y + driver.oy[i]

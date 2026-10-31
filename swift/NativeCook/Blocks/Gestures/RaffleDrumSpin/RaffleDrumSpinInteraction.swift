@@ -58,12 +58,16 @@ final class RaffleDrumSpinInteraction: ObservableObject {
         performance.record(at: timestamp, storyTime: driver.t, mode: driver.mode)
 #endif
         let tickNow = Int(floor((RaffleDrumSpinMotion.cageAngle(driver.t) + driver.spin) / (2 * .pi / 7)))
-        if driver.mode != 0, tickNow != tickBefore, clock - lastRatchetAt > 0.06 {
+        // The site's recording plays the sounds a touch would make (DemoSound).
+        let recordingSound = DemoSound.inAutoPlay && autoPlay && !reducedMotion
+        if driver.mode != 0 || (recordingSound && driver.t >= before), tickNow != tickBefore,
+            clock - lastRatchetAt > 0.06
+        {
             lastRatchetAt = clock
-            UISelectionFeedbackGenerator().selectionChanged()
+            if driver.mode != 0 { UISelectionFeedbackGenerator().selectionChanged() }
             audio.play(.ratchet)
         }
-        playCues(from: before, to: driver.t)
+        playCues(from: before, to: driver.t, recordingSound: recordingSound)
         let current = state(of: driver)
         let rawFade = reducedMotion ? min(1, max(0, (timestamp - reducedFadeStarted) / 0.2)) : 1
         let fade = RaffleDrumSpinMotion.easeOut(rawFade)
@@ -192,11 +196,13 @@ final class RaffleDrumSpinInteraction: ObservableObject {
         RaffleDrumSpinMotion.releaseTicket(&driver, vx, vy, clock)
     }
 
-    private func playCues(from before: Double, to time: Double) {
-        guard driver.mode != 0, time >= before else { return }
+    private func playCues(from before: Double, to time: Double, recordingSound: Bool) {
+        guard driver.mode != 0 || recordingSound, time >= before else { return }
+        // In the self-playing loop (mode 0) the cues sound but the haptics stay off.
+        let haptics = driver.mode != 0
         func crossed(_ mark: Double) -> Bool { before < mark && time >= mark }
         for index in 0...driver.to where crossed(RaffleDrumSpinMotion.T.fly.upperBound + Double(index) * RaffleDrumSpinMotion.T.flyStagger) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             audio.play(.land)
         }
         if crossed(RaffleDrumSpinMotion.T.spin.lowerBound) { audio.play(.spin) }
@@ -204,7 +210,7 @@ final class RaffleDrumSpinInteraction: ObservableObject {
         if crossed(RaffleDrumSpinMotion.T.stitches.lowerBound) { audio.play(.stitches) }
         if crossed(RaffleDrumSpinMotion.T.morph.lowerBound) { audio.play(.morph) }
         if crossed(RaffleDrumSpinMotion.T.burst) {
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            if haptics { UINotificationFeedbackGenerator().notificationOccurred(.success) }
             audio.play(.burst)
         }
         for index in 0..<12 {
@@ -215,7 +221,7 @@ final class RaffleDrumSpinInteraction: ObservableObject {
         if crossed(RaffleDrumSpinMotion.T.tear.lowerBound) { audio.play(.tear) }
         if crossed(RaffleDrumSpinMotion.T.burn.lowerBound + 0.08) { audio.play(.dust) }
         if crossed(RaffleDrumSpinMotion.T.tear.upperBound) {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
             audio.play(.landStub)
         }
     }

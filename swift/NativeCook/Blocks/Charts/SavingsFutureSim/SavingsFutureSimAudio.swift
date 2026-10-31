@@ -1,6 +1,6 @@
 import AVFoundation
 
-// Only the touch driver calls these cues. Autoplay remains silent.
+// The touch driver calls these cues; autoplay stays silent except in the site's recording (DemoSound).
 final class SavingsFutureSimAudio {
   private var players: [String: AVAudioPlayer] = [:]
   func play(_ cue: String) {

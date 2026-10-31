@@ -80,7 +80,17 @@ final class LuckyTaskHubClock: ObservableObject {
     let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
     date = at
     now += dt
+    let before = driver.t
     M.stepDriver(&driver, dt, now, auto)
+    // The site's recording plays the sounds a touch would make (DemoSound): the wheel's
+    // spin, the first bill landing, the card flip and the trophy hop.
+    if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+      func crossed(_ at: Double) -> Bool { before < at && driver.t >= at }
+      if crossed(M.T.spin[0]) { audio.play("spin", enabled: !reduced) }
+      if crossed(M.T.bills + 0.89) { audio.play("cash", enabled: !reduced) }
+      if crossed(M.T.flip) { audio.play("flip", enabled: !reduced) }
+      if crossed(M.T.hop) { audio.play("flip", enabled: !reduced) }
+    }
     if driver.mode == 2 && driver.billsAt > 0 {
       if billsSeen != driver.billsAt {
         billsSeen = driver.billsAt

@@ -44,7 +44,18 @@ final class IsometricScoreGaugeClock: ObservableObject {
             driver.mode = 0; driver.t = pinned; driver.amb = pinned
             M.step(&driver, dt: 0, now: now, auto: false)
         } else {
+            let before = driver.t
             M.step(&driver, dt: dt, now: now, auto: auto)
+            // The site's recording plays the sounds a touch would make (DemoSound).
+            if DemoSound.inAutoPlay && auto && driver.mode == 0 && driver.t > before {
+                let cues: [(Double, Int)] = [(M.T.pick1, 0), (M.T.drop1, 0), (M.T.pick2, 3), (M.T.drop2, 3)]
+                for (time, index) in cues where before < time && driver.t >= time {
+                    let picking = time == M.T.pick1 || time == M.T.pick2
+                    let delta = picking ? IsometricScoreGaugeTheme.columns[index / 2][index % 2].delta : 0
+                    audio.play(delta > 0 ? "up" : "pick")
+                    audio.play("roll")
+                }
+            }
         }
         return driver.frame
     }

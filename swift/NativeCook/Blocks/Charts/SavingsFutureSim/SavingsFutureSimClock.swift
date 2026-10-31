@@ -26,7 +26,15 @@ final class SavingsFutureSimClock: ObservableObject {
       driver.t = pinned
       driver.amb = pinned
     } else {
+      let before = driver.t
       driver.step(dt, now, auto)
+      // The site's recording plays the sounds a touch would make (DemoSound).
+      if DemoSound.inAutoPlay && auto && !reduced && driver.mode == 0 && driver.t > before {
+        let t = driver.t
+        if before < M.T.open && t >= M.T.open { audio.play("unfurl") }
+        if before < M.T.close && t >= M.T.close { audio.play("furl") }
+        if floor(M.frameAt(before).year) != floor(M.frameAt(t).year) { audio.play("tick") }
+      }
     }
     var frame = driver.frameOf(now)
     if reduced {

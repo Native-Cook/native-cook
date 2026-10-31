@@ -23,8 +23,34 @@ final class CashbackPickFiveClock: ObservableObject {
     let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0), 0.05)
     date = at
     now += dt
+    let before = driver.t
+    let wasAuto = driver.mode == 0
     M.stepDriver(&driver, dt, now, auto)
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    if DemoSound.inAutoPlay && auto && wasAuto && driver.mode == 0 { playLoopCues(before, driver.t) }
     return M.frameOf(&driver, now)
+  }
+  // Each cue fires once per loop when the timeline crosses the moment a touch would have made it.
+  private func playLoopCues(_ before: Double, _ after: Double) {
+    func crossed(_ at: Double) -> Bool {
+      after >= before ? (before < at && at <= after) : (at > before || at <= after)
+    }
+    var picks = 0
+    for event in M.loopEvents {
+      if event.k == 0 {
+        if picks >= T.MAX_PICKS {
+          if crossed(event.t) { audio.play("nope", enabled: true) }
+        } else {
+          picks += 1
+          if crossed(event.t) { audio.play("pop", enabled: true) }
+          if crossed(event.t + M.FLY) { audio.play("drop", enabled: true) }
+        }
+      } else if event.k == 1 {
+        picks -= 1
+        if crossed(event.t) { audio.play("back", enabled: true) }
+      }
+    }
+    if crossed(M.SPARKLE_AT) { audio.play("sparkle", enabled: true) }
   }
   func begin() {
     M.takeOver(&driver, now)

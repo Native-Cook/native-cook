@@ -13,7 +13,7 @@ final class SunUvBuddyClock: ObservableObject {
   private var shadesOn = false
   private var zone = 0
   private var startX = 0.0
-  private var lastHour = 0
+  private var lastHour = 3
   private var lastT = 0.0
   private let audio = SunUvBuddyAudio()
   private let selection = UISelectionFeedbackGenerator()
@@ -25,6 +25,7 @@ final class SunUvBuddyClock: ObservableObject {
     driver = M.Driver()
     date = nil
     now = 0
+    lastHour = 3
   }
   func sample(_ at: Date, auto: Bool, reduced: Bool, pinned: Double?) -> M.Live {
     let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
@@ -47,7 +48,17 @@ final class SunUvBuddyClock: ObservableObject {
     let strong = M.uvAt(driver.hour, driver.from, driver.to, tau) > 4.2
     if strong != shadesOn {
       shadesOn = strong
-      if strong && driver.mode == 2 && !reduced { audio.play("shades") }
+      // The site's recording plays the sounds a touch would make (DemoSound).
+      if strong && (driver.mode == 2 || (DemoSound.inAutoPlay && auto)) && !reduced {
+        audio.play("shades")
+      }
+    }
+    if DemoSound.inAutoPlay && auto && !reduced && driver.mode == 0 {
+      let step = Int(driver.hour.rounded())
+      if step != lastHour {
+        lastHour = step
+        audio.play("tick")
+      }
     }
     return M.Live(
       amb: reduced ? 0 : driver.amb, hour: driver.hour, hourV: reduced ? 0 : driver.hourV,

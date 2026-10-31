@@ -64,7 +64,18 @@ final class FrostCardControlsClock: ObservableObject {
     let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
     date = at
     now += dt
+    let before = driver.t
     M.stepDriver(&driver, dt, now, auto)
+    // The site's recording plays the sounds a touch would make (DemoSound), at the loop's
+    // own freeze, melt, shred and reissue.
+    if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+      let ev = M.AUTO
+      for (at, name) in [(ev.freeze, "freeze"), (ev.melt, "melt"), (ev.shred, "shred"), (ev.reissue, "reissue")]
+      where before < at && driver.t >= at {
+        players[name]?.currentTime = 0
+        players[name]?.play()
+      }
+    }
     return Sample(frame: M.liveFrame(driver, now), driver: driver, iced: 0)
   }
   func begin(_ point: CGPoint, scale: Double, reduced: Bool) {

@@ -13,6 +13,8 @@ final class CleanAirDialClock: ObservableObject {
   private var zone = 0
   private var start = CGPoint.zero
   private var lastTick = 0.0
+  private var loopT = 0.0
+  private var loopTick = 12.0
   private var players: [String: AVAudioPlayer] = [:]
   private let selection = UISelectionFeedbackGenerator()
   private let light = UIImpactFeedbackGenerator(style: .light)
@@ -25,6 +27,8 @@ final class CleanAirDialClock: ObservableObject {
     now = 0
     quality = 1
     zone = 0
+    loopT = 0
+    loopTick = 12
   }
   func stopAudio() {
     players.values.forEach { $0.stop() }
@@ -79,6 +83,18 @@ final class CleanAirDialClock: ObservableObject {
         driver.f = driver.power ? T.LEVELS[driver.level].target : -0.5
       }
     }
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    if DemoSound.inAutoPlay && auto && !reduced && pinned == nil && driver.mode == 0 {
+      let t = driver.t
+      let g = M.loopG(t)
+      if t >= loopT {
+        if loopT < M.T.up[0] && t >= M.T.up[0] { cue("tap", reduced); cue("whoosh", reduced) }
+        let inDrag = (t >= M.T.up[0] && t <= M.T.up[1] + 0.3) || (t >= M.T.down[0] && t <= M.T.down[1])
+        if inDrag && g.rounded() != loopTick { cue("tick", reduced) }
+      }
+      loopT = t
+      loopTick = g.rounded()
+    }
     var frame = M.frameOf(driver, now)
     if reduced {
       frame.amb = 0
@@ -87,9 +103,9 @@ final class CleanAirDialClock: ObservableObject {
     let pm = M.pmOf(frame.f)
     let nextQuality = pm < 6.5 ? 0 : pm < 15.5 ? 1 : 2
     if nextQuality != quality {
-      if nextQuality == 0 && driver.mode == 2 {
+      if nextQuality == 0 && (driver.mode == 2 || (DemoSound.inAutoPlay && driver.mode == 0)) {
         cue("chime", reduced)
-        buzz(3)
+        if driver.mode == 2 { buzz(3) }
       }
       quality = nextQuality
     }

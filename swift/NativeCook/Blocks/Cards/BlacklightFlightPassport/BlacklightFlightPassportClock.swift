@@ -81,7 +81,13 @@ final class BlacklightFlightPassportClock: ObservableObject {
         let dt = min(max(0, previous.map { date.timeIntervalSince($0) } ?? 0.016), 0.05)
         previous = date; now += dt
         updateTilt(dt)
+        let before = driver.t
         M.step(&driver, dt, now, auto)
+        // The site's recording plays the sounds a touch would make (DemoSound).
+        if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+            if before < M.press.0 && driver.t >= M.press.0 && driver.t < M.press.0 + 1 { play("on") }
+            if before < M.pressOff.0 && driver.t >= M.pressOff.0 && driver.t < M.pressOff.0 + 1 { play("off") }
+        }
         let frame = M.frameAt(driver.t)
         updateDark(frame.uv > 0.5)
         return (frame, driver, 0)

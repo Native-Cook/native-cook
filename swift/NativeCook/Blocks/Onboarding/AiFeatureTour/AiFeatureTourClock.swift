@@ -7,12 +7,14 @@ final class AiFeatureTourClock: ObservableObject {
     private var driver = M.Driver()
     private var now = 0.0
     private var previous: Date?
+    private var loopT = 0.0
     private let audio = AiFeatureTourAudio()
     func resetDate() { previous = nil }
     func reset() {
         driver = M.Driver()
         now = 0
         previous = nil
+        loopT = 0
         audio.stop()
     }
     func stop() { resetDate(); audio.stop() }
@@ -24,6 +26,16 @@ final class AiFeatureTourClock: ObservableObject {
         previous = date
         now += dt
         driver.step(dt, now, auto)
+        // The site's recording plays the sounds a touch would make (DemoSound).
+        if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+            let t = driver.t
+            func crossed(_ at: Double) -> Bool { t >= loopT ? (loopT < at && t >= at) : (at > loopT || at <= t) }
+            for i in 0..<M.ICONS where crossed(M.T.act0 + Double(i) * M.ACT) { audio.play("tick", reduced: false) }
+            if crossed(M.T.press) { audio.play("tap", reduced: false) }
+            if crossed(M.T.fly) { audio.play("whoosh", reduced: false) }
+            if crossed(M.T.sparkle) { audio.play("sparkle", reduced: false) }
+            loopT = t
+        }
         return driver.frame(now)
     }
     private func button(_ point: CGPoint) -> Bool {

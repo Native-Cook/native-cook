@@ -122,7 +122,13 @@ final class GoldTicketRewardClock: ObservableObject {
     gyroX += (max(-1, min(1, (currentRoll - roll) / 0.35)) - gyroX) * smoothing
     gyroY += (max(-1, min(1, (currentPitch - pitch) / 0.35)) - gyroY) * smoothing
     let amount = D.bAmountAt(t) * 0.6
-    if driver.mode == 1 && before < M.T.land && t >= M.T.land && t < M.T.hold[0] {
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    let selfPlaying = DemoSound.inAutoPlay && auto && driver.mode == 0
+    if selfPlaying {
+      if before < M.T.commit && t >= M.T.commit { cue("reveal") }
+      if before < M.T.ctaGlow[0] && t >= M.T.ctaGlow[0] { cue("sparkle") }
+    }
+    if (driver.mode == 1 || selfPlaying) && before < M.T.land && t >= M.T.land && t < M.T.hold[0] {
       cue("coin")
       buzz(1)
     }

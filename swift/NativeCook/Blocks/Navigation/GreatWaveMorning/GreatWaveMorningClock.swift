@@ -43,7 +43,16 @@ final class GreatWaveMorningClock: ObservableObject {
     let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
     date = at
     now += dt
+    let before = driver.t
     M.stepDriver(&driver, dt, now, auto && !reduced)
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    if DemoSound.inAutoPlay && auto && driver.mode == 0 && driver.t > before {
+      let from = M.loopScroll(before), to = M.loopScroll(driver.t)
+      if driver.t < M.T.release && from >= -60 && to < -60 { audio.play("surge", reduced: reduced) }
+      if before < M.T.release && driver.t >= M.T.release {
+        audio.play("splash", reduced: reduced)
+      }
+    }
     var frame = M.frameOf(driver, now)
     if reduced {
       frame.amb = 0

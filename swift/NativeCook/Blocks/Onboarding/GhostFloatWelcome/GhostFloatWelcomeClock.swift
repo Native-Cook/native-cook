@@ -17,6 +17,7 @@ final class GhostFloatWelcomeClock: ObservableObject {
   private var start = CGPoint.zero
   private var moved = false
   private var swished = false
+  private var loopT = 0.0
   private var fade = 0.0
   private var fadeFrom = 0.0
   private var fadeAim = 0.0
@@ -38,6 +39,7 @@ final class GhostFloatWelcomeClock: ObservableObject {
     live = GhostFloatWelcomeLive()
     now = 0
     date = nil
+    loopT = 0
     fade = 0
     fading = false
     revision += 1
@@ -101,6 +103,16 @@ final class GhostFloatWelcomeClock: ObservableObject {
     date = at
     now += dt
     driver.step(dt, now, auto)
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+      let t = driver.t
+      func crossed(_ at: Double) -> Bool {
+        t >= loopT ? (loopT < at && t >= at) : (at > loopT || at <= t)
+      }
+      if crossed(M.T.puff) { cue("boo") }
+      if crossed(M.T.tick[0]) || crossed(M.T.untick[0]) { cue("tick") }
+      loopT = t
+    }
     live = driver.extra(now)
     let pitch = motion.deviceMotion?.attitude.pitch ?? 0
     let roll = motion.deviceMotion?.attitude.roll ?? 0

@@ -16,16 +16,20 @@ final class CabinClimateCarAudio {
       }
     }
   }
-  func play(_ cue: String, _ reduced: Bool) {
-    // Autoplay never calls this. Ambient audio respects the silent switch.
-    if !reduced {
-      try? AVAudioSession.sharedInstance().setCategory(
-        .ambient, mode: .default, options: .mixWithOthers)
-      if let player = players[cue] {
-        player.currentTime = 0
-        player.play()
-      }
+  /// The sound alone, with no haptic: the site's recording plays the sounds a touch would
+  /// make (DemoSound) while the demo plays by itself.
+  func sound(_ cue: String) {
+    try? AVAudioSession.sharedInstance().setCategory(
+      .ambient, mode: .default, options: .mixWithOthers)
+    if let player = players[cue] {
+      player.currentTime = 0
+      player.play()
     }
+  }
+  func play(_ cue: String, _ reduced: Bool) {
+    // Touch calls this; autoplay is silent except in the site's recording (see `sound`).
+    // Ambient audio respects the silent switch.
+    if !reduced { sound(cue) }
     if cue == "tick" || cue == "air" {
       selection.selectionChanged()
     } else {

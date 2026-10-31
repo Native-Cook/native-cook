@@ -109,7 +109,8 @@ final class BoosterPackExperience {
   private(set) var scene = BoosterPackScene()
 
   private var liveEffects: Bool { !reduceMotion }
-  private var soundEnabled: Bool { focused && !muted && !autoPlay }
+  // The site's recording plays the sounds a touch would make (DemoSound).
+  private var soundEnabled: Bool { focused && !muted && (!autoPlay || DemoSound.inAutoPlay) }
 
   init() {
     cards.postCutMs = { [unowned self] in self.postCutMs.value }

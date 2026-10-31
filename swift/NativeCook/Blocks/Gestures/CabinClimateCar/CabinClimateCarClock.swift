@@ -30,7 +30,18 @@ final class CabinClimateCarClock: ObservableObject {
       let dt = min(max(0, previous.map { date.timeIntervalSince($0) } ?? 0.016), 0.05)
       previous = date
       now += dt
+      let before = driver.t
+      let wasAuto = driver.mode == 0
       if driver.step(dt, now, auto && !reduced) { audio.play("tick", reduced) }
+      // The site's recording plays the sounds a touch would make (DemoSound).
+      if DemoSound.inAutoPlay && auto && !reduced && wasAuto && driver.mode == 0 {
+        let after = driver.t
+        func crossed(_ at: Double) -> Bool {
+          after >= before ? (before < at && at <= after) : (at > before || at <= after)
+        }
+        for step in CabinClimateCarMotion.steps where crossed(step.0) { audio.sound("tick") }
+        for at in [5.4, 6.6] where crossed(at) { audio.sound("slide") }
+      }
     }
     var f = driver.frame(now)
     if reduced {

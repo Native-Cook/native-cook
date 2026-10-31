@@ -33,7 +33,20 @@ final class ListeningBuddyPaywallClock: ObservableObject {
       driver.t = pinned
       driver.amb = pinned
     } else {
+      let before = driver.t
+      let wasAuto = driver.mode == 0
       M.stepDriver(&driver, dt, now, auto && !reduced)
+      // The site's recording plays the sounds a touch would make (DemoSound).
+      if DemoSound.inAutoPlay && auto && !reduced && wasAuto && driver.mode == 0 {
+        let after = driver.t
+        func crossed(_ at: Double) -> Bool {
+          after >= before ? (before < at && at <= after) : (at > before || at <= after)
+        }
+        for pick in M.picks where crossed(pick.0) {
+          audio.play(pick.1 == 0 ? "pick1" : pick.1 == 2 ? "pick2" : "pick3")
+        }
+        if crossed(M.go) { audio.play("notes") }
+      }
     }
     var frame = M.frameOf(driver, now)
     if reduced {

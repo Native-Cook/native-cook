@@ -27,7 +27,21 @@ final class SpilledCoffeeErrorClock: ObservableObject {
     let dt = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
     date = at
     now += dt
+    let before = driver.t
     M.stepDriver(&driver, dt, now, auto && !reduced)
+    // The site's recording plays the sounds a touch would make (DemoSound): tap and rewind at
+    // the press, then the script playScript() schedules for a real retry.
+    if DemoSound.inAutoPlay && auto && !reduced && driver.mode == 0 && driver.t > before {
+      typealias T = M.T
+      let t = driver.t
+      if before < T.press && t >= T.press {
+        audio.play("tap")
+        audio.play("rewind")
+      }
+      if before < T.rise + 0.25 && t >= T.rise + 0.25 { audio.play("clack") }
+      if before < T.land - 0.05 && t >= T.land - 0.05 { audio.play("tip") }
+      if before < T.land + 0.1 && t >= T.land + 0.1 { audio.play("splash") }
+    }
     var pose = M.poseOf(driver, now)
     if reduced {
       pose.rewind = 0

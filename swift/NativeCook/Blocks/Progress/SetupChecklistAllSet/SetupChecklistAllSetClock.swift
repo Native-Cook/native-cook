@@ -36,11 +36,22 @@ final class SetupChecklistAllSetClock: ObservableObject {
       driver.t = pinned
       driver.amb = pinned
     } else {
+      let before = driver.t
       driver.step(dt, now, auto)
+      if DemoSound.inAutoPlay && auto && driver.mode == 0 { loopCues(before, driver.t) }
     }
     return driver.mode == 0
       ? M.Live(now: driver.t, amb: driver.amb, s: M.loopState(driver.t))
       : M.Live(now: reduced ? now + 10 : now, amb: driver.amb, s: driver.s)
+  }
+  // The site's recording plays the sounds a touch would make (DemoSound): a check per row
+  // as it is ticked, then the "all set" chime and pop after the last tick, as `after` does.
+  private func loopCues(_ before: Double, _ t: Double) {
+    if audio == nil { audio = SetupChecklistAllSetAudio() }
+    func crossed(_ at: Double) -> Bool { before < at && t >= at }
+    for at in [0.7, 1.45, 2.15, 2.85, 3.55] where crossed(at) { audio?.play("check") }
+    if crossed(3.55 + 0.4 + M.D.morph) { audio?.play("complete") }
+    if crossed(3.55 + 0.4 + M.D.morph + 0.2) { audio?.play("pop") }
   }
   func begin(_ point: CGPoint) {
     driver.takeOver(now)

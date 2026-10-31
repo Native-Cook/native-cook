@@ -54,7 +54,10 @@ final class QrJoyPostcardClock: ObservableObject {
     let time = M.stepDriver(&driver, dt, wall, now, auto)
     let bear = M.bearExtra(&driver, now)
     let shake = M.jiggle(&driver, now)
-    if driver.mode == 1 && driver.rate > 0 {
+    // The site's recording plays the sounds a touch would make (DemoSound).
+    let selfPlaying = DemoSound.inAutoPlay && auto && driver.mode == 0
+    if selfPlaying && before < M.T.commit && time >= M.T.commit { audio.play("flip") }
+    if (driver.mode == 1 && driver.rate > 0) || selfPlaying {
       if before < M.T.heartAt && time >= M.T.heartAt {
         audio.play("sparkle")
         buzz(2)

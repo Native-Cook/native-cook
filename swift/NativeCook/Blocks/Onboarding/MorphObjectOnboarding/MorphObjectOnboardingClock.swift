@@ -16,6 +16,7 @@ final class MorphObjectOnboardingClock: ObservableObject {
     private var fadeTo = 0.0
     private var fadeStarted: Date?
     private var stopScheduled = false
+    private var loopT = 0.0
     private let audio = MorphObjectOnboardingAudio()
 
     func resetDate() { date = nil }
@@ -24,6 +25,7 @@ final class MorphObjectOnboardingClock: ObservableObject {
         date = nil
         now = 0
         target = 0
+        loopT = 0
         fadePage = 0
         fadeStarted = nil
         fading = false
@@ -44,6 +46,16 @@ final class MorphObjectOnboardingClock: ObservableObject {
         now += dt
         let before = driver.page
         let arrived = M.step(&driver, dt: dt, now: now, auto: auto)
+        // The site's recording plays the sounds a touch would make (DemoSound).
+        if DemoSound.inAutoPlay && auto && driver.mode == 0 {
+            let t = driver.time
+            func crossed(_ at: Double) -> Bool { t >= loopT ? (loopT < at && t >= at) : (at > loopT || at <= t) }
+            for move in M.moves {
+                if crossed(move[0]) { audio.play("morph") }
+                if crossed(move[1]) { audio.play("pop") }
+            }
+            loopT = t
+        }
         if arrived >= 0 {
             driver.arriveAt = now
             audio.play("pop")
