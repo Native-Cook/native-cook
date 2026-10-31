@@ -72,8 +72,11 @@ final class BlockRecordings: Recorder {
     func test_glass_playlist_folder() throws { try record(slug: "glass-playlist-folder", loop: 8, sound: true) }
     func test_iced_drink_switcher() throws { try record(slug: "iced-drink-switcher", loop: 7.5) }
     func test_liquid_metal_swap() throws { try record(slug: "liquid-metal-swap", loop: 10, sound: true) }
+    func test_market_bag_checkout() throws { try record(slug: "market-bag-checkout", loop: 10, sound: true) }
     func test_nut_milk_flavours() throws { try record(slug: "nut-milk-flavours", loop: 7.8) }
+    func test_parcel_locker_pickup() throws { try record(slug: "parcel-locker-pickup", loop: 10, sound: true) }
     func test_season_tier_medals() throws { try record(slug: "season-tier-medals", loop: 8, sound: true) }
+    func test_tap_ride_pass() throws { try record(slug: "tap-ride-pass", loop: 9, sound: true) }
     func test_zodiac_jelly_dish() throws { try record(slug: "zodiac-jelly-dish", loop: 8, sound: true) }
     func test_blacklight_flight_passport() throws { try record(slug: "blacklight-flight-passport", loop: 9, sound: true) }
     func test_frost_card_controls() throws { try record(slug: "frost-card-controls", loop: 9, sound: true) }
@@ -209,6 +212,7 @@ final class BlockRecordings: Recorder {
     func test_unfolding_signature_pad() throws { try record(slug: "unfolding-signature-pad", loop: 10.4) }
     func test_unlocking_checkout_steps() throws { try record(slug: "unlocking-checkout-steps", loop: 10) }
     func test_clay_reaction_morph() throws { try record(slug: "clay-reaction-morph", loop: 11) }
+    func test_crumple_to_delete() throws { try record(slug: "crumple-to-delete", loop: 9, sound: true) }
     func test_jelly_scale_exchange() throws { try record(slug: "jelly-scale-exchange", loop: 10) }
     func test_park_assist_scrub() throws { try record(slug: "park-assist-scrub", loop: 10) }
     func test_puffy_sticker() throws { try record(slug: "puffy-sticker", loop: 9.6, sound: true) }
