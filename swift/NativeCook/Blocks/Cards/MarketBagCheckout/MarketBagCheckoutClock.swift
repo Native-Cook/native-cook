@@ -76,7 +76,10 @@ final class MarketBagCheckoutClock: ObservableObject {
     {
         self.reduceMotion = reduceMotion
         if let pinnedTime { return MarketBagCheckoutMotion.script(pinnedTime) }
-        let deltaSeconds = min(max(0, previousDate.map { sampleDate.timeIntervalSince($0) } ?? 0.016), 0.05)
+        // The script follows the wall clock, so a dropped frame never stretches the loop (the site's
+        // recording is cut at exactly `loop`); physics and touch keep React Native's 0.05 s cap.
+        let wallSeconds = min(max(0, previousDate.map { sampleDate.timeIntervalSince($0) } ?? 0.016), 1)
+        let deltaSeconds = min(wallSeconds, 0.05)
         previousDate = sampleDate
         bagTime += deltaSeconds
         let anyPacked = (0..<5).contains { packTimes[$0] >= 0 && unpackTimes[$0] < 0 }
@@ -88,7 +91,7 @@ final class MarketBagCheckoutClock: ObservableObject {
         }
         if automatic {
             let previousLoopTime = loopTime
-            loopTime += deltaSeconds
+            loopTime += wallSeconds
             if loopTime >= MarketBagCheckoutMotion.loop { loopTime -= MarketBagCheckoutMotion.loop }
             pose = MarketBagCheckoutMotion.script(loopTime)
             if DemoSound.inAutoPlay && !reduceMotion {

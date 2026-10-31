@@ -130,10 +130,15 @@ final class TapRidePassDriver: ObservableObject {
             }
             return
         }
-        let deltaTime = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 0.05)
+        // A late frame is caught up in steps of at most 0.05 s (React Native's cap per step), so the
+        // loop keeps wall-clock time and the site's recording is cut at exactly `Motion.loop`.
+        var remaining = min(max(0, date.map { at.timeIntervalSince($0) } ?? 0.016), 1)
         date = at
-        guard deltaTime > 0 else { return }
-        step(deltaTime, layout, autoplay && !reduce)
+        while remaining > 1e-9 {
+            let deltaTime = min(remaining, 0.05)
+            step(deltaTime, layout, autoplay && !reduce)
+            remaining -= deltaTime
+        }
     }
     /// Copies the script-controlled pose while retaining the integrated tilt and cadence.
     func setPose(_ pose: Motion.Pose) {

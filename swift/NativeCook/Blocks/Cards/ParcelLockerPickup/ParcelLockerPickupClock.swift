@@ -94,12 +94,10 @@ final class ParcelLockerPickupClock: ObservableObject {
             loopTime = pinnedTime
             return Motion.script(pinnedTime)
         }
-        let deltaTime = min(
-            max(
-                0,
-                self.frameDate.map {
-                    frameDate.timeIntervalSince($0)
-                } ?? 0.016), 0.05)
+        // The script follows the wall clock, so a dropped frame never stretches the loop (the site's
+        // recording is cut at exactly `Motion.loop`); physics and touch keep React Native's 0.05 s cap.
+        let wallDelta = min(max(0, self.frameDate.map { frameDate.timeIntervalSince($0) } ?? 0.016), 1)
+        let deltaTime = min(wallDelta, 0.05)
         self.frameDate = frameDate
         let previousTime = elapsedTime
         elapsedTime += deltaTime
@@ -111,7 +109,7 @@ final class ParcelLockerPickupClock: ObservableObject {
         }
         if automatic {
             let previousLoopTime = loopTime
-            loopTime = (loopTime + deltaTime).truncatingRemainder(dividingBy: Motion.loop)
+            loopTime = (loopTime + wallDelta).truncatingRemainder(dividingBy: Motion.loop)
             pose = Motion.script(loopTime)
             velocity = 0
             if DemoSound.inAutoPlay {

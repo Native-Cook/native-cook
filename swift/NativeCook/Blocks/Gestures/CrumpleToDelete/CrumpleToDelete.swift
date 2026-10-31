@@ -196,9 +196,15 @@ final class CrumpleToDeleteSurface: UIView, UIGestureRecognizerDelegate {
     }
     @objc private func frame(_ sender: CADisplayLink) {
         guard let geometry = geo, active else { return }
-        let dt = min(max(0, previousTimestamp.map { sender.timestamp - $0 } ?? 0.016), 0.05)
+        // A late frame is caught up in steps of at most 0.05 s (React Native's cap per step), so the
+        // loop keeps wall-clock time and the site's recording is cut at exactly `loop`.
+        var remaining = min(max(0, previousTimestamp.map { sender.timestamp - $0 } ?? 0.016), 1)
         previousTimestamp = sender.timestamp
-        driver.step(dt, geometry, autoPlay, reduced, pinned)
+        repeat {
+            let dt = min(remaining, 0.05)
+            driver.step(dt, geometry, autoPlay, reduced, pinned)
+            remaining -= dt
+        } while remaining > 1e-9
         paint()
         if previousPose == driver.pose
             && (pinned != nil || (driver.mode == .rest && !driver.auto && (!autoPlay || reduced)))
