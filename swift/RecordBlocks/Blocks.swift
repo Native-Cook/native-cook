@@ -64,6 +64,7 @@ final class BlockRecordings: Recorder {
     func test_donut_flavour_picker() throws { try record(slug: "donut-flavour-picker", loop: 7.2) }
     func test_dot_matrix_widgets() throws { try record(slug: "dot-matrix-widgets", loop: 8) }
     func test_escape_poster_cards() throws { try record(slug: "escape-poster-cards", loop: 8.8) }
+    func test_friend_radar_map() throws { try record(slug: "friend-radar-map", loop: 9, sound: true) }
     func test_glass_piggy_savings() throws { try record(slug: "glass-piggy-savings", loop: 7, sound: true) }
     func test_glass_playlist_folder() throws { try record(slug: "glass-playlist-folder", loop: 8, sound: true) }
     func test_iced_drink_switcher() throws { try record(slug: "iced-drink-switcher", loop: 7.5) }
@@ -548,6 +549,7 @@ final class BlockRecordings: Recorder {
     func test_truchet_wave_tiles() throws { try record(slug: "truchet-wave-tiles", loop: 16) }
     func test_zen_sand_garden() throws { try record(slug: "zen-sand-garden", loop: 18) }
     func test_petal_loader_spin() throws { try record(slug: "petal-loader-spin", loop: 6) }
+    func test_potion_vial_upload() throws { try record(slug: "potion-vial-upload", loop: 12, sound: true) }
     func test_timer_pill_expand() throws { try record(slug: "timer-pill-expand", loop: 9) }
     func test_iso_fold_storage() throws { try record(slug: "iso-fold-storage", loop: 8) }
     func test_setup_checklist_all_set() throws { try record(slug: "setup-checklist-all-set", loop: 9, sound: true) }
