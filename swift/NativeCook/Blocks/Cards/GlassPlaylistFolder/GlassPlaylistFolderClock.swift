@@ -74,11 +74,20 @@ final class GlassPlaylistFolderClock: ObservableObject {
     if !reduced && preview == nil {
       let touched = drag >= 0 || now - last < 2
       if auto && !touched {
+        let before = f.t
         f.t += min(raw, 0.5)
         if f.t >= M.loop { f.t -= M.loop }
         f.s.setTarget(f.t >= 2 && f.t < 5.35 ? 1 : 0, now)
         f.s.liftTarget = f.t >= 3.4 && f.t < 4.7 ? 1 : 0
         f.s.hovered = 1
+        // Cover hover only has a haptic; opening and closing have sound cues.
+        if DemoSound.inAutoPlay && pressAim == 0 {
+          for (beat, name) in [(2.0, "open"), (5.35, "close")] {
+            let crossed = before <= f.t
+              ? before < beat && f.t >= beat : before < beat || f.t >= beat
+            if crossed { cue(name, reduced) }
+          }
+        }
       }
       if drag >= 0 {
         f.s.open = drag

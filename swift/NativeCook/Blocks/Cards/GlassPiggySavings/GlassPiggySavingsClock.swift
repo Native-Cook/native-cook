@@ -49,6 +49,13 @@ final class GlassPiggySavingsClock: ObservableObject {
             if frame.t>=M.loop { frame.t -= M.loop }
             if before<2 && frame.t>=2 { frame.pig.sv -= 0.7 }
             if before<2.5 && frame.t>=2.5 { frame.pig.sv -= 2.2; frame.plus=20 }
+            // The coin finishes sinking into the slot at 2.5 s.
+            if DemoSound.inAutoPlay {
+                let beat=2.5
+                let crossed=before <= frame.t
+                    ? before < beat && frame.t >= beat : before < beat || frame.t >= beat
+                if crossed { cue("clink",reduced) }
+            }
         }
         let hd=frame.held
         if hd.dropAt>0 && frame.now-hd.dropAt>=0.23 && frame.now-hd.dropAt-dt<0.23 {

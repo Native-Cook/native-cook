@@ -64,11 +64,11 @@ final class BlockRecordings: Recorder {
     func test_donut_flavour_picker() throws { try record(slug: "donut-flavour-picker", loop: 7.2) }
     func test_dot_matrix_widgets() throws { try record(slug: "dot-matrix-widgets", loop: 8) }
     func test_escape_poster_cards() throws { try record(slug: "escape-poster-cards", loop: 8.8) }
-    func test_glass_piggy_savings() throws { try record(slug: "glass-piggy-savings", loop: 7) }
-    func test_glass_playlist_folder() throws { try record(slug: "glass-playlist-folder", loop: 8) }
+    func test_glass_piggy_savings() throws { try record(slug: "glass-piggy-savings", loop: 7, sound: true) }
+    func test_glass_playlist_folder() throws { try record(slug: "glass-playlist-folder", loop: 8, sound: true) }
     func test_iced_drink_switcher() throws { try record(slug: "iced-drink-switcher", loop: 7.5) }
     func test_nut_milk_flavours() throws { try record(slug: "nut-milk-flavours", loop: 7.8) }
-    func test_season_tier_medals() throws { try record(slug: "season-tier-medals", loop: 8) }
+    func test_season_tier_medals() throws { try record(slug: "season-tier-medals", loop: 8, sound: true) }
     func test_blacklight_flight_passport() throws { try record(slug: "blacklight-flight-passport", loop: 9, sound: true) }
     func test_frost_card_controls() throws { try record(slug: "frost-card-controls", loop: 9, sound: true) }
     func test_snow_cloud_forecast() throws { try record(slug: "snow-cloud-forecast", loop: 8) }
@@ -366,7 +366,7 @@ final class BlockRecordings: Recorder {
     func test_photo_vortex_morph() throws { try record(slug: "photo-vortex-morph", loop: 14.4) }
     func test_scatter_collage_hero() throws { try record(slug: "scatter-collage-hero", loop: 15) }
     func test_waveform_scrubber() throws { try record(slug: "waveform-scrubber", loop: 12) }
-    func test_first_loot_reward() throws { try record(slug: "first-loot-reward", loop: 4) }
+    func test_first_loot_reward() throws { try record(slug: "first-loot-reward", loop: 4, sound: true) }
     func test_glass_coupon_badge() throws { try record(slug: "glass-coupon-badge", loop: 6) }
     func test_confetti_gather_badge() throws { try record(slug: "confetti-gather-badge", loop: 5) }
     func test_listening_buddy_paywall() throws { try record(slug: "listening-buddy-paywall", loop: 9, sound: true) }

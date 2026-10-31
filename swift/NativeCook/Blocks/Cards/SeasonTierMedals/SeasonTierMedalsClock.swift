@@ -64,12 +64,24 @@ final class SeasonTierMedalsClock: ObservableObject {
         let dt = min(raw, 0.05)
         self.date = date; now += dt
         let touched = rail.mode == 1 || now - last < 2
-        if auto && !reduced && !touched {
+        let autoPlaying = auto && !reduced && !touched
+        if autoPlaying {
+            let before = time
             time += min(raw, 0.5)
             if time >= M.loop { time -= M.loop }
             rail.script(time, dt, now, reduced)
+            if DemoSound.inAutoPlay {
+                // Match the touch landing at 78% of each chosen medal's spin.
+                for (beat, name) in [(1.4, "slide"), (1.4 + M.spin * 0.78, "land"),
+                                     (4.4, "slide"), (4.4 + M.spin * 0.78, "land")] {
+                    let crossed = before <= time
+                        ? before < beat && time >= beat : before < beat || time >= beat
+                    if crossed { cue(name) }
+                }
+            }
         } else { rail.step(dt) }
-        if byHand {
+        // A previous touch must not make subsequent autoplay spins play a second landing.
+        if byHand && !autoPlaying {
             for i in 0..<3 {
                 let since = now - rail.spins[i]
                 if since >= M.spin * 0.78 && since < M.spin && rail.landed != i {

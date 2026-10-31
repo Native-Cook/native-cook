@@ -76,7 +76,14 @@ final class FirstLootRewardClock: ObservableObject {
         let ks=1-exp(-dt*10)
         gx += (max(-1,min(1,(cr-roll)/0.35))-gx)*ks; gy += (max(-1,min(1,(cp-pitch)/0.35))-gy)*ks
         let touched=now-last < 2 || pressAt >= 0
+        let before=t
         if auto && !(touched && M.resting(t)) { t += min(raw,0.5); if t >= M.loop { t -= M.loop } }
+        // The chest bursts 0.25 s after its gather begins at 0.48 s.
+        if DemoSound.inAutoPlay && auto && !touched && !buttonDown {
+            let beat=0.48+0.25
+            let crossed=before <= t ? before < beat && t >= beat : before < beat || t >= beat
+            if crossed { cue("open") }
+        }
         var f=M.at(t)
         let oa=now-openAt
         if pressAt >= 0 {
