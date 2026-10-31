@@ -1,0 +1,265 @@
+package com.ngocdevv.nativecook.blocks.navigation.claycategorytabs
+
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RuntimeShader
+import androidx.annotation.RequiresApi
+import kotlin.math.*
+
+internal const val ClayCategoryTabsAGSL = """
+uniform float4 uObj;    // the lit object: centre x, y (pt), size (pt, the unit radius), squash (+ flat, − tall)
+uniform float4 uMorph;  // category 0…2, yaw, bell wobble (rad), bell knob pressed 0…1
+uniform float4 uGhostX; // ghost centres x (pt) for the three tabs, ghosts' centre y (pt)
+uniform float4 uGhostA; // ghost presence for the three tabs, ghost size (pt)
+uniform float4 uLive;   // time (s), pixel ratio, -, -
+
+const float PI = 3.14159265;
+float sq(float v) { return v*v; }
+float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5*(b - a)/k, 0.0, 1.0); return mix(b, a, h) - k*h*(1.0 - h); }
+float smax(float a, float b, float k) { float h = clamp(0.5 - 0.5*(b - a)/k, 0.0, 1.0); return mix(b, a, h) + k*h*(1.0 - h); }
+float3 rx(float3 p, float a) { float c = cos(a), s = sin(a); return float3(p.x, c*p.y - s*p.z, s*p.y + c*p.z); }
+float3 ry(float3 p, float a) { float c = cos(a), s = sin(a); return float3(c*p.x + s*p.z, p.y, -s*p.x + c*p.z); }
+float3 rz(float3 p, float a) { float c = cos(a), s = sin(a); return float3(c*p.x - s*p.y, s*p.x + c*p.y, p.z); }
+float ell(float3 p, float3 r) { float k0 = length(p/r); float k1 = length(p/(r*r)); return k0*(k0 - 1.0)/max(k1, 1e-5); }
+float box(float3 p, float3 e, float r) { float3 q = abs(p) - e + r; return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r; }
+float cap(float3 p, float3 a, float3 b, float r) { float3 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0); return length(pa - ba*h) - r; }
+float rcone(float3 p, float3 a, float3 b, float ra, float rb) {
+  float3 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba*h) - mix(ra, rb, h);
+}
+// a cylinder standing on y, radius r, half height h, edges rounded by e
+float cyl(float3 p, float r, float h, float e) { float2 d = float2(length(p.xz) - r + e, abs(p.y) - h + e); return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)) - e; }
+
+struct Part { float d; float3 rgb; float gloss; float glow; };
+Part P(float d, float3 rgb, float gloss, float glow) { Part p; p.d = d; p.rgb = rgb; p.gloss = gloss; p.glow = glow; return p; }
+Part nearer(Part a, Part b) { return a.d < b.d ? a : b; }
+
+const float3 WALL = float3(1.0, 0.9, 0.78);
+const float3 ROOF = float3(0.96, 0.36, 0.28);
+const float3 BRICK = float3(0.62, 0.28, 0.22);
+const float3 DOOR = float3(0.16, 0.6, 0.62);
+const float3 LAMP = float3(1.0, 0.82, 0.4);
+const float3 SMOKE = float3(0.86, 0.86, 0.9);
+const float3 SILK1 = float3(1.0, 0.42, 0.2);
+const float3 SILK2 = float3(1.0, 0.84, 0.3);
+const float3 WICKER = float3(0.66, 0.42, 0.22);
+const float3 ROPE = float3(0.3, 0.22, 0.16);
+const float3 BRASS = float3(1.0, 0.74, 0.28);
+const float3 WALNUT = float3(0.34, 0.2, 0.14);
+
+Part house(float3 p, float t) {
+  float walls = box(p - float3(0.0, -0.34, 0.0), float3(0.6, 0.44, 0.46), 0.1);
+  // the roof: a triangular prism with soft edges
+  float2 q = float2(abs(p.x), p.y - 0.06);
+  float2 n = normalize(float2(0.66, 0.86));
+  float d2 = max(dot(q - float2(0.0, 0.66), n), -q.y);
+  float2 w = float2(d2 + 0.07, abs(p.z) - 0.56 + 0.07);
+  float roof = min(max(w.x, w.y), 0.0) + length(max(w, 0.0)) - 0.07;
+  float chim = box(p - float3(0.36, 0.5, -0.12), float3(0.1, 0.22, 0.1), 0.035);
+  Part h = P(walls, WALL, 0.25, 0.0);
+  h = nearer(h, P(roof, ROOF, 0.45, 0.0));
+  h = nearer(h, P(chim, BRICK, 0.3, 0.0));
+  h = nearer(h, P(box(p - float3(0.0, -0.53, 0.47), float3(0.15, 0.25, 0.04), 0.05), DOOR, 0.5, 0.0));
+  float3 wq = float3(abs(p.x), p.y, p.z) - float3(0.38, -0.26, 0.47);
+  h = nearer(h, P(box(wq, float3(0.11, 0.11, 0.03), 0.04), LAMP, 0.6, 1.0));
+  h = nearer(h, P(length(p - float3(0.0, 0.28, 0.55)) - 0.11, LAMP, 0.6, 1.0));
+  // smoke: three puffs rising from the chimney, swelling as they fade
+  for (int i = 0; i < 3; i++) {
+    float u = fract(t/2.25 + float(i)/3.0);
+    float3 c = float3(0.38 + 0.18*u, 0.8 + 0.62*u, -0.12);
+    float r = 0.07 + 0.09*u;
+    float puff = length(p - c) - r*(1.0 - smoothstep(0.7, 1.0, u));
+    if (u > 0.04) h = nearer(h, P(puff, SMOKE, 0.1, 0.0));
+  }
+  return h;
+}
+
+Part balloon(float3 p) {
+  float3 q = p - float3(0.0, 0.2, 0.0);
+  float env = ell(q, float3(0.74, 0.76, 0.74));
+  float neck = rcone(p, float3(0.0, -0.22, 0.0), float3(0.0, -0.54, 0.0), 0.5, 0.14);
+  float d = smin(env, neck, 0.16);
+  float a = atan(q.z, q.x);
+  float band = smoothstep(-0.25, 0.25, sin(a*5.0));
+  Part b = P(d, mix(SILK1, SILK2, band), 0.55, 0.0);
+  // a cream crown on top
+  if (q.y > 0.58) b.rgb = mix(b.rgb, WALL, smoothstep(0.58, 0.64, q.y));
+  b = nearer(b, P(box(p - float3(0.0, -0.86, 0.0), float3(0.19, 0.13, 0.19), 0.05), WICKER, 0.2, 0.0));
+  float3 rp = float3(abs(p.x), p.y, abs(p.z));
+  b = nearer(b, P(cap(rp, float3(0.11, -0.52, 0.11), float3(0.15, -0.75, 0.15), 0.022), ROPE, 0.1, 0.0));
+  // the burner's glow in the mouth
+  b = nearer(b, P(length(p - float3(0.0, -0.56, 0.0)) - 0.07, LAMP, 0.4, 1.0));
+  return b;
+}
+
+Part bell(float3 p, float knob) {
+  float base = cyl(p - float3(0.0, -0.66, 0.0), 0.86, 0.08, 0.05);
+  float dome = ell(p - float3(0.0, -0.56, 0.0), float3(0.7, 0.76, 0.7));
+  dome = smax(dome, -(p.y + 0.56), 0.02);
+  float rim = length(float2(length(p.xz) - 0.7, p.y + 0.56)) - 0.05;
+  dome = smin(dome, rim, 0.04);
+  float stem = cap(p, float3(0.0, 0.16, 0.0), float3(0.0, 0.34 - 0.09*knob, 0.0), 0.055);
+  float ball = length(p - float3(0.0, 0.4 - 0.09*knob, 0.0)) - 0.12;
+  Part b = P(base, WALNUT, 0.45, 0.0);
+  b = nearer(b, P(smin(dome, stem, 0.05), BRASS, 1.0, 0.0));
+  b = nearer(b, P(ball, BRASS, 1.0, 0.0));
+  return b;
+}
+
+Part shape(float3 p, float k, float t, float knob) {
+  if (k < 0.5) return house(p, t);
+  if (k < 1.5) return balloon(p);
+  return bell(p, knob);
+}
+
+// tf: yaw, squash, wobble, knob
+float3 toObject(float3 p, float4 tf) {
+  p.y /= 1.0 - 0.22*tf.y;
+  p.xz /= 1.0 + 0.14*tf.y;
+  p.y += 0.66; p = rz(p, tf.z); p.y -= 0.66; // the bell rocks on its base
+  p = ry(p, tf.x);
+  p = rx(p, -0.3);
+  return p;
+}
+
+float sceneD(float3 p, float r, float4 tf, float t) {
+  float lip = min(1.0 - 0.22*tf.y, 1.0 + 0.14*tf.y);
+  float3 q = toObject(p, tf);
+  float rc = clamp(r, 0.0, 2.0);
+  float a = min(floor(rc), 1.0);
+  float w = smoothstep(0.12, 0.88, rc - a);
+  float d;
+  if (w < 0.001) d = shape(q, a, t, tf.w).d;
+  else if (w > 0.999) d = shape(q, a + 1.0, t, tf.w).d;
+  else d = mix(shape(q, a, t, tf.w).d, shape(q, a + 1.0, t, tf.w).d, w) - 0.12*sin(PI*w);
+  return d*lip*0.9;
+}
+
+float3 toLab(float3 c) {
+  c = pow(max(c, float3(0.0)), float3(2.2));
+  float3 l = float3(dot(c, float3(0.412221, 0.536333, 0.051446)), dot(c, float3(0.211903, 0.680700, 0.107397)), dot(c, float3(0.088302, 0.281719, 0.629979)));
+  l = pow(max(l, float3(0.0)), float3(0.333333));
+  return float3(dot(l, float3(0.210454, 0.793618, -0.004072)), dot(l, float3(1.977998, -2.428592, 0.450594)), dot(l, float3(0.025904, 0.782772, -0.808676)));
+}
+float3 fromLab(float3 c) {
+  float3 l = float3(c.x + 0.396338*c.y + 0.215804*c.z, c.x - 0.105561*c.y - 0.063854*c.z, c.x - 0.089484*c.y - 1.291486*c.z);
+  l = l*l*l;
+  float3 rgb = float3(dot(l, float3(4.076742, -3.307712, 0.230970)), dot(l, float3(-1.268438, 2.609757, -0.341319)), dot(l, float3(-0.004196, -0.703419, 1.707615)));
+  return pow(max(rgb, float3(0.0)), float3(1.0/2.2));
+}
+
+Part surfaceAt(float3 p, float r, float4 tf, float t) {
+  float3 q = toObject(p, tf);
+  float rc = clamp(r, 0.0, 2.0);
+  float a = min(floor(rc), 1.0);
+  float w = smoothstep(0.12, 0.88, rc - a);
+  if (w < 0.001) return shape(q, a, t, tf.w);
+  if (w > 0.999) return shape(q, a + 1.0, t, tf.w);
+  Part x = shape(q, a, t, tf.w), y = shape(q, a + 1.0, t, tf.w);
+  return P(0.0, fromLab(mix(toLab(x.rgb), toLab(y.rgb), w)), mix(x.gloss, y.gloss, w), mix(x.glow, y.glow, w));
+}
+
+float3 toP3(float3 c) {
+  float3 l = pow(max(c, float3(0.0)), float3(2.2));
+  float3 m = float3(dot(l, float3(0.8225, 0.1774, 0.0)), dot(l, float3(0.0332, 0.9669, 0.0)), dot(l, float3(0.0171, 0.0724, 0.9108)));
+  return pow(max(m, float3(0.0)), float3(1.0/2.2));
+}
+float4 over(float4 under, float3 c, float a) { return float4(c*a + under.rgb*(1.0 - a), a + under.a*(1.0 - a)); }
+
+// one icon: centre c, unit size S, category r, transform tf; ghost 1 = grey matte clay
+float4 icon(float4 acc, float2 xy, float2 c, float S, float r, float4 tf, float ghost, float alpha, float t) {
+  if (alpha <= 0.0 || S < 1.0) return acc;
+  float2 uv = (xy - c)/S;
+  uv.y = -uv.y;
+  float b2 = 1.5*1.5 - dot(uv, uv);
+  if (b2 <= 0.0) return acc;
+  float pxo = 1.0/(uLive.y*S);
+  float zEnd = -sqrt(b2);
+  float z = -zEnd;
+  float best = 1e4, bestZ = z;
+  bool hit = false;
+  for (int i = 0; i < 64; i++) {
+    float d = sceneD(float3(uv, z), r, tf, t);
+    if (d < best) { best = d; bestZ = z; }
+    if (d < 0.3*pxo) { hit = true; break; }
+    z -= max(d*0.9, 0.35*pxo);
+    if (z < zEnd) break;
+  }
+  if (hit) { for (int i = 0; i < 2; i++) bestZ -= sceneD(float3(uv, bestZ), r, tf, t); }
+  float cover = (hit ? 1.0 : 1.0 - smoothstep(0.3*pxo, 1.3*pxo, best))*alpha;
+  if (cover <= 0.0) return acc;
+  float3 p = float3(uv, bestZ);
+  float e = max(0.004, 1.2*pxo);
+  const float2 k = float2(1.0, -1.0);
+  float3 n = normalize(k.xyy*sceneD(p + k.xyy*e, r, tf, t) + k.yyx*sceneD(p + k.yyx*e, r, tf, t) + k.yxy*sceneD(p + k.yxy*e, r, tf, t) + k.xxx*sceneD(p + k.xxx*e, r, tf, t));
+  Part s = surfaceAt(p, r, tf, t);
+  float ao = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float h = 0.035 + float(i)*0.07;
+    ao += max(0.0, h - sceneD(p + n*h, r, tf, t))/h/(1.0 + float(i));
+  }
+  ao = clamp(1.0 - ao*0.85, 0.45, 1.0);
+  float3 base = s.rgb;
+  float gloss = s.gloss;
+  float glow = s.glow;
+  if (ghost > 0.5) {
+    float l = dot(base, float3(0.3, 0.55, 0.15));
+    base = float3(0.42 + 0.3*l);
+    gloss *= 0.3;
+    glow = 0.0;
+  }
+  float3 V = float3(0.0, 0.0, 1.0);
+  float3 key = normalize(float3(-0.55, 0.75, 0.8));
+  float nl = clamp((dot(n, key) + 0.4)/1.4, 0.0, 1.0);
+  float3 shade = mix(base*float3(0.6, 0.52, 0.72), base, 0.3);
+  float3 col = mix(shade, base, nl)*(0.62 + 0.42*nl)*ao;
+  col += base*float3(0.1, 0.1, 0.18)*max(dot(n, normalize(float3(0.8, -0.1, 0.5))), 0.0);
+  float hn = max(dot(n, normalize(key + V)), 0.0);
+  col += float3(1.0, 0.96, 0.9)*((0.08 + 0.22*gloss)*pow(hn, 16.0) + 0.45*gloss*pow(hn, 110.0))*ao;
+  float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+  col += float3(0.55, 0.62, 1.0)*rim*(ghost > 0.5 ? 0.12 : 0.3);
+  col += base*glow*0.45;
+  float3 ex = max(col - 0.86, 0.0);
+  col = min(col, float3(0.86)) + ex/(1.0 + ex/0.14);
+  return over(acc, col, cover);
+}
+
+half4 main(float2 pixelPosition) {
+  float2 xy = pixelPosition / uLive.y;
+  float t = uLive.x;
+  float4 acc = float4(0.0);
+  float4 still = float4(0.45, 0.0, 0.0, 0.0);
+  float gs = uGhostA.w;
+  acc = icon(acc, xy, float2(uGhostX.x, uGhostX.w), gs, 0.0, still, 1.0, uGhostA.x, t);
+  acc = icon(acc, xy, float2(uGhostX.y, uGhostX.w), gs, 1.0, still, 1.0, uGhostA.y, t);
+  acc = icon(acc, xy, float2(uGhostX.z, uGhostX.w), gs, 2.0, still, 1.0, uGhostA.z, t);
+  // a soft shadow on the stage under the lit object
+  float2 sc = float2(uObj.x, uGhostX.w + 0.95*uObj.z*0.9);
+  float2 sd = (xy - sc)/(uObj.z*float2(0.75, 0.13));
+  acc = over(acc, float3(0.0), 0.35*exp(-dot(sd, sd)));
+  acc = icon(acc, xy, uObj.xy, uObj.z, uMorph.x, float4(uMorph.y, uObj.w, uMorph.z, uMorph.w), 0.0, 1.0, t);
+  if (acc.a <= 0.0) return half4(0.0);
+  float3 rgb = toP3(clamp(acc.rgb/acc.a, 0.0, 1.0));
+  return half4(half3(rgb*acc.a), half(acc.a));
+}
+"""
+
+@RequiresApi(33)
+internal class ClayCategoryTabsShader {
+    private val shader = RuntimeShader(ClayCategoryTabsAGSL)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = this@ClayCategoryTabsShader.shader }
+    fun draw(canvas: Canvas, layout: ClayCategoryTabsTheme.Layout, f: ClayCategoryTabsMotion.Frame, time: Double, density: Float, reduced: Boolean) {
+        val k = f.r; val kc = k.coerceIn(0.0,2.0); val frac = kc-floor(kc)
+        val sine = sin(PI*frac).toFloat()
+        val x = layout.w/2-layout.slot+k.toFloat()*layout.slot
+        val hop = if (reduced) 0f else 30f*sine
+        shader.setFloatUniform("uObj",x,108f-hop,76f*(1-0.08f*sine),f.squash.toFloat())
+        shader.setFloatUniform("uMorph",k.toFloat(),0.35f+(if (reduced) 0f else 0.5f*sine),f.wobble.toFloat(),f.knob.toFloat())
+        shader.setFloatUniform("uGhostX",layout.xs[0],layout.xs[1],layout.xs[2],108f)
+        shader.setFloatUniform("uGhostA",ClayCategoryTabsMotion.smooth(0.15,0.85,abs(k)).toFloat(),ClayCategoryTabsMotion.smooth(0.15,0.85,abs(k-1)).toFloat(),ClayCategoryTabsMotion.smooth(0.15,0.85,abs(k-2)).toFloat(),24f)
+        shader.setFloatUniform("uLive",time.toFloat(),density,0f,0f)
+        // The surrounding UI is drawn in dp. Undo that scale only for the shader so main gets pixels.
+        canvas.save(); canvas.translate(0f,layout.stageTop); canvas.scale(1/density,1/density)
+        canvas.drawRect(0f,0f,layout.w*density,244f*density,paint); canvas.restore()
+    }
+}
