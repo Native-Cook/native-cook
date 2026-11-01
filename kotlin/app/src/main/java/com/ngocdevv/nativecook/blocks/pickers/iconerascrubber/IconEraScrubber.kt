@@ -793,6 +793,16 @@ fun IconEraScrubber(modifier: Modifier = Modifier, autoPlay: Boolean = false) {
                             (layout.width / 2f - ((state.year - IconEraScrubberMotion.FIRST) * IconEraScrubberTheme.Step)).toFloat(),
                             24f,
                         )
+                        // unlabelled ticks past both ends, fading out, so the ruler runs off the screen at 2008 and 2026 too
+                        val ghostAlpha = rulerPaint.alpha
+                        for (away in 1..8) {
+                            rulerPaint.alpha = (ghostAlpha * 0.55 * (1.0 - away / 9.0)).roundToInt()
+                            for (year in intArrayOf(IconEraScrubberMotion.FIRST.roundToInt() - away, IconEraScrubberMotion.LAST.roundToInt() + away)) {
+                                val x = ((year - IconEraScrubberMotion.FIRST) * IconEraScrubberTheme.Step).toFloat()
+                                native.drawLine(x, 0f, x, 14f, rulerPaint)
+                            }
+                        }
+                        rulerPaint.alpha = ghostAlpha
                         for (year in IconEraScrubberMotion.FIRST.roundToInt()..IconEraScrubberMotion.LAST.roundToInt()) {
                             val x = ((year - IconEraScrubberMotion.FIRST) * IconEraScrubberTheme.Step).toFloat()
                             val isMajor = year % 2 == 0
@@ -827,7 +837,9 @@ private fun IconEraEraWords(state: IconEraScrubberState, fonts: FontFamily, inde
             .graphicsLayer {
                 state.frame.intValue
                 val distance = IconEraScrubberMotion.eraOf(state.year) - index
-                val opacity = max(0.0, 1.0 - abs(distance) * 2.4)
+                // the nearer era's words show, swapping in a quick fade at the change's middle
+                val away = abs(distance)
+                val opacity = ((0.53 - away) / 0.06).coerceIn(0.0, 1.0)
                 alpha = (opacity * opacity).toFloat()
                 translationY = (-14.0 * distance.coerceIn(-1.0, 1.0) * density).toFloat()
             },

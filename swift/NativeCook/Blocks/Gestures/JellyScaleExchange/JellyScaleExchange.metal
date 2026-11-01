@@ -2,6 +2,27 @@
 #include <SwiftUI/SwiftUI_Metal.h>
 using namespace metal;
 
+// Where bean i rests in the pile, worked out once: a golden-angle spiral on the bowl's floor
+// (radius 0.5*sqrt((i+0.5)/16)), raised into a mound as the pile grows.
+constant float3 JellyScaleExchangeRestTable[16] = {
+  float3(0.088388, 0.055769, 0.000000),
+  float3(-0.112886, 0.067458, 0.093072),
+  float3(0.017278, 0.079356, -0.177197),
+  float3(0.142287, 0.091476, 0.167027),
+  float3(-0.261112, 0.106520, -0.041565),
+  float3(0.247345, 0.125398, -0.141612),
+  float3(-0.082727, 0.145970, 0.276988),
+  float3(-0.157788, 0.166658, -0.273414),
+  float3(0.342324, 0.186323, 0.112506),
+  float3(-0.356124, 0.206769, 0.132313),
+  float3(0.171665, 0.229174, -0.330183),
+  float3(0.126879, 0.251951, 0.364015),
+  float3(-0.382382, 0.273762, -0.199420),
+  float3(0.448563, 0.293502, -0.088772),
+  float3(-0.273736, 0.310283, 0.350459),
+  float3(-0.063267, 0.323418, -0.439238)
+};
+
 struct JellyScaleExchangeScene {
 
 float4 uView;
@@ -46,14 +67,6 @@ float3 JellyScaleExchangeBeanColour(float i) {
   return float3(0.45, 0.72, 1.0);
 }
 
-// bean i at rest in the pile, and its turn
-float3 JellyScaleExchangeBeanRest(float i) {
-  float a = i*2.39996;
-  float rr = 0.5*sqrt((i + 0.5)/16.0);
-  float floorY = BOWL_C.y - sqrt(max(JellyScaleExchangeSq(BOWL_R - 0.06) - rr*rr, 0.0)) + 0.11;
-  float mound = 0.34*(1.0 - rr/0.5)*smoothstep(3.0, 16.0, i) + 0.06*smoothstep(8.0, 16.0, i);
-  return float3(cos(a)*rr, floorY + mound, sin(a)*rr*0.9);
-}
 float JellyScaleExchangeBounceOut(float x) {
   float n1 = 7.5625, d1 = 2.75;
   if (x < 1.0/d1) return n1*x*x;
@@ -79,9 +92,13 @@ float JellyScaleExchangeCandy(float3 p, thread float3 &rgb) {
     float i = float(j);
     float u = clamp(pour - i, 0.0, 1.0);
     if (u <= 0.0) break;
-    float3 rest = JellyScaleExchangeBeanRest(i);
+    float3 rest = JellyScaleExchangeRestTable[j];
     float3 c = rest + float3(0.0, (1.0 - JellyScaleExchangeBounceOut(u))*1.7, 0.0);
     c = mix(c, PILE, pull*0.85);
+    // a bean is a capsule within 0.32 of its centre: one too far to change the blend (nor its
+    // colour, whose weight would be under exp(-5)) is skipped before its turn is worked out
+    float lb = length(p - c) - 0.32;
+    if (lb > d + k && lb > 0.15) continue;
     float yaw = JellyScaleExchangeHash1(i)*6.28 + (1.0 - u)*4.0;
     float tilt = (JellyScaleExchangeHash1(i + 7.0) - 0.5)*0.9;
     float3 q = JellyScaleExchangeRx(JellyScaleExchangeRy(p - c, yaw), tilt);
@@ -159,19 +176,38 @@ half4 JellyScaleExchangeRender(float2 xy) {
   float3 ro = float3(sp.x, 0.0, 0.0) + up*sp.y - fwd*4.0;
   float3 rd = fwd;
   float px = 1.0/(ppu*uView.w);
-  float t = 1.0, best = 1e4, bestT = t;
+  // a soft shadow on the table under the scale
+  float2 g = sp - float2(0.0, -1.0);
+  float shadow = 0.45*exp(-JellyScaleExchangeSq(g.x/1.15) - JellyScaleExchangeSq(g.y/0.16));
+  // march only where the ray can meet something: the box the scale, bowl and falling beans
+  // stay in, and the sphere round the gummy or coin when it leaves it on its way to the pill
+  float tIn = 1e4, tOut = -1.0;
+  {
+    float3 lo = float3(-1.35, -1.0, -1.15), hi = float3(1.35, 2.7, 1.15);
+    float3 inv = 1.0/rd;
+    float3 a = (lo - ro)*inv, b = (hi - ro)*inv;
+    float3 mn = min(a, b), mx = max(a, b);
+    float t0 = max(max(mn.x, mn.y), mn.z), t1 = min(min(mx.x, mx.y), mx.z);
+    if (t1 > max(t0, 0.0)) { tIn = max(t0, 0.0); tOut = t1; }
+    if (uPour.y > 0.55) {
+      float3 at = mix(PILE + float3(0.0, 0.06, 0.0), RISE, smoothstep(0.0, 0.6, uPour.z)) + float3(uCoin.xy, 0.0) - float3(0.0, uScale.x, 0.0);
+      float r = 0.75*uCoin.z + 0.6;
+      float3 oc = ro - at;
+      float bq = dot(oc, rd), cq = dot(oc, oc) - r*r, disc = bq*bq - cq;
+      if (disc > 0.0) { float sq = sqrt(disc); tIn = min(tIn, max(-bq - sq, 0.0)); tOut = max(tOut, -bq + sq); }
+    }
+  }
+  if (tOut < tIn) return half4(half3(0.0), half(shadow));
+  float t = tIn, best = 1e4, bestT = t;
   bool hit = false;
   for (int i = 0; i < 80; i++) {
     float d = JellyScaleExchangeSd(ro + rd*t);
     if (d < best) { best = d; bestT = t; }
     if (d < 0.35*px) { hit = true; break; }
     t += d*0.9;
-    if (t > 8.0) break;
+    if (t > tOut) break;
   }
   float cover = hit ? 1.0 : 1.0 - smoothstep(0.35*px, 1.4*px, best);
-  // a soft shadow on the table under the scale
-  float2 g = sp - float2(0.0, -1.0);
-  float shadow = 0.45*exp(-JellyScaleExchangeSq(g.x/1.15) - JellyScaleExchangeSq(g.y/0.16));
   if (cover <= 0.0) return half4(half3(0.0), half(shadow));
   float3 p = ro + rd*bestT;
   if (hit) { for (int i = 0; i < 2; i++) p += rd*JellyScaleExchangeSd(p); }

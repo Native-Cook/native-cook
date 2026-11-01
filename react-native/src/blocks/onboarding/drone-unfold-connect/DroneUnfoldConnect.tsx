@@ -76,7 +76,7 @@ export function DroneUnfoldConnect({ autoPlay = false }: Props) {
   }, []);
   const [dims, setDims] = useState({ w: 402, h: 874 });
   const L = useMemo(() => {
-    const ppu = Math.round(dims.w * 0.36);
+    const ppu = Math.round(dims.w * 0.3);
     const floorY = insets.top + Math.round((dims.h - insets.top - insets.bottom) * 0.52);
     const cardTop = floorY + 86;
     const bottomTop = dims.h - Math.max(insets.bottom, 16) - 8 - 120;

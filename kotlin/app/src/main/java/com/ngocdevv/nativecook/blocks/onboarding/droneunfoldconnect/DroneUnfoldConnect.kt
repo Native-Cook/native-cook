@@ -207,7 +207,7 @@ fun DroneUnfoldConnect(modifier: Modifier = Modifier, autoPlay: Boolean = false)
     }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val w = maxWidth.value; val h = maxHeight.value
-        val ppu = (w * 0.36f).roundToInt().toFloat()
+        val ppu = (w * 0.3f).roundToInt().toFloat()
         val floorY = top + ((h - top - bottom) * 0.52f).roundToInt()
         val cardTop = floorY + 86
         val bottomTop = h - max(bottom, 16f) - 8 - 120

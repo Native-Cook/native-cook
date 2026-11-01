@@ -83,7 +83,8 @@ struct IconEraScrubber: View {
                 .offset(y:l.yearTop).accessibilityHidden(true)
             ForEach(0..<4,id:\.self) { i in
                 let d = M.eraOf(f.year)-Double(i)
-                let k = max(0,1-abs(d)*2.4)
+                // the nearer era's words show, swapping in a quick fade at the change's middle
+                let a = abs(d), k = max(0,min(1,(0.53-a)/0.06))
                 VStack(spacing:2) {
                     Text(T.eras[i].0).font(T.font("SemiBold",17)).foregroundStyle(T.ink).frame(height:24)
                     Text(T.eras[i].1).font(T.font("Regular",14)).foregroundStyle(T.mute).frame(height:20)
@@ -94,6 +95,14 @@ struct IconEraScrubber: View {
     }
     private func ruler(_ l: T.Layout, _ f: M.Frame) -> some View {
         Canvas { context,_ in
+            // unlabelled ticks past both ends, fading out, so the ruler runs off the screen at 2008 and 2026 too
+            for away in 1...8 {
+                for year in [2008-away, 2026+away] {
+                    let x = l.w/2+(Double(year)-f.year)*T.step
+                    let rect = CGRect(x:x-0.75,y:l.rulerTop,width:1.5,height:14)
+                    context.fill(Path(roundedRect:rect,cornerRadius:1),with:.color(T.tick.opacity(0.55*(1-Double(away)/9))))
+                }
+            }
             for year in 2008...2026 {
                 let x = l.w/2+(Double(year)-f.year)*T.step
                 let major = year%2 == 0

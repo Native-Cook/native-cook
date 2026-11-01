@@ -27,7 +27,7 @@ export function easeOut(x: number) {
 export const LIFT = 0.9; // hover height (units)
 export const STICK_R = 44; // the joystick's travel (pt)
 export const TILT_MAX = 0.35; // rad at full stick
-export const DRIFT = 0.35; // units the drone leans over at full stick
+export const DRIFT = 0.2; // units the drone leans over at full stick
 export const YAW = 0.5;
 
 export const LOOP = 10;

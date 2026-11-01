@@ -31,16 +31,21 @@ Hit arm(float3 p, float sx, float sz, float u, float spin) {
   Hit h = H(cap(p, hinge, tip, 0.065), 3.0);
   float3 m = p - tip;
   h = nearer(h, H(cyl(m - float3(0.0, 0.05, 0.0), 0.1, 0.07) - 0.02, 4.0));
-  // props: two blades along the arm when still, a thin disc when spinning
+  // props: two blades along the arm while they spin up; once they run they are light (rotorGlow)
   float3 q = m - float3(0.0, 0.15, 0.0);
-  float blades = 1e3;
-  if (spin < 0.999) {
+  if (spin < 0.6) {
     float3 bq = ry(q, atan2(dir.x, dir.z) + spin*12.0);
-    blades = box(bq, float3(0.04, 0.008, 0.29), 0.008);
+    h = nearer(h, H(box(bq, float3(0.04, 0.008, 0.29), 0.008), 5.0));
   }
-  float disc = cyl(q, 0.3, 0.006) - 0.004;
-  h = nearer(h, H(mix(blades, disc, smoothstep(0.35, 0.8, spin)), 5.0));
   return h;
+}
+
+// the centre of prop (sx, sz) in the drone's space, at unfold u
+float3 propAt(float sx, float sz, float u) {
+  float3 hinge = float3(0.32*sx, 0.0, 0.42*sz);
+  float a = mix(sz > 0.0 ? 0.0 : PI, sz > 0.0 ? PI*0.25 : PI*0.75, u);
+  float dip = sz > 0.0 ? 0.0 : -0.06*(1.0 - u);
+  return hinge + float3(sin(a)*sx, 0.0, cos(a))*0.78 + float3(0.0, dip + 0.03 + 0.15, 0.0);
 }
 
 Hit drone(float3 p) {
@@ -68,6 +73,30 @@ float3 toDrone(float3 p) {
   return p;
 }
 Hit scene(float3 p) { return drone(toDrone(p)); }
+float3 dirToDrone(float3 d) { return ry(rx(rz(d, -uDrone.w), -uDrone.z), -uState.z); }
+
+// running props are light: a bright rim where the blade tips run, a faint streaked blur inside and a
+// soft halo, met where the ray crosses each prop's plane (in front of whatever the ray hit, tHit)
+float rotorGlow(float3 ro, float3 rd, float tHit) {
+  float on = smoothstep(0.35, 0.8, uState.y);
+  if (on <= 0.0) return 0.0;
+  float3 o = toDrone(ro), d = dirToDrone(rd);
+  float g = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float sx = (i == 0 || i == 2) ? 1.0 : -1.0;
+    float sz = i < 2 ? 1.0 : -1.0;
+    float3 c = propAt(sx, sz, uState.x);
+    float s = (c.y - o.y)/d.y;
+    if (s > tHit + 0.02) continue;
+    float2 v = (o + d*s).xz - c.xz;
+    float r = length(v);
+    float streak = 0.5 + 0.5*sin(atan2(v.y, v.x)*2.0 + uState.w*40.0);
+    g += exp(-sq((r - 0.29)/0.022))*0.85;
+    g += smoothstep(0.31, 0.06, r)*(0.1 + 0.12*streak);
+    g += exp(-sq(max(r - 0.3, 0.0)/0.07))*0.22;
+  }
+  return g*on;
+}
 float sd(float3 p) { return scene(p).d; }
 
 float3 toP3(float3 c) {
@@ -97,9 +126,10 @@ half4 render(float2 xy) {
   float3 dc = float3(uDrone.x, uDrone.y + 0.2, 0.0);
   float3 oc = ro - dc;
   float bb = dot(oc, rd);
-  float cc = dot(oc, oc) - 1.35*1.35;
+  float cc = dot(oc, oc) - 1.6*1.6;
   float disc = bb*bb - cc;
   if (disc <= 0.0) return half4(0.0, 0.0, 0.0, half(shadow));
+  float3 GLOW = float3(0.78, 0.9, 1.0);
   float t = -bb - sqrt(disc);
   float tEnd = -bb + sqrt(disc);
   float best = 1e4, bestT = t;
@@ -112,7 +142,11 @@ half4 render(float2 xy) {
     if (t > tEnd) break;
   }
   float cover = hit ? 1.0 : 1.0 - smoothstep(0.35*px, 1.4*px, best);
-  if (cover <= 0.0) return half4(0.0, 0.0, 0.0, half(shadow));
+  float glow = rotorGlow(ro, rd, hit ? bestT : 1e4);
+  if (cover <= 0.0) {
+    float ga = clamp(glow*0.5, 0.0, 1.0);
+    return half4(half3(toP3(GLOW)*min(glow, 1.2)), half(ga + shadow*(1.0 - ga)));
+  }
   float3 p = ro + rd*bestT;
   if (hit) { for (int i = 0; i < 2; i++) p += rd*sd(p); }
   float id = scene(p).id;
@@ -133,16 +167,9 @@ half4 render(float2 xy) {
   else if (id < 3.5) base = float3(0.2, 0.21, 0.23);
   else if (id < 4.5) { base = float3(0.55, 0.57, 0.6); gloss = 0.9; }
   else if (id < 5.5) {
+    // a blade spinning up fades into its light
     base = float3(0.12, 0.12, 0.14);
-    // a spinning prop is a pale, see-through disc
-    float sp2 = smoothstep(0.35, 0.8, uState.y);
-    // streaks of the blades and a bright rim where their tips run
-    float3 dq = toDrone(p);
-    float ang = atan2(dq.z, dq.x);
-    float streak = 0.5 + 0.5*sin(ang*2.0 + uState.w*40.0);
-    base = mix(base, float3(0.82, 0.85, 0.92)*(0.75 + 0.25*streak), sp2);
-    // the blur is faint inside and brightest where the blade tips run
-    alpha *= mix(1.0, 0.16 + 0.1*streak, sp2);
+    alpha *= 1.0 - smoothstep(0.35, 0.6, uState.y);
   }
   else if (id < 6.5) { base = float3(0.05, 0.08, 0.14); gloss = 1.0; }
   else base = mix(float3(0.9, 0.3, 0.25), float3(0.25, 0.95, 0.5), uFloor.z);
@@ -154,7 +181,11 @@ half4 render(float2 xy) {
   col = min(col, float3(0.9)) + ex/(1.0 + ex/0.1);
   float outA = alpha + shadow*(1.0 - alpha);
   float3 outC = toP3(clamp(col, 0.0, 1.0))*alpha;
-  return half4(half3(outC), half(outA));
+  // the props' light over the drone (added, it is light)
+  float ga = clamp(glow*0.5, 0.0, 1.0);
+  outC += toP3(GLOW)*min(glow, 1.2)*(1.0 - 0.5*alpha);
+  outA = outA + ga*(1.0 - outA);
+  return half4(half3(min(outC, float3(1.0))), half(outA));
 }
 };
 [[ stitchable ]] half4 DroneUnfoldConnectMain(float2 position, half4 color, float4 view, float4 drone, float4 state, float4 floor) {

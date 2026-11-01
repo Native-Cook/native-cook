@@ -9,7 +9,7 @@ internal object DroneUnfoldConnectMotion {
     const val LIFT = 0.9f
     const val STICK_R = 44f
     const val TILT_MAX = 0.35f
-    const val DRIFT = 0.35f
+    const val DRIFT = 0.2f
     const val YAW = 0.5f
     fun clamp01(v: Float) = v.coerceIn(0f, 1f)
     fun seg(t: Float, a: Float, b: Float) = clamp01((t - a) / (b - a))

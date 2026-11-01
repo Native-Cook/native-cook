@@ -2,7 +2,7 @@ import Foundation
 
 enum DroneUnfoldConnectMotion {
   static let loop = 10.0
-  static let lift = 0.9, stickRadius = 44.0, tiltMax = 0.35, drift = 0.35, yaw = 0.5
+  static let lift = 0.9, stickRadius = 44.0, tiltMax = 0.35, drift = 0.2, yaw = 0.5
   static func clamp01(_ v: Double) -> Double { min(1, max(0, v)) }
   static func seg(_ t: Double, _ a: Double, _ b: Double) -> Double { clamp01((t-a)/(b-a)) }
   static func smooth(_ a: Double, _ b: Double, _ x: Double) -> Double {

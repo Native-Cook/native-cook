@@ -51,6 +51,12 @@ const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1);
 const NEVER = ReduceMotion.Never;
 const AnimatedInput = Animated.createAnimatedComponent(TextInput);
 const YEARS = Array.from({ length: LAST - FIRST + 1 }, (_, i) => FIRST + i);
+// unlabelled ticks past both ends, fading out, so the ruler runs off the screen at 2008 and 2026 too
+const GHOSTS = 8;
+const GHOST_AT = [
+  ...Array.from({ length: GHOSTS }, (_, i) => -(i + 1)),
+  ...Array.from({ length: GHOSTS }, (_, i) => LAST - FIRST + 1 + i),
+];
 
 function tick() {
   if (process.env.EXPO_OS === 'web') return;
@@ -298,6 +304,14 @@ export function IconEraScrubber({ autoPlay = false }: Props) {
             onAccessibilityAction={(e) => step(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
           >
             <Animated.View style={[styles.ruler, rulerStyle]}>
+              {GHOST_AT.map((i) => {
+                const away = i < 0 ? -i : i - (LAST - FIRST);
+                return (
+                  <View key={`g${i}`} style={[styles.tickBox, { left: i * STEP - STEP / 2, opacity: 0.55 * (1 - away / (GHOSTS + 1)) }]}>
+                    <View style={styles.tick} />
+                  </View>
+                );
+              })}
               {YEARS.map((y, i) => (
                 <View key={y} style={[styles.tickBox, { left: i * STEP - STEP / 2 }]}>
                   <View style={[styles.tick, y % 2 === 0 ? styles.tickMajor : null]} />
@@ -318,8 +332,10 @@ export function IconEraScrubber({ autoPlay = false }: Props) {
 function EraWords({ index, name, line, year }: { index: number; name: string; line: string; year: { get: () => number } }) {
   const style = useAnimatedStyle(() => {
     const d = eraOf(year.get()) - index;
-    // one era's words leave before the next arrive, so they never sit on each other
-    const k = Math.max(0, 1 - Math.abs(d) * 2.4);
+    // the nearer era's words show, swapping in a quick fade at the change's middle: they never sit on
+    // each other, and the screen is never left without them while the ruler rests mid-change
+    const a = Math.abs(d);
+    const k = Math.max(0, Math.min(1, (0.53 - a) / 0.06));
     return { opacity: k * k, transform: [{ translateY: -14 * Math.max(-1, Math.min(1, d)) }] };
   });
   return (

@@ -28,7 +28,7 @@ struct DroneUnfoldConnect: View {
             C.page
             if scenePhase == .active {
               Rectangle().fill(.white).colorEffect(ShaderLibrary.DroneUnfoldConnectMain(
-                .float4(Float(w),Float(h),Float((w*0.36).rounded()),Float(pixelRatio)),
+                .float4(Float(w),Float(h),Float((w*0.3).rounded()),Float(pixelRatio)),
                 .float4(Float(f.drift),Float(f.lift+bob),Float(f.pitch),Float(f.roll)),
                 .float4(Float(f.unfold),Float(f.spin),Float(0.5+0.25*f.roll),Float(clock*0.7)),
                 .float4(Float(floorY),0.38,Float(f.light),0)))
