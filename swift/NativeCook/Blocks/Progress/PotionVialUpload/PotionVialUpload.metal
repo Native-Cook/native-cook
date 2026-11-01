@@ -107,10 +107,22 @@ float4 potionVialUploadImageColor(float4 c) {
   return c.a > 0 ? float4(potionVialUploadToP3(c.rgb/c.a)*c.a,c.a) : c;
 }
 float4 potionVialUploadOver(float4 a,float4 b) { return a+b*(1-a.a); }
+// Preserve the byte boundary between the old Quartz bitmap drawing operations.
+float4 potionVialUploadBitmapOver(float4 a,float4 b) {
+  return floor(potionVialUploadOver(a,b)*255+0.5)/255;
+}
+float4 potionVialUploadImageAlpha(float4 c,float alphaByte) {
+  // Quartz quantizes global image alpha, then rounds each premultiplied source
+  // channel before source-over. Applying a floating alpha after blending differs.
+  // alphaByte is rounded on the CPU before conversion from Double to Float.
+  return floor(c*alphaByte+0.5)/255;
+}
 fragment half4 potionVialUploadFragment(PotionVialUploadVertex v [[stage_in]],
   constant PotionVialUploadUniforms &u [[buffer(0)]],
-  texture2d<float> back [[texture(0)]], texture2d<float> front [[texture(1)]],
-  texture2d<float> solid [[texture(2)]], texture2d<float> mask [[texture(3)]]) {
+  texture2d<float> back [[texture(0)]], texture2d<float> glow9 [[texture(1)]],
+  texture2d<float> solid [[texture(2)]], texture2d<float> mask [[texture(3)]],
+  texture2d<float> glow24 [[texture(4)]], texture2d<float> tint [[texture(5)]],
+  texture2d<float> halo [[texture(6)]]) {
   constexpr sampler nearest(coord::pixel,address::clamp_to_edge,filter::nearest);
   float px=4/u.line.y;
   float2 cell=floor(v.uv*u.geo.xy/px), xy=(cell+0.5)*px;
@@ -120,7 +132,18 @@ fragment half4 potionVialUploadFragment(PotionVialUploadVertex v [[stage_in]],
     float4 smoke=float4(potionVialUploadSmoke(local,0,339,0,u.line.z,12,1,u.fields.w,u.fields.z,1));
     soft=potionVialUploadOver(smoke,soft);
   }
-  soft=potionVialUploadOver(front.sample(nearest,cell+0.5),soft);
+  float4 front=float4(0);
+  if(u.fields.z>=0.01) {
+    front=potionVialUploadBitmapOver(potionVialUploadImageAlpha(glow9.sample(nearest,cell+0.5),u.fx.z),front);
+    front=potionVialUploadBitmapOver(potionVialUploadImageAlpha(glow24.sample(nearest,cell+0.5),u.fx.w),front);
+  }
+  // Art.fill uses the unquantized 0.05 coverage, unlike CGContext image alpha.
+  if(tint.sample(nearest,cell+0.5).a>0) {
+    uint4 bytes=uint4(floor(front*255+0.5));
+    front=float4((uint4(196,190,210,255)+bytes*19+10)/20)/255;
+  }
+  front=potionVialUploadBitmapOver(halo.sample(nearest,cell+0.5),front);
+  soft=potionVialUploadOver(front,soft);
   soft=potionVialUploadImageColor(floor(soft*255+0.5)/255);
   float th=potionVialUploadB4(cell);
   float3 page=float3(10,8,13)/255;

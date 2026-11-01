@@ -25,8 +25,11 @@ struct MicCordOnboarding: View {
                     TimelineView(.animation(paused:pinned != nil || scene != .active || (!(autoPlay && !reduced) && !clock.running))) { timeline in
                         let _ = clock.configure(size.width, top, pinned, reduced)
                         let _ = clock.sample(timeline.date, autoPlay && !reduced, reduced)
+                        // Values, not the clock: a Canvas whose closure only reads a class's properties
+                        // is not redrawn when they change, so the live loop stood still.
+                        let time = clock.time, rope = clock.rope
                         Canvas(opaque:false,colorMode:.nonLinear,rendersAsynchronously:false) { c, dimensions in
-                            MicCordOnboardingArt.scene(c,dimensions,top,clock.time,clock.rope)
+                            MicCordOnboardingArt.scene(c,dimensions,top,time,rope)
                         }
                     }
                     .accessibilityLabel("A pink microphone hanging on its cable. Drag it to swing it.")

@@ -5,7 +5,7 @@ import UIKit
 final class SeasonTierMedalsClock: ObservableObject {
     typealias M = SeasonTierMedalsMotion
     @Published var awake = false
-    @Published var current = 1
+    var current = 1
     private var rail = M.Rail()
     private var time = 0.0, now = 0.0, last = -10.0
     private var date: Date?
@@ -91,12 +91,13 @@ final class SeasonTierMedalsClock: ObservableObject {
         }
         let frame = M.Frame(rail: rail, time: time, now: now)
         let moving = rail.mode == 1 || abs(rail.p - Double(rail.target)) > 0.000001 || abs(rail.v) > 0.000001 || rail.spins.contains { now - $0 < M.spin + 1.2 }
-        if current != frame.current || awake != moving {
-            let cur = frame.current
+        current = frame.current
+        // Publishing re-renders the whole screen, which cost a 40–50 ms frame at every medal change
+        // while it played by itself (seen in the recordings); the timeline runs regardless then.
+        if !(auto && !reduced) && awake != moving {
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if self.current != cur { self.current = cur }
-                if self.awake != moving { self.awake = moving }
+                guard let self, self.awake != moving else { return }
+                self.awake = moving
             }
         }
         return frame

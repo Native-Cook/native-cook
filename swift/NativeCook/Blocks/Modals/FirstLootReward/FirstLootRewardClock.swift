@@ -49,21 +49,10 @@ final class FirstLootRewardClock: ObservableObject {
         if sleeping { sleeping=false }
         date=Date()
     }
-    private func restIfPossible(_ auto:Bool) {
-        guard auto, !motion.isDeviceMotionAvailable, M.resting(t), now-last >= 2,
-            pressAt < 0, now-openAt >= 1.7, !buttonDown, !sleepRequested else { return }
-        sleepRequested=true
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.sleepRequested else { return }
-            self.idleAt=Date(); self.sleeping=true
-            let work=DispatchWorkItem { [weak self] in
-                guard let self else { return }
-                self.cancelIdle(advance:true); self.revision += 1
-            }
-            self.idleWake=work
-            DispatchQueue.main.asyncAfter(deadline:.now()+max(0,3.55-self.t),execute:work)
-        }
-    }
+    /// The loop keeps drawing while it plays by itself. Pausing the timeline in the still stretch
+    /// and waking it again made the reveal jump (a quarter second lost at the start of each loop,
+    /// visible in every recording).
+    private func restIfPossible(_ auto:Bool) {}
     private func cue(_ name:String) { if !reduced, let p=players[name] { p.currentTime=0; p.play() } }
     func sample(_ at:Date,_ auto:Bool,_ pinned:Double?) -> M.Frame {
         if let pinned { return M.at(pinned) }

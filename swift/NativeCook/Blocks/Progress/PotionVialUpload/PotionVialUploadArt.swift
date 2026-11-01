@@ -19,7 +19,7 @@ enum PotionVialUploadArt {
     let path: ObjectIdentifier
     let width: Double
     let transform: [Double]
-    let w, h: Int
+    let w, h, row: Int
   }
   private struct Mask { let owner: CGPath; let pixels: [Int] }
   private static var masks: [MaskKey: Mask] = [:]
@@ -29,7 +29,7 @@ enum PotionVialUploadArt {
     guard alpha > 0, let data = c.data else { return }
     let t = c.ctm, w = c.width, h = c.height
     let coverage = width > 0 ? min(1,width * sqrt(abs(t.a*t.d-t.b*t.c))) : 1
-    let key = MaskKey(path:ObjectIdentifier(path),width:width,transform:[t.a,t.b,t.c,t.d,t.tx,t.ty],w:w,h:h)
+    let key = MaskKey(path:ObjectIdentifier(path),width:width,transform:[t.a,t.b,t.c,t.d,t.tx,t.ty],w:w,h:h,row:c.bytesPerRow)
     let keep = pixelClip == nil && (cached || path === outer || path === inner || stopperPaths.contains { $0 === path })
     let pixels: [Int]
     if keep, let mask = masks[key] { pixels = mask.pixels }
@@ -126,11 +126,13 @@ enum PotionVialUploadArt {
     [1,0,0,1,-1,1,1,-1,-1,1,1,-1,1,1,1], [-1,0,0,-1,-1,-1,-1,-1,1,-1,1,1,-1,1,-1],
     [0,-1,0,-1,-1,-1,1,-1,-1,1,-1,1,-1,-1,1], [0,1,0,-1,1,1,1,1,1,1,1,-1,-1,1,-1]]
   static func local(_ c: CGContext, _ g: G) { c.translateBy(x:g.ox,y:g.cy); c.scaleBy(x:g.s,y:g.s) }
-  static func stars(_ c: CGContext, _ g: G, _ f: F) {
+  static func starField(_ c: CGContext, _ g: G) {
     for j in 0..<46 {
       let i = Double(j), x = M.hash(i*3.1)*g.w, y = g.top+M.hash(i*7.7+1)*(g.h-g.top-g.bottom)
       let r = M.hash(i*1.3)>0.8 ? 1.1:0.7; rect(c,x,y,r,r,C.star,0.22)
     }
+  }
+  static func twinkles(_ c: CGContext, _ g: G, _ f: F) {
     for j in 0..<14 {
       let i = Double(j), a = M.hash(i*5.3+2)*Double.pi*2, rr = 120+M.hash(i*2.9)*130
       let x = g.ox+(190+cos(a)*rr*1.15)*g.s, y = g.cy+sin(a)*rr*0.62*g.s
@@ -193,18 +195,42 @@ enum PotionVialUploadArt {
       else { line(c,-2.6,0,2.6,0,"#5a2c0e",2.8); line(c,-2.4,0,2.4,0,C.brass,1.5) }; c.restoreGState()
     }
   }
+  private static var stopperKey: [Double] = []
+  private static var stopperImages: [CGImage] = []
+  private static func stopperBand(_ c: CGContext, _ index: Int) {
+    let b = [V.band1,V.disc,V.band2][index], p = stopperPaths[index], steel = index == 1
+    // A path clip discards Quartz's edge coverage. Mask the gradient with an
+    // antialiased fill instead, matching Skia's antialiased rounded rectangles.
+    c.saveGState(); c.setShouldAntialias(true); c.clip(to:p.boundingBoxOfPath.insetBy(dx:-2,dy:-2))
+    c.beginTransparencyLayer(auxiliaryInfo:nil)
+    c.setFillColor(CGColor(gray:1,alpha:1)); c.addPath(p); c.fillPath()
+    c.setBlendMode(.sourceIn)
+    c.drawLinearGradient(PotionVialUploadResources.shared.bands[steel ? 1:0],start:.init(x:0,y:-b[2]),end:.init(x:0,y:b[2]),options:[])
+    c.endTransparencyLayer()
+    c.restoreGState()
+  }
   static func stopper(_ c: CGContext) {
-    for (index,b) in [V.band1,V.disc,V.band2].enumerated() {
-      let p = stopperPaths[index], steel = index == 1
-      // A path clip discards Quartz's edge coverage. Mask the gradient with an
-      // antialiased fill instead, matching Skia's antialiased rounded rectangles.
-      c.saveGState(); c.setShouldAntialias(true); c.clip(to:p.boundingBoxOfPath.insetBy(dx:-2,dy:-2))
-      c.beginTransparencyLayer(auxiliaryInfo:nil)
-      c.setFillColor(CGColor(gray:1,alpha:1)); c.addPath(p); c.fillPath()
-      c.setBlendMode(.sourceIn)
-      c.drawLinearGradient(PotionVialUploadResources.shared.bands[steel ? 1:0],start:.init(x:0,y:-b[2]),end:.init(x:0,y:b[2]),options:[])
-      c.endTransparencyLayer()
-      c.restoreGState(); stroke(c,p,"#1a1014",1.1,0.55)
+    let t = c.ctm, key = [t.a,t.b,t.c,t.d,t.tx,t.ty,Double(c.width),Double(c.height)]
+    if stopperKey != key {
+      var images: [CGImage] = []
+      for i in stopperPaths.indices {
+        if let source = CGContext(data:nil,width:c.width,height:c.height,bitsPerComponent:8,bytesPerRow:c.bytesPerRow,
+          space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) {
+          source.concatenate(t); stopperBand(source,i)
+          if let image = source.makeImage() { images.append(image) }
+        }
+      }
+      stopperKey = key; stopperImages = images
+    }
+    for (index,p) in stopperPaths.enumerated() {
+      if stopperImages.count == stopperPaths.count {
+        // Replay each gradient separately, before its outline: flattening the
+        // entire stopper would change rounding where the chain passes underneath.
+        c.saveGState(); c.clip(to:p.boundingBoxOfPath.insetBy(dx:-2,dy:-2))
+        c.concatenate(t.inverted()); c.interpolationQuality = .none
+        c.draw(stopperImages[index],in:CGRect(x:0,y:0,width:c.width,height:c.height)); c.restoreGState()
+      } else { stopperBand(c,index) }
+      stroke(c,p,"#1a1014",1.1,0.55)
     }
   }
   static func gem(_ c: CGContext, _ f: F) {

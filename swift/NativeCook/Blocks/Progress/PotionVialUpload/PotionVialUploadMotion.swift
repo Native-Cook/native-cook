@@ -110,8 +110,11 @@ struct PotionVialUploadDriver {
     var ev = 0
     if mode == 3 && now-last > 2 { mode = 0; sound = 0 }
     if mode == 0 && auto {
-      let before = t; var next = before+(loopDT ?? dt)
-      if next >= 12 { next -= 12; sound = 0; dropX = .nan }
+      let before = t; var wrapped = before+(loopDT ?? dt)
+      if wrapped >= 12 { wrapped -= 12; sound = 0; dropX = .nan }
+      // A constant, so the local function below captures a value, not a variable: in a Release
+      // build the captured variable tripped Swift's exclusivity check while `self` was mutated.
+      let next = wrapped
       func crossed(_ mark: Double) -> Bool {
         before <= next ? before < mark && next >= mark : before < mark || next >= mark
       }
