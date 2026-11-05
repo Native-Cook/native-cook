@@ -53,6 +53,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
+    "react-native-tgfx": "^0.1.0",
     "react-native-vision-camera": "^5.2.3",
     "react-native-web": "~0.21.0",
     "react-native-webgpu": "0.10.4",

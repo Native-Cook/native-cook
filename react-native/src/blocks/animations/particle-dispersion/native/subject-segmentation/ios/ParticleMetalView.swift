@@ -336,9 +336,11 @@ final class ParticleMetalView: ExpoView, MTKViewDelegate {
       )
       if let performanceProbe, let performanceToken {
         performanceProbe.encoded(performanceToken, milliseconds: (CACurrentMediaTime() - encodeStarted) * 1_000)
+        #if !targetEnvironment(simulator)
         drawable.addPresentedHandler { [weak performanceProbe] shown in
           performanceProbe?.presented(performanceToken, at: shown.presentedTime)
         }
+        #endif
       }
       let needsReadyEvent = readyGeneration != activeGeneration
       commandBuffer.addCompletedHandler { [weak self] completed in

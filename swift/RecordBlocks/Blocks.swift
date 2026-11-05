@@ -468,6 +468,7 @@ final class BlockRecordings: Recorder {
     func test_subitem_tab_bar() throws { try record(slug: "subitem-tab-bar", loop: 10) }
     func test_swipe_deck_toolbar() throws { try record(slug: "swipe-deck-toolbar", loop: 10) }
     func test_switcher_deck_nav() throws { try record(slug: "switcher-deck-nav", loop: 12) }
+    func test_aurora_teammates_onboarding() throws { try record(slug: "aurora-teammates-onboarding", loop: 9) }
     func test_cash_handoff_onboarding() throws { try record(slug: "cash-handoff-onboarding", loop: 8, sound: true) }
     func test_chrome_step_numerals() throws { try record(slug: "chrome-step-numerals", loop: 9) }
     func test_coin_card_onboarding() throws { try record(slug: "coin-card-onboarding", loop: 9, sound: true) }
