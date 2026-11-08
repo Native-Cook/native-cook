@@ -221,6 +221,7 @@ final class BlockRecordings: Recorder {
     func test_swap_success_card() throws { try record(slug: "swap-success-card", loop: 9.6) }
     func test_unfolding_signature_pad() throws { try record(slug: "unfolding-signature-pad", loop: 10.4) }
     func test_unlocking_checkout_steps() throws { try record(slug: "unlocking-checkout-steps", loop: 10) }
+    func test_hoop_shot_refresh() throws { try record(slug: "hoop-shot-refresh", loop: 8) }
     func test_box_cat_feed() throws { try record(slug: "box-cat-feed", loop: 9) }
     func test_clay_reaction_morph() throws { try record(slug: "clay-reaction-morph", loop: 11) }
     func test_crumple_to_delete() throws { try record(slug: "crumple-to-delete", loop: 9, sound: true) }
