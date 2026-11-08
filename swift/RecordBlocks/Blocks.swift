@@ -182,6 +182,7 @@ final class BlockRecordings: Recorder {
     func test_steps_bars_to_spikes() throws { try record(slug: "steps-bars-to-spikes", loop: 8) }
     func test_stress_dot_grid_donut() throws { try record(slug: "stress-dot-grid-donut", loop: 8) }
     func test_swipe_month_donut() throws { try record(slug: "swipe-month-donut", loop: 8.6) }
+    func test_price_glyph_scatter_slider() throws { try record(slug: "price-glyph-scatter-slider", loop: 8) }
     func test_fuzzy_mood_monster() throws { try record(slug: "fuzzy-mood-monster", loop: 8) }
     func test_salad_gauge_builder() throws { try record(slug: "salad-gauge-builder", loop: 8) }
     func test_selfie_verify_badge() throws { try record(slug: "selfie-verify-badge", loop: 9.6) }
