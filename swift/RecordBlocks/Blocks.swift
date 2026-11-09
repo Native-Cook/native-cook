@@ -64,6 +64,7 @@ final class BlockRecordings: Recorder {
     func test_thinking_button() throws { try record(slug: "thinking-button", loop: 8.4) }
     func test_ticket_button() throws { try record(slug: "ticket-button", loop: 3.9) }
     func test_tilt_button() throws { try record(slug: "tilt-button", loop: 6.1) }
+    func test_daypart_weather_bands() throws { try record(slug: "daypart-weather-bands", loop: 8) }
     func test_cashback_cloud_card() throws { try record(slug: "cashback-cloud-card", loop: 9) }
     func test_dollhouse_floors() throws { try record(slug: "dollhouse-floors", loop: 9) }
     func test_donut_flavour_picker() throws { try record(slug: "donut-flavour-picker", loop: 7.2) }
