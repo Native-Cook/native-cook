@@ -19,6 +19,7 @@ final class BlockRecordings: Recorder {
     func test_supercharge_card() throws { try record(slug: "supercharge-card", loop: 12) }
     func test_ember_charge_widget() throws { try record(slug: "ember-charge-widget", loop: 6.2) }
     func test_word_drum() throws { try record(slug: "word-drum", loop: 10) }
+    func test_on_air_toggle() throws { try record(slug: "on-air-toggle", loop: 6) }
     func test_candy_knob_toggle() throws { try record(slug: "candy-knob-toggle", loop: 6) }
     func test_glass_split_button() throws { try record(slug: "glass-split-button", loop: 7) }
     func test_live_like_bubble() throws { try record(slug: "live-like-bubble", loop: 9) }
