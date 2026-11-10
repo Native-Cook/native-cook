@@ -2,7 +2,7 @@
 //
 // `pos` runs 0..3 round a circle: an integer is a page at rest, a fraction is the way from page
 // floor(pos) to the next. Autoplay walks it along the loop clock; a drag scrubs it; Next plays it to
-// the next integer at the designed tempo. Every frame of every layer (the tgfx stage, the Skia
+// the next integer at the designed tempo. Every frame of every layer (the tgfx stage with its
 // sheet, the controls, the WebGPU motes) is computed here from (pos, ambient time), so a drag held
 // half-way holds the whole screen half-way, and the loop's last frame is its first.
 //
