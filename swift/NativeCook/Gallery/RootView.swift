@@ -41,10 +41,20 @@ struct RootView: View {
         .background(GalleryColors.background.ignoresSafeArea())
         // The gallery is dark. An open block chooses for itself, status bar included.
         .preferredColorScheme(open == nil ? .dark : nil)
-        .statusBarHidden(recording && open != nil)
+        // Only while recording: a modifier here, even .statusBarHidden(false), overrides the block's
+        // own choice (a block may hide the clock under a banner that covers it).
+        .modifier(RecordingStatusBar(hidden: recording && open != nil, active: recording))
     }
 }
 
 #Preview {
     RootView()
+}
+
+private struct RecordingStatusBar: ViewModifier {
+    let hidden: Bool
+    let active: Bool
+    func body(content: Content) -> some View {
+        if active { content.statusBarHidden(hidden) } else { content }
+    }
 }
