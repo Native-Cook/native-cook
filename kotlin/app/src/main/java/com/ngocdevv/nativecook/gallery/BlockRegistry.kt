@@ -7,6 +7,7 @@ import com.ngocdevv.nativecook.blocks.animations.emberchargewidget.EmberChargeWi
 import com.ngocdevv.nativecook.blocks.animations.expressiveorb.ExpressiveOrbDemo
 import com.ngocdevv.nativecook.blocks.animations.flarenotifications.FlareNotificationsDemo
 import com.ngocdevv.nativecook.blocks.animations.gemorbcollect.GemOrbCollectDemo
+import com.ngocdevv.nativecook.blocks.animations.golddunecontours.GoldDuneContoursDemo
 import com.ngocdevv.nativecook.blocks.animations.heartlikeburst.HeartLikeBurstDemo
 import com.ngocdevv.nativecook.blocks.animations.inkdropbloom.InkDropBloomDemo
 import com.ngocdevv.nativecook.blocks.animations.lavalamploader.LavaLampLoaderDemo
@@ -800,6 +801,7 @@ import com.ngocdevv.nativecook.blocks.text.yearphotocounter.YearPhotoCounterDemo
 const val GALLERY_TIER = "Free"
 
 val blockRegistry: List<Block> = listOf(
+    Block(slug = "gold-dune-contours", name = "Gold Dune Contours", category = "Animations", spec = "A full-screen sleep-sound player called Dune Wind frames a moonlit field of thin cream, gold and rose contour lines. Near ridges glow more brightly and hide the terrain behind them while a warm light travels across the sand. Drag the dunes to raise a ridge beneath your finger, or pause the silent player.") { GoldDuneContoursDemo() },
     Block(slug = "radar-friend-finder", name = "Radar Friend Finder", category = "Animations", spec = "The \"find your crew\" screen of an invented festival app, Beacon: a green radar sweeps a dark scope and each friend's blip flashes as the beam passes. On the second turn it locks on to Maya — her blip becomes a ringed avatar, a dashed line runs out to her and a card says how far away she is.") { RadarFriendFinderDemo() },
     Block(slug = "robot-mood-companion", name = "Robot Mood Companion", category = "Animations", spec = "The home screen of an invented desk companion, Pip: a teal robot head whose black visor shows a glowing cyan face. Pip runs through six moods — happy, surprised, sleepy, proud, sad, grumpy — each with its own face, head pose, extras and room colour.") { RobotMoodCompanionDemo() },
     Block(slug = "plasma-squircle-charge", name = "Plasma Squircle Charge", category = "Animations", spec = "An invented smart-home hub, Lumen, waking the house: a smoked-glass hub rests on a dark violet stage inside the faint outline of a wide squircle under \"Wake the home.\". Holding it sends electric sparks crawling out from the middles of the outline's sides until they meet at the corners; then the outline ignites into a crackling violet ring with a blue bloom, the hub's glass, status light and reflection glow, the status reads Online and three room cards light up one after another. Letting go powers it down.") { PlasmaSquircleChargeDemo() },

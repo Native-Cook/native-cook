@@ -2,6 +2,7 @@
 import XCTest
 
 final class BlockRecordings: Recorder {
+    func test_gold_dune_contours() throws { try record(slug: "gold-dune-contours", loop: 8) }
     func test_radar_friend_finder() throws { try record(slug: "radar-friend-finder", loop: 6) }
     func test_robot_mood_companion() throws { try record(slug: "robot-mood-companion", loop: 8.4) }
     func test_plasma_squircle_charge() throws { try record(slug: "plasma-squircle-charge", loop: 6) }
