@@ -366,6 +366,7 @@ final class BlockRecordings: Recorder {
     func test_glass_folder_burst() throws { try record(slug: "glass-folder-burst", loop: 10) }
     func test_origami_fold_list() throws { try record(slug: "origami-fold-list", loop: 11) }
     func test_rubber_chain_list() throws { try record(slug: "rubber-chain-list", loop: 9) }
+    func test_glass_voice_capsule() throws { try record(slug: "glass-voice-capsule", loop: 9) }
     func test_glass_aperture_camera() throws { try record(slug: "glass-aperture-camera", loop: 10, sound: true) }
     func test_orbit_bubble_friends() throws { try record(slug: "orbit-bubble-friends", loop: 7.2) }
     func test_poster_ring_band() throws { try record(slug: "poster-ring-band", loop: 9) }
