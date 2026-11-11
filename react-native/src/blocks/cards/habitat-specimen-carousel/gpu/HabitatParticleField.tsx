@@ -9,7 +9,7 @@ import { useReducedMotionPreference } from '@/shared/useReducedMotionPreference'
 
 import { creaturePose, type CreatureMotion } from '../HabitatCreature';
 import { EXCHANGE_DRIFT, LAND_MS, LOOP } from '../HabitatMotion';
-import { bodyPoint, RIGS } from '../HabitatRig';
+import { bodyPoint, bodyPointFrom, RIGS } from '../HabitatRig';
 import type { HabitatWebGPU } from './HabitatGpuField';
 import { createParticleResources, particleFrame, type ParticleEngine, type ParticleResources } from './HabitatParticleEngine';
 
@@ -103,6 +103,8 @@ export function HabitatParticleField(props: HabitatParticleProps) {
   const frame = useFrameCallback((info: FrameInfo) => {
     const current = engine.get();
     if (!current || !allowed.get()) return;
+    // A frame repeated at the same timestamp has nothing to step (and must not spawn twice).
+    if (info.timeSincePreviousFrame === 0) return;
     const v = current.values;
     const dt = Math.min(info.timeSincePreviousFrame ?? 16, 50) / 1000;
     const t = motion.time.get();
@@ -140,7 +142,8 @@ export function HabitatParticleField(props: HabitatParticleProps) {
     v[36] = a[0]; v[37] = a[1]; v[38] = ta[0] - a[0]; v[39] = ta[1] - a[1];
     v[40] = b[0]; v[41] = b[1]; v[42] = tb[0] - b[0]; v[43] = tb[1] - b[1];
     const flame = RIGS[0].flame;
-    const tip = flame && index === 0 ? bodyPoint(body, flame.base[0], flame.base[1] - flame.height * (1 + 1.25 * pose.flameGrow) * 0.95) : a;
+    // Embers leave the plume's tip, which rises straight up from the tail's tip (CREATURE_LIFE).
+    const tip = flame && index === 0 ? bodyPointFrom(body, flame.base[0], flame.base[1], -flame.height * (1 + 1.25 * pose.flameGrow) * 0.06, -flame.height * (1 + 1.25 * pose.flameGrow) * 0.95) : a;
     v[44] = tip[0]; v[45] = tip[1]; v[46] = 15 * unit * (1 + 0.6 * pose.flameGrow); v[47] = heroTop + top + RIGS[index].feet * k;
     try { particleFrame(current); }
     catch (error) {

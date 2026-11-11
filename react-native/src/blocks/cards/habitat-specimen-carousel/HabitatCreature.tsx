@@ -12,6 +12,11 @@ const RIM_LIGHT = [[1, 0.55, 0.22], [0.45, 0.85, 1], [0.75, 0.95, 0.45]] as cons
 /** Margin around the art square, so a hop, a squash or a wing beat is never cut by the canvas. */
 export const CREATURE_PAD = 0.14;
 const ART = 512;
+/** Each creature's lids: skin painted under its eyes and the map of its eyes' outlines (`HabitatRig` → lids). */
+/** Charizard's tail flame as a signed distance map (`HabitatRig` → flame.map); the blaze's outline. */
+const FLAME_MAP = require('./assets/charizard-flame.png') as number;
+const FLAME_TEXELS = [384, 560] as const;
+const LIDS = [require('./assets/charizard-lids.png'), require('./assets/blastoise-lids.png'), require('./assets/bulbasaur-lids.png')] as const;
 
 /**
  * A normal map baked once from the art's alpha: a wide blur gives the body its dome, a near one
@@ -80,6 +85,8 @@ export const HabitatCreature = memo(function HabitatCreature({ index, source, mo
   size: number; left: number; top: number; width: number; heroTop: number; screenHeight: number; scale: number;
 }) {
   const image = useImage(source as number);
+  const lids = useImage(LIDS[index] as number);
+  const flameMap = useImage(FLAME_MAP);
   const normals = useMemo(() => bakeNormals(image), [image]);
   const pad = Math.round(size * CREATURE_PAD);
   const view = size + pad * 2;
@@ -103,10 +110,12 @@ export const HabitatCreature = memo(function HabitatCreature({ index, source, mo
   const rect = { x: 0, y: 0, width: size, height: size };
   return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: left - pad, top: top - pad, width: view, height: view }, placement]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
     <Canvas style={{ width: view, height: view }}>
-      {image && CREATURE_LIFE && <Fill>
+      {image && lids && flameMap && CREATURE_LIFE && <Fill>
         <Shader source={CREATURE_LIFE} uniforms={uniforms}>
           <ImageShader image={image} fit="contain" rect={rect} tx="decal" ty="decal" />
           <ImageShader image={normals ?? image} fit="contain" rect={rect} tx="clamp" ty="clamp" />
+          <ImageShader image={lids} fit="fill" rect={{ x: 0, y: 0, width: size, height: size * 2 }} tx="clamp" ty="clamp" />
+          <ImageShader image={flameMap} fit="fill" rect={{ x: 0, y: 0, width: FLAME_TEXELS[0], height: FLAME_TEXELS[1] }} tx="clamp" ty="clamp" />
         </Shader>
       </Fill>}
     </Canvas>

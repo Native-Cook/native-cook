@@ -388,7 +388,7 @@ export function useHabitatMotion({ autoPlay = true, previewTime, previewReducedM
     fx.set(withTiming(FX_S, { duration: FX_S * 1000, easing: Easing.linear, reduceMotion: ReduceMotion.Never }));
     scheduleOnRN(signatureCallback);
   }), [dragging, foreground, fx, look, manual, now, pet, power, powerIndex, press, rawPosition, reducedValue, resumeAt, routeFocused, signatureCallback, tapAt, width]);
-  // A hold pets the specimen: it squints, wiggles and hearts rise for as long as the finger stays.
+  // A hold pets the specimen: it blinks slowly, wiggles and hearts rise for as long as the finger stays.
   const hold = useMemo(() => Gesture.LongPress().minDuration(380).maxDistance(12).onStart(() => {
     if (!routeFocused.get() || !foreground.get()) return;
     const current = rawPosition.get();

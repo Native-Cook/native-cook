@@ -166,6 +166,12 @@ half4 main(float2 xy) {
 export const CREATURE_LIFE = Skia.RuntimeEffect.Make(`
 uniform shader image;
 uniform shader normals;
+// The lids (512 x 1024 art px): skin painted over the eyes on top, the eye map below it
+// (r: 0 at the eye's top contour to 1 at its bottom, per column; g: inside, feathered; b: height / 128).
+uniform shader lids;
+// Charizard's tail flame as a signed distance map (384 x 560 texels, 4 per art px; grey = 0.5 + d / 12,
+// d in art px, positive inside), over the box flameMap (art box): the blaze's smooth outline.
+uniform shader flameSdf;
 // Art square in points, and the feet line (art box coordinates).
 uniform float2 box;
 uniform float pd;
@@ -184,8 +190,10 @@ uniform float4 chest;
 uniform float4 hips;
 uniform float4 eyeA;
 uniform float4 eyeB;
-// Blink closure, happy squint.
-uniform float2 lid;
+// Blink: closure, the lower lid's share of it, lash width (art px), how much lower lash shows;
+// the lash ink and how far the face squashes around a shut eye.
+uniform float4 lid;
+uniform float4 lidInk;
 uniform float2 origin;
 uniform float zoom;
 uniform float2 screen;
@@ -207,6 +215,7 @@ uniform float4 face;
 // flame; and grow (0..1 into the plume), ambient seconds, stretch, live (0 under Reduced Motion).
 uniform float4 flame;
 uniform float4 flameArea;
+uniform float4 flameMap;
 uniform float4 flameState;
 uniform float hidden;
 ${SEAM}
@@ -232,48 +241,73 @@ float flameMask(float2 p,half4 c) {
   return inside*smoothstep(.02,.14,(c.r-c.b)/max(c.a,.001));
 }
 // The live flame at an art-box point. At rest it is the drawn flame itself, licked sideways by
-// rising noise, swaying at the tip and stretching on two waves. In the move a plume with the drawn
-// flame's teardrop, cel edge and colours takes over from it as it starts to swell, then grows.
+// rising noise, swaying at the tip and stretching on two waves. In the move the same drawn flame
+// swells about its base on the tail: its own silhouette, scaled, so it blazes up exactly where it
+// burns at rest and keeps its lean and tongues. Inside it, two smaller copies of that silhouette
+// (anchored at the same base) are its orange body and yellow heart, cel shaded like the art.
+// The baked distance to the drawn flame's outline at an art-box point (art px, positive inside),
+// read bilinearly from texel centres so it is smooth however the image is sampled.
+float flameDistance(float2 src) {
+  float2 t=(src-flameMap.xy)/flameMap.zw*float2(384.0,560.0)-.5;
+  if(t.x<-1.0||t.y<-1.0||t.x>384.0||t.y>560.0) return -6.0;
+  float2 i=floor(t);
+  float2 f=t-i;
+  float d00=flameSdf.eval(i+float2(.5,.5)).r;
+  float d10=flameSdf.eval(i+float2(1.5,.5)).r;
+  float d01=flameSdf.eval(i+float2(.5,1.5)).r;
+  float d11=flameSdf.eval(i+float2(1.5,1.5)).r;
+  return (mix(mix(d00,d10,f.x),mix(d01,d11,f.x),f.y)-.5)*12.0;
+}
+// Coverage of the drawn flame scaled s times about its base, at q from the base: the distance is
+// scaled to the screen and antialiased over about one device pixel, so the outline is a clean curve.
+float flameDist(float2 q,float s) { return flameDistance(flame.xy+q/s)*flame.z/110.0*s; }
+float flameCover(float d) { return clamp(d*zoom*2.4+.5,0.0,1.0); }
+// The blaze's silhouette: the drawn flame's, and on its outer side a mirror of its inner side, a
+// little wider and lower. The wing cuts the drawn flame's outer side straight; the mirror reaches
+// past that cut and rounds it with the flame's own tongues. The drawn tall tongue stays the tallest.
+float blazeAt(float2 q,float s) {
+  // Low down it narrows to the tail's tip (a scaled drawn base would be a flat cut as wide as a fist).
+  float v=-q.y/(flame.z*s);
+  q.x*=1.0+1.1*(1.0-smoothstep(.0,.3,v));
+  // Joined as distances (the mirror receding fast past the axis), so the join is one clean outline.
+  return flameCover(max(flameDist(q,s),flameDist(float2(-q.x*.72,q.y/.9),s)-max(-q.x,0.0)*1.5));
+}
 half4 liveFlame(float2 p) {
   float grow=flameState.x;
   float live=flameState.w;
   float hr=flame.z;
-  float h=hr*(1.0+1.25*grow)*(1.0+flameState.z);
+  float s=(1.0+1.25*grow)*(1.0+flameState.z);
+  float h=hr*s;
   float2 q=p-flame.xy;
   float v=-q.y/h;
-  if(v<-.1||v>1.25||abs(q.x)>h*.6) return half4(0.0);
+  if(-q.y<-.1*hr||v>1.3||abs(q.x)>h*.85) return half4(0.0);
   float lt=flameState.y/LOOP_S*6.2831853;
-  float sway=(sin(lt*9.0+v*3.0)*.05+sin(lt*17.0-v*6.0)*.025)*v*v*live;
-  float u=q.x/h-sway;
+  float sway=(sin(lt*9.0+v*3.0)*.05+sin(lt*17.0-v*6.0)*.025)*v*v*live*(1.0+grow);
   float n=.5;
   float m=.5;
-  if(live>.5) { n=rising(float2(u*7.5,v*4.2),5.5); m=rising(float2(u*15.0+3.1,v*8.0),9.0); }
-  float2 src=flame.xy+float2((u+(n-.5)*.09*v)*hr,q.y*hr/h);
+  if(live>.5) { n=rising(float2((q.x/h)*7.5,v*4.2),5.5+3.0*grow); m=rising(float2((q.x/h)*15.0+3.1,v*8.0),9.0+4.0*grow); }
+  // Licks: sideways with the rising noise, and, as it blazes, upwards too, so its tongues run.
+  float2 lick=float2((sway+(n-.5)*(.09+.16*grow)*v)*h,(m-.5)*.16*grow*v*v*h);
+  float2 ql=q-lick;
+  float2 src=flame.xy+ql/s;
   half4 art=image.eval(src);
-  half4 drawn=art*flameMask(src,art);
+  // At rest it is the art's own flame (soft like the rest of the art), less the stray flame-coloured
+  // specks the art leaves outside its outline.
+  half4 drawn=art*flameMask(src,art)*smoothstep(-1.5,-.3,flameDistance(src));
   if(grow<=.001) return drawn;
-  float x=clamp(v+.05,0.0,1.0);
-  float profile=.82*pow(x,.9)*(1.0-x);
-  float w=u+(n-.5)*.10*(.2+v);
-  float f=(1.0-abs(w)/max(profile,.0001))*1.15+(n-.5)*(.35+1.3*v)+(m-.5)*(.2+.5*v)-smoothstep(.75,1.1,v)*.35;
-  // The top splits into licking tongues that run upwards, as the drawn flame's tip does.
-  f-=smoothstep(.42,.95,v)*(.55+.45*sin(w*34.0+n*6.0-lt*17.0))*.85;
-  half4 plume=half4(0.0);
-  if(f>0.0) {
-    // Shaded like the drawn flame: a crisp outline over nested flames that blend softly, red
-    // outside, orange, a yellow heart low down (colours sampled from the art), each with its own noise.
-    float mid=(1.0-abs(w+(m-.5)*.05)/max(profile*.66,.0001))*1.1+(m-.5)*(.4+1.1*v)-smoothstep(.38,.78,v)*1.0;
-    float heart=(1.0-abs(w)/max(profile*.42,.0001))*1.05+(n-.5)*.55-smoothstep(.16,.46,v)*1.1;
-    float3 hot=mix(float3(1.0,.27,.17),float3(1.0,.40,.26),smoothstep(.55,1.0,v));
-    hot=mix(hot,float3(1.0,.56,.20),smoothstep(-.05,.32,mid));
-    hot=mix(hot,float3(1.0,.96,.30),smoothstep(-.05,.36,heart));
-    float body=smoothstep(0.0,.05,f);
-    plume=half4(hot*body,body);
-  }
-  // The plume burns through the drawn flame (along the same rising noise) while it is still the
-  // drawn flame's size: each pixel is one or the other, so the two never ghost.
-  float take=smoothstep(n-.08,n+.08,smoothstep(0.0,.15,grow)*1.3-.15);
-  return mix(drawn,plume,take);
+  float outer=blazeAt(ql,s);
+  if(outer<=.001) return drawn*(1.0-smoothstep(0.0,.45,grow));
+  // Nested copies sit low in it, with their own noise, so the colours flicker apart.
+  float mid=blazeAt(ql-float2((m-.5)*.05*h,0.0),s*.74);
+  float heart=blazeAt(ql+float2((n-.5)*.04*h,.02*h),s*.46);
+  float3 hot=mix(float3(1.0,.27,.17),float3(1.0,.40,.26),smoothstep(.55,1.0,v));
+  hot=mix(hot,float3(1.0,.56,.20),mid);
+  hot=mix(hot,float3(1.0,.96,.30),heart);
+  half4 blaze=half4(hot*outer,outer);
+  // The drawn colours turn to the blaze's along the same rising noise: the silhouette is shared, so
+  // nothing moves, only the shading changes.
+  float take=smoothstep(n-.08,n+.08,smoothstep(0.0,.45,grow)*1.3-.15);
+  return mix(drawn,blaze,take);
 }
 float weight(float2 a,float4 j,float2 k) {
   if(k.x<=0.0) return 0.0;
@@ -289,6 +323,15 @@ float2 bend(float2 a,float4 j,float2 k) {
   float2 r=a-j.xy;
   return float2(c*r.x-s*r.y,s*r.x+c*r.y)+j.xy-a;
 }
+// A blink squashes the face around the eye: the brow comes down and the cheek comes up towards the
+// line where the lids meet, as soft skin over an eyeball does.
+float2 squash(float2 a,float4 eye) {
+  if(eye.z<=0.0||lid.x<=.001) return float2(0.0);
+  float meet=eye.y+eye.w*(1.0-2.0*lid.y);
+  float2 r=(a-eye.xy)/(eye.zw*float2(1.5,2.4));
+  float fall=1.0-smoothstep(.35,1.0,length(r));
+  return float2(0.0,lid.x*lidInk.w*eye.w*clamp((meet-a.y)/eye.w,-1.0,1.0)*fall);
+}
 float2 field(float2 a) {
   float2 d=bend(a,j0,k0)+bend(a,j1,k1)+bend(a,j2,k2)+bend(a,j3,k3);
   d.x+=headShift*weight(a,j0,k0);
@@ -298,41 +341,50 @@ float2 field(float2 a) {
   d+=float2((a.x-chest.x)*.5,a.y-box.y)*chest.w*wb;
   d.x+=hips.y*(1.0-smoothstep(hips.x-hips.w,box.y,a.y));
   d.y+=max(a.y-hips.x,0.0)*hips.z;
+  d+=squash(a,eyeA)+squash(a,eyeB);
   return d;
 }
-// Lids are skin taken from just above the eye; the ellipse is 2 units larger than the eye white.
-half4 lidded(half4 c,float2 a,float4 eye,float closed,float squint) {
-  if(eye.z<=0.0||(closed<=.001&&squint<=.001)) return c;
-  float2 e=(a-eye.xy)/(eye.zw+2.0);
-  float rr=dot(e,e);
-  if(rr>=1.0) return c;
-  float half_=sqrt(max(1.0-e.x*e.x,0.0));
-  float v=(e.y/half_+1.0)*.5;
-  float upper=max(closed*.86,squint*.30);
-  float lower=max(closed*.14,squint*.42);
-  float lash=min(abs(v-upper),abs(v-(1.0-lower)))*(eye.w+2.0)*2.0*half_;
-  float covered=step(v,upper)+step(1.0-lower,v);
-  if(covered<.5) {
-    if(lash<1.6&&(upper>.02||lower>.02)) return half4(c.rgb*(.55+.45*lash/1.6),c.a);
-    return c;
-  }
-  // Skin from just above the eye; the art draws a dark lid line there on some eyes, so of three
-  // samples going up the lightest opaque one is the skin. Where the head's outline runs just above
-  // the eye (Bulbasaur's far eye) there is no skin above it, so the whole lid takes the skin beside
-  // the eye, towards the middle of the face: decided once per eye, so a lid never shows a seam.
-  float top=eye.y-(eye.w+2.0)*half_;
-  half4 skin=image.eval(float2(a.x,top-3.0));
-  half4 s2=image.eval(float2(a.x,top-8.0));
-  half4 s3=image.eval(float2(a.x,top-14.0));
-  if(s2.a>=.95&&dot(s2.rgb,half3(1.0))>dot(skin.rgb,half3(1.0))) skin=s2;
-  if(s3.a>=.95&&dot(s3.rgb,half3(1.0))>dot(skin.rgb,half3(1.0))) skin=s3;
-  float2 inward=face.xy-eye.xy;
-  half4 side=image.eval(eye.xy+inward/max(length(inward),.001)*(max(eye.z,eye.w)+6.0));
-  float trust=step(.95,image.eval(float2(eye.x,eye.y-eye.w-5.0)).a);
-  half3 tone=mix(side.rgb/max(side.a,.001),skin.rgb/max(skin.a,.001),trust);
-  half4 lidc=half4(tone*c.a*.92,c.a);
-  if(lash<1.6) lidc.rgb*=.55+.45*lash/1.6;
-  return lidc;
+// The lids follow the drawn eye, not an ellipse: the upper one falls with the top lash line along
+// the eye's own contour, the lower one rises to meet it, and where they cover the eye they are the
+// face's skin (painted under the eye, so its shading runs on). The lid rolls darker into its edge,
+// shades the eyeball just under it, and its lash line thins towards the corners.
+// The eye map is data, but Skia hands it over converted into the canvas's colour space (Display P3
+// on iPhones), which mixes the channels; this undoes it back to the stored sRGB bytes.
+half3 stored(half3 c) {
+  half3 l=max(toLinearSrgb(c),half3(0.0));
+  return mix(l*12.92,1.055*pow(l,half3(1.0/2.4))-.055,step(half3(.0031308),l));
+}
+half3 inSpace(half3 srgb) {
+  return fromLinearSrgb(mix(srgb/12.92,pow((srgb+.055)/1.055,half3(2.4)),step(half3(.04045),srgb)));
+}
+half4 lidded(half4 c,float2 a) {
+  float L=lid.x;
+  if(L<=.001) return c;
+  half3 m=stored(lids.eval(float2(a.x,a.y+box.x)).rgb);
+  float g=m.g;
+  if(g<.002) return c;
+  float v=m.r;
+  float h=max(m.b*128.0,1.0);
+  float U=L*(1.0-lid.y);
+  float B=1.0-L*lid.y;
+  float w=.45/h;
+  float cover=max(1.0-smoothstep(U-w,U+w,v),smoothstep(B-w,B+w,v))*g;
+  half3 skin=lids.eval(a).rgb;
+  // Each lid rolls under at its edge, darker there: the upper one more, as it overhangs the eye.
+  float edge=v<U ? .14*exp(-(U-v)*h/1.2) : .06*exp(-max(v-B,0.0)*h/1.0)*step(B,v)*step(v,.999);
+  skin*=(1.0-edge)*(1.0-.04*L*exp(-v*h*v*h/1.5));
+  half3 rgb=mix(c.rgb,skin*c.a,cover);
+  float core=smoothstep(.98,1.0,g);
+  float under=max(v-U,0.0)*h;
+  rgb*=1.0-.35*smoothstep(0.0,.15,L)*exp(-under/(1.2+.06*h))*core*(1.0-cover);
+  float ends=core*smoothstep(0.0,.5,v*h)*smoothstep(0.0,.5,(1.0-v)*h);
+  float lw=lid.z*clamp(h/7.0,.35,1.0);
+  float lash=(1.0-smoothstep(lw*.5-.6,lw*.5+.6,abs(v-U)*h))*ends*smoothstep(0.0,.08,L);
+  half3 ink=inSpace(half3(lidInk.rgb));
+  rgb=mix(rgb,ink*c.a,lash);
+  float low=(1.0-smoothstep(lid.z*.3-.6,lid.z*.3+.6,abs(v-B)*h))*ends*lid.w*smoothstep(0.0,.3,L);
+  rgb=mix(rgb,ink*c.a,low);
+  return half4(rgb,c.a);
 }
 half4 main(float2 p) {
   if(hidden>.5) return half4(0.0);
@@ -348,7 +400,8 @@ half4 main(float2 p) {
   float2 q=float2(dot(invX,float3(p,1.0)),dot(invY,float3(p,1.0)));
   float2 a=q;
   for(int i=0;i<3;i++) a=q-field(a);
-  if(a.x<-2.0||a.y<-2.0||a.x>box.x+2.0||a.y>box.x+2.0) return half4(0.0);
+  // Outside the art square there is nothing to draw, but a blazing flame reaches past its edge.
+  if((a.x<-2.0||a.y<-2.0||a.x>box.x+2.0||a.y>box.x+2.0)&&(flame.w<.5||flameState.x<.001)) return half4(0.0);
   float behind=max(-edge,0.0);
   float2 at=a;
   // Entering water lenses the outgoing specimen just ahead of its crest, as it lenses the habitat.
@@ -357,14 +410,23 @@ half4 main(float2 p) {
   // The drawn flame is replaced by the live one, drawn over the lit body.
   half4 fire=half4(0.0);
   if(flame.w>.5) {
-    fire=liveFlame(at);
+    // The plume is held to the tail's tip by the rig's warp linearised there: it turns, leans and
+    // stretches with the tail exactly as the drawn flame does at its base, so it blazes up from the
+    // flame's own place, but the wing beating behind it can no longer shear its upper half away
+    // (drawn through the full warp it did). At rest the drawn flame keeps the full warp.
+    float2 fb=flame.xy+field(flame.xy);
+    float2 fx_=float2(1.0,0.0)+field(flame.xy+float2(1.0,0.0))-field(flame.xy);
+    float2 fy_=float2(0.0,1.0)+field(flame.xy+float2(0.0,1.0))-field(flame.xy);
+    float det=fx_.x*fy_.y-fy_.x*fx_.y;
+    float2 dq=q-fb;
+    float2 rigid=flame.xy+float2(fy_.y*dq.x-fy_.x*dq.y,-fx_.y*dq.x+fx_.x*dq.y)/det+(at-a);
+    fire=liveFlame(mix(at,rigid,smoothstep(0.0,.3,flameState.x)));
     if(c.a>=.01) c*=1.0-flameMask(at,c);
   }
   if(c.a<.01&&fire.a<.002) return half4(0.0);
   half4 body=half4(0.0);
   if(c.a>=.01) {
-    c=lidded(c,at,eyeA,lid.x,lid.y);
-    c=lidded(c,at,eyeB,lid.x,lid.y);
+    c=lidded(c,at);
     // Volume: the baked normal turns the flat art towards or away from the key light.
     float3 n=normalize(normals.eval(at).rgb*2.0-1.0);
     float3 L=normalize(float3(light.xy,.85));

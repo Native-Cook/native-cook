@@ -22,10 +22,20 @@ export type Rig = {
   hips: number;
   /** Joint 0 is always the head: it also tilts towards the finger and rights itself after a lean. */
   joints: readonly Joint[];
-  /** Eye ellipses (cx, cy, rx, ry); a second eye with rx 0 is absent. */
+  /** Eye boxes (cx, cy, half width, half height) the blink squashes the face around; rx 0 is absent. */
   eyes: readonly (readonly [number, number, number, number])[];
-  /** Loop seconds of every blink; two close together make a double blink. */
+  /**
+   * Loop seconds of every blink; two close together make a double blink. Each creature blinks as
+   * it lands (the jolt of the hop), and its acting blinks fill its move, so none come in a cluster.
+   */
   blinks: readonly number[];
+  /**
+   * How this creature blinks. The lids follow each eye's drawn outline (baked in `<name>-lids.png`):
+   * the upper lid falls with the top lash line, the lower one rises `lower` of the way to meet it,
+   * and the skin around the eye squashes towards the closing line. Seconds to close, stay shut and
+   * reopen; lash width (art px) and ink; how much of a lower lash line shows; squash of the face.
+   */
+  lids: { close: number; hold: number; open: number; lower: number; lash: number; ink: readonly [number, number, number]; lowerInk: number; squash: number };
   /** Where the signature move lights the body from, its reach and colour. */
   glow: { at: readonly [number, number]; radius: number; color: readonly [number, number, number] };
   /**
@@ -35,9 +45,10 @@ export type Rig = {
   face: { at: readonly [number, number]; radius: number; shift: number };
   /**
    * A drawn flame that is always drawn live (CREATURE_LIFE): its base, its height, and the
-   * ellipse that holds it (only flame colours inside it, down to the tail tip it burns from).
+   * ellipse that holds it (only flame colours inside it, down to the tail tip it burns from), and
+   * the box (art px) of its baked distance map (`assets/bake-flame.py`), the blaze's outline.
    */
-  flame?: { base: readonly [number, number]; height: number; at: readonly [number, number]; radius: readonly [number, number] };
+  flame?: { base: readonly [number, number]; height: number; at: readonly [number, number]; radius: readonly [number, number]; map: readonly [number, number, number, number] };
   /**
    * Acting around the signature move, in seconds of its effect clock (FX): the head turns and
    * tilts to watch what the move throws, and blinks on each turn. Read with `flow`.
@@ -63,11 +74,13 @@ export const RIGS: readonly Rig[] = [
       { pivot: [292, 280], center: [420, 250], radius: 122, sway: [[-2.4, 4, 0.37], [-0.8, 7, 0.71]] },
       { pivot: [396, 446], center: [452, 372], radius: 62, sway: [[3.4, 18, 0.2], [2.0, 12, 0.55]] },
     ],
-    eyes: [[239, 136, 9, 5.5], [0, 0, 0, 0]],
-    blinks: [1.2, 4.6, 8.1, 8.42, 11.6],
+    eyes: [[241, 138.5, 13, 6.5], [0, 0, 0, 0]],
+    blinks: [0.06, 4.6, 8.1, 8.42, 11.6],
+    // A predator's blink: quick and sharp, almost all upper lid.
+    lids: { close: 0.075, hold: 0.03, open: 0.17, lower: 0.15, lash: 2.4, ink: [0.12, 0.07, 0.05], lowerInk: 0, squash: 0.1 },
     glow: { at: [452, 380], radius: 150, color: [1, 0.55, 0.2] },
     face: { at: [250, 140], radius: 52, shift: 5 },
-    flame: { base: [452, 402], height: 110, at: [451, 345], radius: [38, 68] },
+    flame: { base: [452, 402], height: 110, at: [451, 345], radius: [38, 68], map: [408, 272, 96, 140] },
     // Turns to its tail as the flame swells, watches the embers rise up and away, settles.
     acting: {
       yaw: [[0, 0], [0.18, 0], [0.55, 0.85], [1.15, 0.85], [1.7, 0.2], [2.3, -0.25], [3.2, -0.1], [3.9, 0]],
@@ -88,8 +101,10 @@ export const RIGS: readonly Rig[] = [
       { pivot: [112, 262], center: [88, 266], radius: 26, sway: [[-3.0, 3, 0.85]] },
       { pivot: [0, 0], center: [0, 0], radius: 0, sway: [] },
     ],
-    eyes: [[309, 94, 11, 7], [0, 0, 0, 0]],
-    blinks: [2.1, 5.6, 5.95, 9.4, 12.6],
+    eyes: [[319.5, 95, 20.5, 11], [0, 0, 0, 0]],
+    blinks: [2.1, 4.58, 7.25, 7.6, 12.6],
+    // A heavy, unhurried blink: the lid lingers shut and lifts slowly.
+    lids: { close: 0.11, hold: 0.07, open: 0.26, lower: 0.22, lash: 2, ink: [0.07, 0.1, 0.18], lowerInk: 0.6, squash: 0.12 },
     glow: { at: [409, 196], radius: 140, color: [0.5, 0.85, 1] },
     face: { at: [318, 100], radius: 58, shift: 6 },
     // Braces towards the higher jet while both fire, then looks down at the spray landing.
@@ -112,8 +127,10 @@ export const RIGS: readonly Rig[] = [
       { pivot: [350, 162], center: [366, 146], radius: 42, sway: [[3.2, 3, 0.45]] },
       { pivot: [116, 240], center: [106, 214], radius: 27, sway: [[1.5, 6, 0.2]], twitch: { degrees: -9, at: [2.6, 9.9] } },
     ],
-    eyes: [[86, 300, 20, 32], [251, 308, 40, 29]],
-    blinks: [0.4, 3.9, 7.3, 10.6, 10.94, 12.9],
+    eyes: [[86.5, 298, 19.5, 31], [250.5, 307.5, 40.5, 30.5]],
+    blinks: [0.4, 3.9, 6.6, 9.06, 12.2],
+    // A soft, round blink: the cheeks push the lower lids well up, so it shuts with a smile.
+    lids: { close: 0.09, hold: 0.05, open: 0.22, lower: 0.3, lash: 3.2, ink: [0.11, 0.26, 0.23], lowerInk: 0.6, squash: 0.08 },
     glow: { at: [377, 152], radius: 190, color: [0.8, 1, 0.45] },
     face: { at: [172, 300], radius: 132, shift: 9 },
     // Looks up the beam as it fires, then down at the leaves as they fall and settle.
@@ -166,12 +183,16 @@ function rises(x: number, a: number, b: number, c: number, d: number) {
   const fall = Math.max(0, Math.min(1, (x - c) / (d - c)));
   return rise * rise * (3 - 2 * rise) * (1 - fall * fall * (3 - 2 * fall));
 }
-/** Seconds into a hold of the contented double blink. */
-const PET_BLINKS = [0.22, 0.56] as const;
+/** Seconds into a hold of the contented double blink, and how much slower than a plain blink it is. */
+const PET_BLINKS = [0.22, 0.78] as const;
+const PET_SLOW = 2.2;
 const RAD = Math.PI / 180;
 
-/** Eyelid closure (0 open, 1 shut): close 110 ms, hold 40 ms, reopen 190 ms with an ease-out. */
-export function lidAt(seconds: number, blinks: readonly number[]) {
+/**
+ * Eyelid closure (0 open, 1 shut) as a real lid moves: it falls faster and faster and stops dead
+ * when the lids meet, rests, then lifts quickly at first and settles slowly open.
+ */
+export function lidAt(seconds: number, blinks: readonly number[], close: number, hold: number, open: number) {
   'worklet';
   let lid = 0;
   for (let i = 0; i < blinks.length; i++) {
@@ -179,9 +200,9 @@ export function lidAt(seconds: number, blinks: readonly number[]) {
     if (d < -LOOP / 2) d += LOOP;
     if (d > LOOP / 2) d -= LOOP;
     let v = 0;
-    if (d >= 0 && d < 0.11) { const u = d / 0.11; v = u * u * (3 - 2 * u); }
-    else if (d >= 0.11 && d < 0.15) v = 1;
-    else if (d >= 0.15 && d < 0.34) { const u = 1 - (d - 0.15) / 0.19; v = u * u * u; }
+    if (d >= 0 && d < close) v = Math.pow(d / close, 1.6);
+    else if (d >= close && d < close + hold) v = 1;
+    else if (d >= close + hold && d < close + hold + open) v = Math.pow(1 - (d - close - hold) / open, 2.4);
     lid = Math.max(lid, v);
   }
   return lid;
@@ -293,10 +314,13 @@ export function lifePose(input: LifeInput) {
     // the legs hang a little longer, as a body held up by nothing does.
     shift: live * 4 * wave(3, 0.35),
     hang: 0.07 * lift,
-    // A petted creature answers with a slow, contented double blink; a held half-closed lid on flat
-    // art reads as a cut-out, so there is no squint. It also blinks on each acting turn.
-    lid: input.reduced ? 0 : Math.max(lidAt(seconds, rig.blinks), input.pet > 0 ? lidAt(input.petClock, PET_BLINKS) : 0, acting ? lidAt(input.fx, rig.acting.blinks) : 0),
-    squint: 0,
+    // A petted creature answers with a slow, contented double blink, as a cat does. It also blinks
+    // on each acting turn.
+    lid: input.reduced ? 0 : Math.max(
+      lidAt(seconds, rig.blinks, rig.lids.close, rig.lids.hold, rig.lids.open),
+      input.pet > 0 ? lidAt(input.petClock, PET_BLINKS, rig.lids.close * PET_SLOW, 0.22, rig.lids.open * PET_SLOW) : 0,
+      acting ? lidAt(input.fx, rig.acting.blinks, rig.lids.close, rig.lids.hold, rig.lids.open) : 0,
+    ),
     // The live tail flame: it swells into a plume during the move, and stretches 3-6% on two waves
     // (about 0.7 s and 1.1 s) the rest of the time.
     flameGrow: acting ? rises(input.fx / (SIGNATURE_MS / 1000), 0.1, 0.28, 0.6, 0.96) : 0,
@@ -399,6 +423,19 @@ export function bodyPoint(frame: BodyFrame, x: number, y: number): [number, numb
   return [origin[0] + (ox + c * u - s * v) * z, origin[1] + (oy + s * u + c * v) * z];
 }
 
+/**
+ * A point held to an anchor of the body by the warp linearised there: the anchor follows the warp
+ * (`bodyPoint`), the offset (art px) turns, leans and stretches as the body does at the anchor, as
+ * CREATURE_LIFE draws the plume, without the far-reaching bends of other joints.
+ */
+export function bodyPointFrom(frame: BodyFrame, x: number, y: number, offsetX: number, offsetY: number): [number, number] {
+  'worklet';
+  const p = bodyPoint(frame, x, y);
+  const px = bodyPoint(frame, x + 1, y);
+  const py = bodyPoint(frame, x, y + 1);
+  return [p[0] + (px[0] - p[0]) * offsetX + (py[0] - p[0]) * offsetY, p[1] + (px[1] - p[1]) * offsetX + (py[1] - p[1]) * offsetY];
+}
+
 /** CREATURE_LIFE's uniforms for one frame. */
 export function lifeUniforms(frame: LifeFrame) {
   'worklet';
@@ -428,7 +465,8 @@ export function lifeUniforms(frame: LifeFrame) {
     chest: [rig.chest[0] * k, rig.chest[1] * k, rig.chest[2] * k, pose.breath],
     hips: [rig.hips * k, pose.shift * k, pose.hang, 10 * k],
     eyeA: eye(0), eyeB: eye(1),
-    lid: [pose.lid, pose.squint],
+    lid: [pose.lid, rig.lids.lower, rig.lids.lash, rig.lids.lowerInk],
+    lidInk: [rig.lids.ink[0], rig.lids.ink[1], rig.lids.ink[2], rig.lids.squash],
     origin: [origin[0], origin[1]],
     zoom: z,
     screen: [frame.width, frame.screenHeight],
@@ -446,6 +484,7 @@ export function lifeUniforms(frame: LifeFrame) {
     face: [rig.face.at[0] * k, rig.face.at[1] * k, rig.face.radius * k, pose.yaw * rig.face.shift * k],
     flame: flame ? [flame.base[0] * k, flame.base[1] * k, flame.height * k, 1] : [0, 0, 1, 0],
     flameArea: flame ? [flame.at[0] * k, flame.at[1] * k, flame.radius[0] * k, flame.radius[1] * k] : [0, 0, 1, 1],
+    flameMap: flame ? [flame.map[0] * k, flame.map[1] * k, flame.map[2] * k, flame.map[3] * k] : [0, 0, 1, 1],
     flameState: [pose.flameGrow, frame.seconds, pose.flameStretch, frame.reduced ? 0 : 1],
     hidden: exchange.role < 0 ? 1 : 0,
   };

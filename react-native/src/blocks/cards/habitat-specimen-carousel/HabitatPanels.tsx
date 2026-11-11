@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
-import { memo, useEffect, useState } from 'react';
-import { StyleSheet, Text, View, type ImageSourcePropType, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import { memo, useEffect, useState, type ComponentProps } from 'react';
+import { StyleSheet, Text, View, type ImageSourcePropType, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { Pressable, ScrollView } from 'react-native-gesture-handler';
 import Animated, {
-  type CSSStyle, cubicBezier, Easing, interpolateColor, ReduceMotion, type SharedValue,
+  Easing, interpolateColor, ReduceMotion, type SharedValue,
   useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming,
 } from 'react-native-reanimated';
 
@@ -24,7 +24,33 @@ const STAT_LABELS = ['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'] a
 /** Element tints in carousel order, repeated so colour interpolation wraps 2 → 0. */
 const ELEMENT_COLORS = ['#F2A766', '#7FD3EA', '#A9DD7F', '#F2A766'];
 const STAT_CEILING = 150;
-const TAB_EASING = cubicBezier(0.2, 0, 0, 1);
+const TAB_EASING = Easing.bezier(0.2, 0, 0, 1);
+
+/**
+ * 1 while a tab (or its panel) is the shown one, easing over `duration`. A shared-value timing
+ * rather than a CSS transition, so it runs on the same frame clock as the rest of the block.
+ */
+function useShown(shown: boolean, duration: number) {
+  const value = useSharedValue(shown ? 1 : 0);
+  useEffect(() => {
+    value.set(withTiming(shown ? 1 : 0, { duration, easing: TAB_EASING, reduceMotion: ReduceMotion.Never }));
+  }, [duration, shown, value]);
+  return value;
+}
+
+function TabLabel({ label, active, scale }: { label: string; active: boolean; scale: number }) {
+  const shown = useShown(active, 150);
+  const color = useAnimatedStyle(() => ({ color: interpolateColor(shown.get(), [0, 1], ['#8F9E8F', '#F1F4E5']) }));
+  return <Animated.Text maxFontSizeMultiplier={1.3} style={[styles.tabLabel, { fontSize: 11 * scale }, color]}>{label}</Animated.Text>;
+}
+
+function Panel({ active, reducedMotion, scale, style, children, ...rest }: Omit<ComponentProps<typeof Animated.View>, 'style'> & {
+  active: boolean; reducedMotion: boolean; scale: number; style: StyleProp<ViewStyle>;
+}) {
+  const shown = useShown(active, 160);
+  const pose = useAnimatedStyle(() => ({ opacity: shown.get(), transform: [{ translateY: reducedMotion ? 0 : (1 - shown.get()) * 4 * scale }] }));
+  return <Animated.View {...rest} style={[style, pose]}>{children}</Animated.View>;
+}
 
 /** Value of one base stat at a continuous carousel position: it morphs with the swipe itself. */
 function statAt(stats: readonly (readonly number[])[], stat: number, position: number) {
@@ -150,43 +176,36 @@ export function HabitatPanels({ specs, position, reduced, reducedMotion, scale, 
     });
   };
   const rowHeight = Math.min(24 * scale, contentHeight / 3);
-  const panelStyle = (index: HabitatTab): CSSStyle<ViewStyle> => ({
-    opacity: tab === index ? 1 : 0,
-    transform: [{ translateY: tab === index || reducedMotion ? 0 : 4 * scale }],
-    transitionProperty: reducedMotion ? 'opacity' : ['opacity', 'transform'],
-    transitionDuration: 160, transitionTimingFunction: TAB_EASING,
-  });
   const active = specs[selectedIndex];
   const panelWidth = width - 54 * scale;
   return <>
     <View style={[styles.tabs, { top: tabsTop, left: 27 * scale, right: 27 * scale, gap: 31 * scale, height: 32 * scale }]} accessibilityRole="tablist">
       {TABS.map((label, index) => <Pressable key={label} onLayout={layout(index)} accessibilityRole="tab" accessibilityState={{ selected: tab === index }}
         onPress={() => onTab(index as HabitatTab)} hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }} style={styles.tab}>
-        <Animated.Text maxFontSizeMultiplier={1.3} style={[styles.tabLabel, { fontSize: 11 * scale, color: tab === index ? '#F1F4E5' : '#8F9E8F',
-          transitionProperty: 'color', transitionDuration: 150, transitionTimingFunction: TAB_EASING }]}>{label}</Animated.Text>
+        <TabLabel label={label} active={tab === index} scale={scale} />
       </Pressable>)}
       <Animated.View pointerEvents="none" style={[styles.underline, { top: 12 + 11 * scale * 1.2 + 12 * scale - 2 }, underline]} />
     </View>
-    <Animated.View style={[styles.panel, { top: contentTop, left: 27 * scale, right: 27 * scale, height: contentHeight }, panelStyle(0)]}
+    <Panel style={[styles.panel, { top: contentTop, left: 27 * scale, right: 27 * scale, height: contentHeight }]} active={tab === 0} reducedMotion={reducedMotion} scale={scale}
       pointerEvents={tab === 0 ? 'box-none' : 'none'} accessibilityElementsHidden={tab !== 0} importantForAccessibility={tab === 0 ? 'auto' : 'no-hide-descendants'}>
       <TextSwap position={position} reduced={reduced} height={contentHeight} selectedIndex={selectedIndex}
         items={specs.map(spec => <ScrollView key={spec.name} showsVerticalScrollIndicator={false} bounces={false}>
           <Text style={[styles.description, { fontSize: 11.5 * scale, lineHeight: 19 * scale }]}>{spec.copy}</Text>
         </ScrollView>)} />
-    </Animated.View>
-    <Animated.View style={[styles.panel, styles.statsPanel, { top: contentTop, left: 27 * scale, right: 27 * scale, height: contentHeight, columnGap: 22 * scale }, panelStyle(1)]}
+    </Panel>
+    <Panel style={[styles.panel, styles.statsPanel, { top: contentTop, left: 27 * scale, right: 27 * scale, height: contentHeight, columnGap: 22 * scale }]} active={tab === 1} reducedMotion={reducedMotion} scale={scale}
       pointerEvents="none" accessible={tab === 1} accessibilityLabel={active ? `${active.name} base stats: ${active.stats.map((value, index) => `${STAT_LABELS[index]} ${value}`).join(', ')}` : undefined}
       accessibilityElementsHidden={tab !== 1} importantForAccessibility={tab === 1 ? 'yes' : 'no-hide-descendants'}>
       {[0, 1].map(column => <View key={column} style={styles.statColumn}>
         {[0, 1, 2].map(row => <StatRow key={row} index={column * 3 + row} stats={stats} position={position} reveal={reveal} reduced={reduced} scale={scale} height={rowHeight} selectedIndex={selectedIndex} />)}
       </View>)}
-    </Animated.View>
-    <Animated.View style={[styles.panel, { top: contentTop, left: 27 * scale, right: 27 * scale, height: contentHeight }, panelStyle(2)]}
+    </Panel>
+    <Panel style={[styles.panel, { top: contentTop, left: 27 * scale, right: 27 * scale, height: contentHeight }]} active={tab === 2} reducedMotion={reducedMotion} scale={scale}
       pointerEvents="none" accessible={tab === 2} accessibilityLabel={active ? `Evolution: ${active.evolution.map(stage => stage.name).join(', then ')}` : undefined}
       accessibilityElementsHidden={tab !== 2} importantForAccessibility={tab === 2 ? 'yes' : 'no-hide-descendants'}>
       <TextSwap position={position} reduced={reduced} height={contentHeight} selectedIndex={selectedIndex}
         items={specs.map(spec => <Evolution key={spec.name} spec={spec} reduced={reduced} reveal={reveal} scale={scale} width={panelWidth} />)} />
-    </Animated.View>
+    </Panel>
   </>;
 }
 
