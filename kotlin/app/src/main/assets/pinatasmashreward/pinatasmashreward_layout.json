@@ -1,0 +1,150 @@
+{
+  "canvas": {
+    "w": 1080,
+    "h": 1140
+  },
+  "figure_box": {
+    "x": 106,
+    "y": 134,
+    "w": 888,
+    "h": 897
+  },
+  "ribbon_attach_point": {
+    "x": 604,
+    "y": 500
+  },
+  "eye_center": {
+    "x": 814.1,
+    "y": 316.7
+  },
+  "flank_center": {
+    "x": 450,
+    "y": 570
+  },
+  "burst_hole_box": {
+    "x": 375,
+    "y": 475,
+    "w": 150,
+    "h": 190
+  },
+  "tail_root": {
+    "x": 449.7,
+    "y": 481.6
+  },
+  "tail_box": {
+    "x": 106,
+    "y": 258,
+    "w": 377,
+    "h": 354
+  },
+  "bulbs": [
+    {
+      "id": 0,
+      "center": {
+        "x": 603.5,
+        "y": 530.6
+      },
+      "radius": 17.6,
+      "color": "#62FFCE"
+    },
+    {
+      "id": 1,
+      "center": {
+        "x": 633.9,
+        "y": 606.7
+      },
+      "radius": 18.8,
+      "color": "#FCFF5F"
+    },
+    {
+      "id": 2,
+      "center": {
+        "x": 734.7,
+        "y": 640.8
+      },
+      "radius": 19.3,
+      "color": "#F9BFFA"
+    },
+    {
+      "id": 3,
+      "center": {
+        "x": 870.3,
+        "y": 606.2
+      },
+      "radius": 19.0,
+      "color": "#62FFCE"
+    },
+    {
+      "id": 4,
+      "center": {
+        "x": 833.1,
+        "y": 721.9
+      },
+      "radius": 19.0,
+      "color": "#FCFF5F"
+    },
+    {
+      "id": 5,
+      "center": {
+        "x": 710.0,
+        "y": 777.0
+      },
+      "radius": 19.3,
+      "color": "#F9BFFA"
+    },
+    {
+      "id": 6,
+      "center": {
+        "x": 558.2,
+        "y": 794.6
+      },
+      "radius": 18.1,
+      "color": "#62FFCE"
+    },
+    {
+      "id": 7,
+      "center": {
+        "x": 422.4,
+        "y": 765.0
+      },
+      "radius": 18.5,
+      "color": "#FCFF5F"
+    },
+    {
+      "id": 8,
+      "center": {
+        "x": 339.5,
+        "y": 697.4
+      },
+      "radius": 18.5,
+      "color": "#F9BFFA"
+    },
+    {
+      "id": 9,
+      "center": {
+        "x": 313.2,
+        "y": 599.2
+      },
+      "radius": 17.6,
+      "color": "#62FFCE"
+    },
+    {
+      "id": 10,
+      "center": {
+        "x": 336.7,
+        "y": 502.0
+      },
+      "radius": 19.0,
+      "color": "#FCFF5F"
+    },
+    {
+      "id": 11,
+      "center": {
+        "x": 433.9,
+        "y": 447.9
+      },
+      "radius": 18.5,
+      "color": "#F9BFFA"
+    }
+  ]
+}
