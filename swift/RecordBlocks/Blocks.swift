@@ -563,6 +563,7 @@ final class BlockRecordings: Recorder {
     func test_value_word_wheel() throws { try record(slug: "value-word-wheel", loop: 8) }
     func test_velocity_marquee() throws { try record(slug: "velocity-marquee", loop: 15) }
     func test_watchful_eyes_permission() throws { try record(slug: "watchful-eyes-permission", loop: 10) }
+    func test_heat_shape_picker() throws { try record(slug: "heat-shape-picker", loop: 8) }
     func test_app_icon_atelier() throws { try record(slug: "app-icon-atelier", loop: 10) }
     func test_wind_chime_tones() throws { try record(slug: "wind-chime-tones", loop: 10, sound: true) }
     func test_icon_era_scrubber() throws { try record(slug: "icon-era-scrubber", loop: 10) }
