@@ -1,0 +1,33 @@
+{
+  "rasterArt": [],
+  "models": [],
+  "procedural": [
+    {
+      "name": "Spark sphere: hollow, haze, inner glow, membrane film, shadow and the sparks (polar-lattice slots, one pass)",
+      "file": "../sss-shaders.ts (DISC_SKSL)",
+      "generator": "Original procedural SkSL; the spark density, sizes and colours are measured on the pin (.work/spark-sphere-score/tools)",
+      "alpha": "premultiplied; transparent outside the shadow",
+      "pinFrameMatched": "Rest frame (t = 0): rim-to-hollow haze ramp, spark density by radius, spark diameters",
+      "gateResult": "See .work/spark-sphere-score/codex-report.md",
+      "credit": "Layout reference saved to Pinterest; original shader implementation"
+    },
+    {
+      "name": "Ruler: 81 ticks, cursor, ripple",
+      "file": "../sss-shaders.ts (RULER_SKSL)",
+      "generator": "Original procedural SkSL",
+      "alpha": "premultiplied",
+      "credit": "Original"
+    },
+    {
+      "name": "Icons (back, info, date chevrons, Slow dot, Fast blob)",
+      "file": "../SparkSphereScore.tsx",
+      "generator": "Skia paths",
+      "alpha": true,
+      "credit": "Original vectors matching the source icon roles"
+    }
+  ],
+  "fonts": [
+    { "name": "Figtree Medium, SemiBold, Bold (static instances of the variable font, subset to Basic Latin)", "file": "fonts/", "license": "SIL OFL 1.1, fonts/OFL.txt", "credit": "The Figtree Project Authors" },
+    { "name": "Barlow Semi Condensed SemiBold, Bold (subset to Basic Latin)", "file": "fonts/", "license": "SIL OFL 1.1, fonts/OFL.txt", "credit": "The Barlow Project Authors" }
+  ]
+}

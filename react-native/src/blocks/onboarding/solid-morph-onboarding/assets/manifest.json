@@ -1,0 +1,51 @@
+{
+  "assets": [
+    {
+      "name": "Outfit Regular",
+      "file": "fonts/Outfit-Regular.ttf",
+      "purpose": "Body, chip and action labels",
+      "alpha": false,
+      "generator": "Bundled static OFL font, retained from the partial implementation",
+      "credit": "The Outfit Project Authors",
+      "license": "fonts/OFL.txt",
+      "pinFrameMatched": "Dribbble 27730037, geometric rounded sans",
+      "gateResult": "Layout and paragraph heights checked offline; closest OFL substitute, not the source font"
+    },
+    {
+      "name": "Outfit SemiBold",
+      "file": "fonts/Outfit-SemiBold.ttf",
+      "purpose": "Onboarding headline",
+      "alpha": false,
+      "generator": "Bundled static OFL font, retained from the partial implementation",
+      "credit": "The Outfit Project Authors",
+      "license": "fonts/OFL.txt",
+      "pinFrameMatched": "Dribbble 27730037, headline",
+      "gateResult": "Measured width corrected to 41.5 pt with 50 pt line pitch on the 402 pt reference"
+    }
+  ],
+  "procedural": [
+    {
+      "name": "Ceramic solids",
+      "generator": "Live SkSL raymarched SDF",
+      "file": "../smo-shaders.ts",
+      "ptSize": [256, 240],
+      "alpha": false,
+      "pinFrameMatched": "All three pages",
+      "gateResult": "Offline CanvasKit stills; native GPU timing and rim stability require device QA"
+    },
+    {
+      "name": "Linked-loop mark, check and clock hand",
+      "generator": "Authored SVG paths rasterized to 128x128 signed distance fields at mount",
+      "file": "../smo-pages.ts",
+      "ptSize": [100, 80],
+      "pixelSize": [128, 128],
+      "alpha": false,
+      "credit": "Original redrawn vector glyphs; linked-loop mark replaces the source currency symbol",
+      "gateResult": "Composited on the exact SkSL surface; fields are runtime textures, no raster art files"
+    }
+  ],
+  "rasterArt": [],
+  "glb": [],
+  "sound": [],
+  "networkRequests": false
+}

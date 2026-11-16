@@ -1,0 +1,10 @@
+{
+  "assets": [
+    { "name": "InterDisplay-Bold.ttf", "file": "fonts/InterDisplay-Bold.ttf", "use": "headline and track title, 36 pt (Inter Display cut for sizes of 20 pt and up)", "generator": "font", "license": "SIL OFL 1.1 (fonts/OFL.txt)", "credit": "Inter, The Inter Project Authors" },
+    { "name": "Inter-SemiBold.ttf", "file": "fonts/Inter-SemiBold.ttf", "use": "display title, avatar monogram, cover wordmark", "generator": "font", "license": "SIL OFL 1.1", "credit": "Inter, The Inter Project Authors" },
+    { "name": "Inter-Medium.ttf", "file": "fonts/Inter-Medium.ttf", "use": "time, artist (tracked capitals), pill label", "generator": "font", "license": "SIL OFL 1.1", "credit": "Inter, The Inter Project Authors" },
+    { "name": "Inter-Regular.ttf", "file": "fonts/Inter-Regular.ttf", "use": "the line under the headline, 17 pt", "generator": "font", "license": "SIL OFL 1.1", "credit": "Inter, The Inter Project Authors" }
+  ],
+  "raster": "none: the dome is one runtime effect (wsp-shaders.ts); the cover art, the avatar, the glyphs and the bezel are vector paths drawn in code (wsp-geometry.ts). The concept's cover.png and avatar.png were replaced by procedural art because no image tool was available to the builder.",
+  "glb": "none (the top view of a dome is analytic)"
+}

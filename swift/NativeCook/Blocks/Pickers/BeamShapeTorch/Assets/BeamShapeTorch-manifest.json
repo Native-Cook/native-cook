@@ -1,0 +1,44 @@
+{
+  "assets": [
+    {
+      "name": "wallpaper",
+      "file": "wallpaper.jpg",
+      "ptSize": [
+        402,
+        874
+      ],
+      "px3x": [
+        1206,
+        2622
+      ],
+      "alpha": false,
+      "generator": "procedural (Python/NumPy/SciPy) reconstruction of the pin's folded magenta surface, extended below 650 pt; Codex jobs beam-shape-torch-assets, beam-shape-torch-assets-r2",
+      "pinFrameMatched": "pin 735916395435313288, rectified (.work/beam-shape-torch/pin-rectified-1206.png)",
+      "gate": "round 1: wallpaper-content mean ΔE00 2.46 (12 px blur; the literal mask incl. the pin's white device frame reads 5.19), ring crest / dome rim within 1 px; round 2 repainted only the area behind the capsule (visible while it is closed into the island), exterior pixels identical; see .work/beam-shape-torch/assets-report.md",
+      "credit": "ours, after the pin's render (Feng HE)"
+    },
+    {
+      "name": "wallpaper-pro",
+      "file": "wallpaper-pro.jpg",
+      "ptSize": [
+        402,
+        874
+      ],
+      "px3x": [
+        1206,
+        2622
+      ],
+      "alpha": false,
+      "generator": "Built-in image_gen edit, second candidate; sips JPEG export at 1206 x 2622. Original generated resolution 784 x 2007. No Blender needed.",
+      "pinFrameMatched": "Feng HE pin 735916395435313288; existing wallpaper supplied as edit target",
+      "gate": "Visually reviewed in offline full-loop composite. Sharper upper side folds; exact pixel parity and true native @3x detail are not claimed (generated image required resizing). See .work/beam-shape-torch/pro/assets/ and codex-report.md.",
+      "credit": "Generated for this block after Feng HE pin; no brand, text or network fetch at runtime.",
+      "polish": "2026-11-16: unsharp-masked (radius 14 px and 4 px, stronger over the upper dome that shows while the capsule is closed) and re-saved at JPEG quality 90; the unmodified generated image is kept outside the repo. Film grain over the page is added at runtime in BeamShapeTorch.tsx."
+    }
+  ],
+  "drawnInCode": [
+    "capsule (squircle path + BEAM_SKSL)",
+    "beam, fringe, lens, wall light (BEAM_SKSL)",
+    "arc, dotted arc, sun, torch glyph (paths)"
+  ]
+}

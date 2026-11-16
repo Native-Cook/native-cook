@@ -1,0 +1,69 @@
+{
+  "block": "card-vacuum-seal",
+  "assets": [
+    {
+      "name": "Hanken Grotesk Medium",
+      "file": "fonts/HankenGrotesk-Medium.ttf",
+      "use": "labels, body, revenue figure",
+      "generator": "Google Fonts (OFL)",
+      "credit": "The Hanken Grotesk Project Authors, OFL.txt"
+    },
+    {
+      "name": "Hanken Grotesk SemiBold",
+      "file": "fonts/HankenGrotesk-SemiBold.ttf",
+      "use": "title, list heading, amounts",
+      "generator": "instanced at wght 600 from the OFL variable font HankenGrotesk[wght].ttf (google/fonts) with fontTools",
+      "credit": "The Hanken Grotesk Project Authors, OFL.txt"
+    },
+    {
+      "name": "Hanken Grotesk Bold",
+      "file": "fonts/HankenGrotesk-Bold.ttf",
+      "use": "not used by the screen any more (the card is a plain view in Medium); kept with its OFL text",
+      "generator": "Google Fonts (OFL)",
+      "credit": "The Hanken Grotesk Project Authors, OFL.txt"
+    }
+  ],
+  "drawn_in_code": [
+    "clear film (cvs-shaders.ts): height field, single-tap refraction, hard-edged softboxes, rim, contact shadow",
+    "icons (cvs-icons.tsx)",
+    "tile discs, revenue bars, page light, the card view (BankCard in CardVacuumSeal.tsx)"
+  ],
+  "images": [
+    {
+      "name": "Tidewell Prints avatar",
+      "file": "avatar-tidewell.png",
+      "pt": 44,
+      "px": 264,
+      "alpha": "circle, corners transparent",
+      "generator": "Codex image_gen (job card-vacuum-seal-assets), art direction by Codex",
+      "pin_frame": "avatar crop of the pin's last frame (HugeArts)",
+      "gate": "palette/saturation checked side by side on #1C1B20 at 44/132/264 px (.work/card-vacuum-seal/codex-assets/qa)",
+      "credit": "generated, no third-party material"
+    },
+    {
+      "name": "Oren Calloway avatar",
+      "file": "avatar-oren.png",
+      "pt": 44,
+      "px": 264,
+      "alpha": "circle, corners transparent",
+      "generator": "Codex image_gen (job card-vacuum-seal-assets)",
+      "pin_frame": "same",
+      "gate": "same",
+      "credit": "generated, no third-party material"
+    }
+  ],
+  "data": [
+    {
+      "name": "air.wav / tup.wav / inhale.wav",
+      "file": "sounds/*.wav",
+      "generator": "synthesised: .work/card-vacuum-seal/tools/synth_sounds.py (filtered noise and a falling sine, 22.05 kHz mono 16-bit, 53 / 3 / 9 KB)",
+      "use": "touch-only cues: air hiss loop (volume 0.032, rate 0.8 to 1.4 with p), 70 ms thump at the lock, 200 ms inhale on revert",
+      "note": "not listened to on a device"
+    }
+  ],
+  "material": {
+    "generator": "Live SkSL procedural height field; no new raster or baked map shipped",
+    "fallback": "Two ridged value-noise octaves, 0.9 pt peak, within 14 pt of the card edge; seven angular corner pleats; three long procedural creases",
+    "reason": "Prescribed Blender command could not open the global heavy lock under the sandbox (exit 73); image art was unnecessary with the named procedural fallback."
+  }
+}

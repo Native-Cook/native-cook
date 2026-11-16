@@ -1,0 +1,77 @@
+{
+  "raster_assets": [],
+  "models": [],
+  "assets": [
+    {
+      "name": "Inter-Regular",
+      "file": "fonts/Inter-Regular.ttf",
+      "bytes": 342732,
+      "sha256": "d2a4911506ea4e124a47ca044e5e79f671ddf8f1a55f1ab9a56c58d088124b63",
+      "pt_size": null,
+      "@3x_px": null,
+      "alpha": false,
+      "generator": "Existing static OFL font",
+      "pin_frame_matched": "Source neutral grotesk",
+      "gate_result": "Font renders in CanvasKit; native text QA pending",
+      "credit": "Inter contributors; bundled OFL.txt"
+    },
+    {
+      "name": "Inter-Medium",
+      "file": "fonts/Inter-Medium.ttf",
+      "bytes": 417300,
+      "sha256": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "pt_size": null,
+      "@3x_px": null,
+      "alpha": false,
+      "generator": "Existing static OFL font",
+      "pin_frame_matched": "Source neutral grotesk",
+      "gate_result": "Font renders in CanvasKit; native text QA pending",
+      "credit": "Inter contributors; bundled OFL.txt"
+    },
+    {
+      "name": "OFL",
+      "file": "fonts/OFL.txt",
+      "bytes": 4380,
+      "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+      "pt_size": null,
+      "@3x_px": null,
+      "alpha": false,
+      "generator": "Existing static OFL font",
+      "pin_frame_matched": "Source neutral grotesk",
+      "gate_result": "Font renders in CanvasKit; native text QA pending",
+      "credit": "Inter contributors; bundled OFL.txt"
+    },
+    {
+      "name": "air",
+      "file": "sounds/air.wav",
+      "bytes": 3792,
+      "sha256": "e27b4c4570b8fd08b9e8c42fbc853fb3ec2a1774217c760998c838d7023596cc",
+      "pt_size": null,
+      "@3x_px": null,
+      "alpha": false,
+      "generator": "Deterministic original PCM synthesis; .work/gel-cube-unbox/tools/sounds.py",
+      "pin_frame_matched": "Authored motion cue; source is silent still",
+      "gate_result": "PCM metadata/peak verified; device audio timing pending",
+      "credit": "Original procedural synthesis",
+      "sample_rate": 22050,
+      "duration_s": 0.08498866213151927,
+      "peak_dbfs": -22.0
+    },
+    {
+      "name": "contact",
+      "file": "sounds/contact.wav",
+      "bytes": 4896,
+      "sha256": "f3cd93623168cc81d1d9de218a5c53f922016c2d298b7d75041af965dca226bb",
+      "pt_size": null,
+      "@3x_px": null,
+      "alpha": false,
+      "generator": "Deterministic original PCM synthesis; .work/gel-cube-unbox/tools/sounds.py",
+      "pin_frame_matched": "Authored motion cue; source is silent still",
+      "gate_result": "PCM metadata/peak verified; device audio timing pending",
+      "credit": "Original procedural synthesis",
+      "sample_rate": 22050,
+      "duration_s": 0.11002267573696145,
+      "peak_dbfs": -26.0
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "rasterArt": [],
+  "models": [],
+  "glyphs": {
+    "generator": "Original SVG paths in ers-theme.ts, rasterized to 256-square masks at mount, then two-pass Euclidean signed distance transform",
+    "alpha": false,
+    "pinFrameMatched": "Note thumbnail; heart and bolt in the saved contact sheet",
+    "gateResult": "Procedural approximation; source pixel fidelity is not certified"
+  },
+  "fonts": [
+    {
+      "file": "fonts/Onest-ExtraBold.ttf",
+      "family": "ERSOnestBlack",
+      "license": "fonts/OFL.txt",
+      "source": "Google Fonts / Onest",
+      "usage": "Display and wordmark"
+    },
+    {
+      "file": "fonts/Onest-Regular.ttf",
+      "family": "ERSOnest",
+      "license": "fonts/OFL.txt",
+      "source": "Google Fonts / Onest",
+      "usage": "Captions and page count"
+    }
+  ]
+}

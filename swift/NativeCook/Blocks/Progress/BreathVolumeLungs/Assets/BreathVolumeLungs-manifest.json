@@ -1,0 +1,33 @@
+{
+  "rasterArt": [],
+  "models": [],
+  "procedural": [
+    {
+      "name": "Lung pressure atlas",
+      "file": "../bvl-fields.ts",
+      "ptSize": [402, 502.5],
+      "pixels": [64, 41],
+      "alpha": false,
+      "generator": "CPU field + traced numeric silhouette, rendered by live SkSL",
+      "pinFrameMatched": ".work/breath-volume-lungs/src/ref/rect.png",
+      "gateResult": "See offline gate and codex-report.md; no native device overlay claimed",
+      "credit": "Layout reference: Ron Design Lab, source Pinterest pin 373235887892623353; motion is ours"
+    }
+  ],
+  "fonts": [
+    {
+      "name": "Urbanist Regular",
+      "file": "fonts/Urbanist-Regular.ttf",
+      "license": "fonts/OFL.txt",
+      "generator": "Google Fonts OFL, pre-existing builder asset",
+      "credit": "Urbanist Project Authors, https://github.com/coreyhu/Urbanist"
+    },
+    {
+      "name": "Urbanist Medium",
+      "file": "fonts/Urbanist-Medium.ttf",
+      "license": "fonts/OFL.txt",
+      "generator": "Google Fonts OFL, pre-existing builder asset",
+      "credit": "Urbanist Project Authors, https://github.com/coreyhu/Urbanist"
+    }
+  ]
+}

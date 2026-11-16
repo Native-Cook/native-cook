@@ -1,0 +1,35 @@
+{
+  "assets": [
+    {
+      "name": "Onest ExtraBold",
+      "file": "fonts/Onest-ExtraBold.ttf",
+      "generator": "OFL font (Google Fonts, Onest)",
+      "use": "title, tile titles, amount, wordmarks",
+      "credit": "fonts/OFL.txt"
+    },
+    {
+      "name": "Onest SemiBold",
+      "file": "fonts/Onest-SemiBold.ttf",
+      "generator": "OFL font (Google Fonts, Onest)",
+      "use": "copy, Collect, Exchange currency",
+      "credit": "fonts/OFL.txt"
+    },
+    {
+      "name": "clink",
+      "file": "sounds/clink.wav",
+      "generator": "synthesised (.work/coin-pile-collect/tools/sounds.js): four damped partials + contact click, about -18 dBFS",
+      "use": "contact above 200 pt/s",
+      "credit": "none"
+    },
+    { "name": "clink2", "file": "sounds/clink2.wav", "generator": "same, +6 % pitch", "use": "alternates with clink", "credit": "none" },
+    {
+      "name": "thunk",
+      "file": "sounds/thunk.wav",
+      "generator": "synthesised: 90 to 52 Hz sine decay + low noise",
+      "use": "the tile empties",
+      "credit": "none"
+    }
+  ],
+  "raster": "none: the emboss atlas (H, $, €) is drawn at mount with Skia from the bundled font; the coins, the page and the tiles are shaders and vectors",
+  "glyphs": "cpc-glyphs.ts is shaped offline with HarfBuzz (.work/coin-pile-collect/tools/shape.py); cpc-heap.ts is baked by .work/coin-pile-collect/tools/bake.js"
+}

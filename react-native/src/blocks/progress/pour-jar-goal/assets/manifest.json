@@ -1,0 +1,101 @@
+{
+  "raster_art": [],
+  "glb": null,
+  "assets": [
+    {
+      "name": "InstrumentSerif-Regular",
+      "file": "fonts/InstrumentSerif-Regular.ttf",
+      "pt_size": "runtime-scaled; display capped at 76 pt",
+      "px_3x": "vector font",
+      "alpha": null,
+      "generator": "bundled static OFL font (existing repository asset copied locally)",
+      "credit": "Instrument Serif authors; see adjacent OFL file",
+      "pin_frame_matched": "d27863828-screen.jpg",
+      "gate_result": "visual cap-height and width review; native font loading not run",
+      "bytes": 70012,
+      "sha256": "498efd461f6ddfcb7a111bf9a565709d2085d48201d501ead960d93e84ffbb88"
+    },
+    {
+      "name": "Inter-Medium",
+      "file": "fonts/Inter-Medium.ttf",
+      "pt_size": "runtime-scaled; display capped at 76 pt",
+      "px_3x": "vector font",
+      "alpha": null,
+      "generator": "bundled static OFL font (existing repository asset copied locally)",
+      "credit": "Inter authors; see adjacent OFL file",
+      "pin_frame_matched": "d27863828-screen.jpg",
+      "gate_result": "visual cap-height and width review; native font loading not run",
+      "bytes": 417300,
+      "sha256": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872"
+    },
+    {
+      "name": "Inter-Regular",
+      "file": "fonts/Inter-Regular.ttf",
+      "pt_size": "runtime-scaled; display capped at 76 pt",
+      "px_3x": "vector font",
+      "alpha": null,
+      "generator": "bundled static OFL font (existing repository asset copied locally)",
+      "credit": "Inter authors; see adjacent OFL file",
+      "pin_frame_matched": "d27863828-screen.jpg",
+      "gate_result": "visual cap-height and width review; native font loading not run",
+      "bytes": 342732,
+      "sha256": "d2a4911506ea4e124a47ca044e5e79f671ddf8f1a55f1ab9a56c58d088124b63"
+    },
+    {
+      "name": "Inter-SemiBold",
+      "file": "fonts/Inter-SemiBold.ttf",
+      "pt_size": "runtime-scaled; display capped at 76 pt",
+      "px_3x": "vector font",
+      "alpha": null,
+      "generator": "bundled static OFL font (existing repository asset copied locally)",
+      "credit": "Inter authors; see adjacent OFL file",
+      "pin_frame_matched": "d27863828-screen.jpg",
+      "gate_result": "visual cap-height and width review; native font loading not run",
+      "bytes": 419744,
+      "sha256": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3"
+    },
+    {
+      "name": "JetBrainsMono-Medium",
+      "file": "fonts/JetBrainsMono-Medium.ttf",
+      "pt_size": "runtime-scaled; display capped at 76 pt",
+      "px_3x": "vector font",
+      "alpha": null,
+      "generator": "bundled static OFL font (existing repository asset copied locally)",
+      "credit": "JetBrains Mono authors; see adjacent OFL file",
+      "pin_frame_matched": "d27863828-screen.jpg",
+      "gate_result": "visual cap-height and width review; native font loading not run",
+      "bytes": 273860,
+      "sha256": "31c92d01a8a08528b718a43addf0ad3df0af2ca4b7b3290a452f70f358e14d3d"
+    },
+    {
+      "name": "land",
+      "file": "land.wav",
+      "pt_size": null,
+      "px_3x": null,
+      "alpha": null,
+      "generator": "deterministic local synthesis, seed 17, mono PCM16, 24000 Hz",
+      "credit": "Original synthesized audio; no third-party samples",
+      "pin_frame_matched": "physical cue only",
+      "gate_result": "PCM shape/duration/level inspected; listening on native device pending",
+      "duration_s": 0.22,
+      "peak_dbfs": -24.04,
+      "rms_dbfs": -36.81,
+      "bytes": 10604
+    },
+    {
+      "name": "pour",
+      "file": "pour.wav",
+      "pt_size": null,
+      "px_3x": null,
+      "alpha": null,
+      "generator": "deterministic local synthesis, seed 17, mono PCM16, 24000 Hz",
+      "credit": "Original synthesized audio; no third-party samples",
+      "pin_frame_matched": "physical cue only",
+      "gate_result": "PCM shape/duration/level inspected; listening on native device pending",
+      "duration_s": 0.6,
+      "peak_dbfs": -17.72,
+      "rms_dbfs": -31.72,
+      "bytes": 28844
+    }
+  ]
+}

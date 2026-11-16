@@ -1,0 +1,30 @@
+{
+  "assets": [
+    {
+      "name": "Outfit Regular",
+      "file": "fonts/Outfit-Regular.ttf",
+      "pt size": 30,
+      "@3x px": "vector font",
+      "alpha": true,
+      "generator": "licensed static font; copied from repository asset",
+      "pin frame matched": "rounded geometric final wordmark; replacement text korra",
+      "gate result": "offline metrics; native text pending",
+      "credit": "Outfit Project Authors; SIL Open Font License 1.1",
+      "license": "fonts/Outfit-OFL.txt"
+    },
+    {
+      "name": "Korra mark and four token glyphs",
+      "file": "../tfs-theme.ts",
+      "pt size": "mark 60/40; token faces within 44 pt bodies",
+      "@3x px": "runtime vector/SDF; atlas 7 × 128 px cells",
+      "alpha": true,
+      "generator": "original SVG path data, CPU rasterisation and exact Euclidean distance transform at mount",
+      "pin frame matched": "source's angular mark / flat token faces, all brands replaced",
+      "gate result": "CanvasKit atlas and exact production shader compiled and rendered; native cache timing pending",
+      "credit": "Original procedural vectors for this block"
+    }
+  ],
+  "rasterArt": [],
+  "models": [],
+  "runtimeNetwork": false
+}

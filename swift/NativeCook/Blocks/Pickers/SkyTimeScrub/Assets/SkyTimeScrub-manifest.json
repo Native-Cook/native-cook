@@ -1,0 +1,86 @@
+{
+  "rasterArt": [],
+  "models": [],
+  "procedural": [
+    {
+      "name": "Atmosphere, bloom, HDR sun disc, sun pillar, twilight arch, path, ruler and refracting lens",
+      "file": "../sts-shaders.ts",
+      "generator": "Original procedural SkSL",
+      "alpha": "transparent instrument layer over opaque sky",
+      "pinFrameMatched": "Rest 001; qualitative dusk 181 / dawn 105 / night 81",
+      "gateResult": "See .work/sky-time-scrub/review/overlay-gate.json; no full-device parity claim",
+      "credit": "Layout reference saved to Pinterest by 60fps; original shader implementation"
+    },
+    {
+      "name": "Control icons",
+      "file": "../SkyTimeScrubber.tsx",
+      "generator": "Inline SVG geometry",
+      "alpha": true,
+      "credit": "Original vectors matching source icon roles"
+    },
+    {
+      "name": "Dither",
+      "file": "../sts-shaders.ts",
+      "generator": "Deterministic interleaved gradient noise, no image asset",
+      "alpha": false,
+      "credit": "Procedural hash"
+    },
+    {
+      "name": "Sky tint table (16 elevations)",
+      "file": "../sts-tint.ts",
+      "generator": "Measured from the exact shader by .work/sky-time-scrub/preview/tint-table.cjs",
+      "alpha": false,
+      "credit": "Procedural"
+    }
+  ],
+  "fonts": [
+    {
+      "name": "Inter Regular",
+      "file": "fonts/Inter-Regular.ttf",
+      "license": "fonts/OFL.txt",
+      "generator": "Existing bundled static OFL font, copied without modification",
+      "credit": "Inter font authors"
+    },
+    {
+      "name": "Inter Medium",
+      "file": "fonts/Inter-Medium.ttf",
+      "license": "fonts/OFL.txt",
+      "generator": "Existing bundled static OFL font, copied without modification",
+      "credit": "Inter font authors"
+    },
+    {
+      "name": "Inter SemiBold",
+      "file": "fonts/Inter-SemiBold.ttf",
+      "license": "fonts/OFL.txt",
+      "generator": "Existing bundled static OFL font, copied without modification",
+      "credit": "Inter font authors"
+    }
+  ],
+  "note": "No raster art or GLB was needed. Four synthesised cues (silent unless the sound prop is set). Point/@3x sizes apply to live vectors, not font binaries. Fonts loaded by expo-font and the chip font measured using Skia getGlyphWidths.",
+  "sounds": [
+    {
+      "name": "Tick",
+      "file": "sounds/sts-tick.wav",
+      "generator": "Synthesised by .work/sky-time-scrub/tools/make-sounds.py (1.9 kHz damped tone + click, 55 ms, 16-bit mono 44.1 kHz)",
+      "credit": "Original, no third-party material"
+    },
+    {
+      "name": "Night tick",
+      "file": "sounds/sts-tick-night.wav",
+      "generator": "The same synthesis two semitones lower (x 2^(-2/12)), 62 ms",
+      "credit": "Original, no third-party material"
+    },
+    {
+      "name": "Detent clack",
+      "file": "sounds/sts-clack.wav",
+      "generator": "520 Hz body + 1.41 kHz partial + 233 Hz thump + noise transient, 110 ms",
+      "credit": "Original, no third-party material"
+    },
+    {
+      "name": "Horizon swell",
+      "file": "sounds/sts-swell.wav",
+      "generator": "D3 + A3 + soft octave under a raised-cosine envelope, 400 ms",
+      "credit": "Original, no third-party material"
+    }
+  ]
+}

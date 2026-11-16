@@ -1,0 +1,41 @@
+{
+  "assets": [
+    {
+      "name": "row font",
+      "file": "fonts/Inter-Medium.ttf",
+      "generator": "Inter 4 (Rasmus Andersson), OFL \u2014 fonts/OFL.txt",
+      "use": "menu labels, 17 pt; row pitch grows with Dynamic Type",
+      "credit": "Inter, SIL Open Font License 1.1"
+    },
+    {
+      "name": "glass touch",
+      "file": "sounds/tap.wav",
+      "generator": "deterministic damped sine synthesis, original to this block",
+      "durationMs": 40,
+      "use": "optional touch-only expo-audio cue; autoplay is silent",
+      "credit": "Original procedural audio"
+    },
+    {
+      "name": "neck pinch",
+      "file": "sounds/plip.wav",
+      "generator": "deterministic damped sine synthesis, original to this block",
+      "durationMs": 60,
+      "use": "optional touch-only expo-audio cue; autoplay is silent",
+      "credit": "Original procedural audio"
+    },
+    {
+      "name": "neck merge (reversed plip)",
+      "file": "sounds/merge.wav",
+      "generator": "deterministic damped sine synthesis, original to this block",
+      "durationMs": 60,
+      "use": "optional touch-only expo-audio cue; autoplay is silent",
+      "credit": "Original procedural audio"
+    }
+  ],
+  "drawnInCode": [
+    "petals: five discs through the flower's centre, PETALS_SKSL (fitted to the pin's frame 0; overlay gate edge mean 3.4 px, dE00 1.97)",
+    "glass: GLASS_SKSL, bead + rounded panel + explicit capsule bridge + optional satellite + lens, union-field optics",
+    "icons: gpm-icons.ts (24 x 24 stroked paths)"
+  ],
+  "rasterAssets": "none: the pin's art is vector-flat gradients and lines, so nothing went to Codex"
+}

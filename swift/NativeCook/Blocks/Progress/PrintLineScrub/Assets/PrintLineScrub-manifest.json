@@ -1,0 +1,20 @@
+{
+  "images": [
+    {
+      "file": "frillwarden-solid.webp",
+      "width": 1024,
+      "height": 1536,
+      "alpha": true,
+      "role": "Original matte coral PLA sculpt, below the cut"
+    },
+    {
+      "file": "frillwarden-slicer.webp",
+      "width": 1024,
+      "height": 1536,
+      "alpha": true,
+      "role": "Registered grey-green triangle mesh material, above the cut"
+    }
+  ],
+  "registration": "Identical exported alpha; slicer RGB is registered to the solid with a smooth mask-distance warp.",
+  "generation": "Built-in image_gen; original creature named Frillwarden. No third-party character art."
+}

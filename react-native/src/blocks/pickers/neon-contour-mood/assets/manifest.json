@@ -1,0 +1,72 @@
+{
+  "rasterArt": [],
+  "models": [],
+  "fonts": [
+    {
+      "name": "Inter-Regular",
+      "file": "fonts/Inter-Regular.ttf",
+      "size": "vector font",
+      "alpha": true,
+      "generator": "OFL typeface, copied from existing project assets",
+      "pinFrameMatched": "still / rect.png",
+      "gateResult": "closest source family; native rasterization unverified",
+      "credit": "The Inter Project Authors",
+      "pt size": "Role-dependent vector type, 12\u201354 reference pt; UI roles respond to Dynamic Type",
+      "@3x px": "Not applicable: vector font rendered at device scale"
+    },
+    {
+      "name": "Inter-Medium",
+      "file": "fonts/Inter-Medium.ttf",
+      "size": "vector font",
+      "alpha": true,
+      "generator": "OFL typeface, copied from existing project assets",
+      "pinFrameMatched": "still / rect.png",
+      "gateResult": "closest source family; native rasterization unverified",
+      "credit": "The Inter Project Authors",
+      "pt size": "Role-dependent vector type, 12\u201354 reference pt; UI roles respond to Dynamic Type",
+      "@3x px": "Not applicable: vector font rendered at device scale"
+    },
+    {
+      "name": "Inter-SemiBold",
+      "file": "fonts/Inter-SemiBold.ttf",
+      "size": "vector font",
+      "alpha": true,
+      "generator": "OFL typeface, copied from existing project assets",
+      "pinFrameMatched": "still / rect.png",
+      "gateResult": "closest source family; native rasterization unverified",
+      "credit": "The Inter Project Authors",
+      "pt size": "Role-dependent vector type, 12\u201354 reference pt; UI roles respond to Dynamic Type",
+      "@3x px": "Not applicable: vector font rendered at device scale"
+    },
+    {
+      "name": "Nunito-ExtraBold",
+      "file": "fonts/Nunito-ExtraBold.ttf",
+      "size": "vector font",
+      "alpha": true,
+      "generator": "OFL typeface, copied from existing project assets",
+      "pinFrameMatched": "still / rect.png",
+      "gateResult": "closest source family; native rasterization unverified",
+      "credit": "The Nunito Project Authors",
+      "pt size": "Role-dependent vector type, 12\u201354 reference pt; UI roles respond to Dynamic Type",
+      "@3x px": "Not applicable: vector font rendered at device scale"
+    }
+  ],
+  "proceduralArt": {
+    "name": "Contour field and thumb",
+    "generator": "live SkSL SDF",
+    "assets": "none",
+    "pinFrameMatched": "rest FEAR",
+    "gateResult": "Offline CanvasKit reviewed in multiple rounds; source color/edge comparison still fails the requested quantitative thresholds; native Graphite rendering unverified."
+  },
+  "audio": [
+    {
+      "name": "ncm-strike",
+      "file": "sounds/ncm-strike.wav",
+      "size": "6.2 KB, 44.1 kHz mono 16-bit, 70 ms",
+      "generator": "synthesised for this block by .work/neon-contour-mood/pro/make-strike.cjs: high-passed click, 2.35 kHz ping and a 110/220/330 Hz mains hum with a 22 ms decay",
+      "use": "one cue per label strike, finger-driven only, playbackRate 0.9 to 1.15 by mood index, never during autoplay",
+      "credit": "original, no third-party material",
+      "gateResult": "envelope checked offline; never listened to on a device"
+    }
+  ]
+}

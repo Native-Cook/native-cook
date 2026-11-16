@@ -1,0 +1,27 @@
+{
+  "assets": [
+    {
+      "name": "portrait",
+      "file": "rgr-portrait.jpg",
+      "pt": [402, 874],
+      "px@3x": [1206, 2622],
+      "alpha": false,
+      "generator": "Codex image_gen (jobs reeded-glass-reveal-assets and reeded-glass-reveal-assets-r2); iteration 15 photographic detail with broad relight from round 2, normalized 1206x2622, JPEG q90, 256421 bytes",
+      "pinFrameMatched": "refs/462604192999526516-orig.jpg, card x 522-1635 y 496-2382, face landmarks: skull 155, eyes 300, mouth 395, chin 440 pt",
+      "gate": "round-2 asset diagnostics: landmarks within 10 pt; seven sample dE00 1.28-4.54; same face-oval linear luminance +43.13%; no live-device fidelity claim",
+      "credit": "generated, invented person; no reference face supplied to the generator"
+    },
+    {
+      "name": "Urbanist Light / Regular",
+      "file": "fonts/Urbanist-Light.ttf, fonts/Urbanist-Regular.ttf",
+      "generator": "static instances (wght 300 / 400) of Urbanist[wght].ttf from google/fonts, fontTools instancer",
+      "credit": "The Urbanist Project Authors, SIL OFL 1.1 (fonts/OFL.txt)"
+    },
+    {
+      "name": "marks",
+      "file": "rgr-marks.tsx (vector, code)",
+      "generator": "vector, invented: Vidly, Loop, Sable, card network lozenge",
+      "credit": "ours"
+    }
+  ]
+}

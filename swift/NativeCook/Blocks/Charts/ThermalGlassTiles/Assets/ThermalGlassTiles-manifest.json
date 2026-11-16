@@ -1,0 +1,48 @@
+[
+  {
+    "name": "Runner heat atlas",
+    "file": "runner-heat-atlas.png",
+    "ptSize": [402, 874],
+    "pixels": [1536, 1280],
+    "alpha": true,
+    "generator": ".work/thermal-glass-tiles/preview/runner-atlas.py; original NumPy 3D ray renderer",
+    "pinFrameMatched": "5.2s composition; original athlete replacement",
+    "gateResult": "NOT matched to source silhouette; Blender execution sandbox-blocked",
+    "credit": "Original procedural geometry",
+    "bytes": 434844
+  },
+  {
+    "name": "Runner frost atlas",
+    "file": "runner-heat-atlas-blur.png",
+    "pixels": [384, 320],
+    "alpha": true,
+    "generator": "cell-by-cell quarter-resolution resize and Gaussian sigma1.5 (equivalent sigma6 at full cell)",
+    "gateResult": "Previewed as glass backdrop; no cross-cell filtering",
+    "credit": "Derived from original heat atlas",
+    "bytes": 104533
+  },
+  {
+    "name": "Thermal palette",
+    "file": "thermal-palette.png",
+    "pixels": [256, 67],
+    "alpha": false,
+    "generator": ".work/thermal-glass-tiles/preview/palette.py",
+    "gateResult": "64 effort rows plus cool/mono/acid presets; exact specified stop values, OKLab interpolation; source deltaE gate not measured",
+    "credit": "Numerical source-inspired palette",
+    "bytes": 5786
+  },
+  {
+    "name": "Urbanist Light",
+    "file": "fonts/Urbanist-Light.ttf",
+    "generator": "OFL font, existing local copy",
+    "credit": "Urbanist project; fonts/OFL.txt",
+    "bytes": 43404
+  },
+  {
+    "name": "Urbanist Regular",
+    "file": "fonts/Urbanist-Regular.ttf",
+    "generator": "OFL font, existing local copy",
+    "credit": "Urbanist project; fonts/OFL.txt",
+    "bytes": 43332
+  }
+]
