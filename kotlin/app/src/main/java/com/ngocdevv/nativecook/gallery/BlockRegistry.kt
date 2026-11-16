@@ -24,6 +24,7 @@ import com.ngocdevv.nativecook.blocks.animations.robotmoodcompanion.RobotMoodCom
 import com.ngocdevv.nativecook.blocks.animations.shatterglasstransition.ShatterGlassTransitionDemo
 import com.ngocdevv.nativecook.blocks.animations.soapbubblepop.SoapBubblePopDemo
 import com.ngocdevv.nativecook.blocks.animations.superchargecard.SuperchargeCardDemo
+import com.ngocdevv.nativecook.blocks.animations.thermalshapemorph.ThermalShapeMorphDemo
 import com.ngocdevv.nativecook.blocks.animations.twistglassstack.TwistGlassStackDemo
 import com.ngocdevv.nativecook.blocks.animations.worddrum.WordDrumDemo
 import com.ngocdevv.nativecook.blocks.buttons.applycheckbutton.ApplyCheckButtonDemo
@@ -805,6 +806,7 @@ import com.ngocdevv.nativecook.blocks.text.yearphotocounter.YearPhotoCounterDemo
 const val GALLERY_TIER = "Free"
 
 val blockRegistry: List<Block> = listOf(
+    Block(slug = "thermal-shape-morph", name = "Thermal Shape Morph", category = "Animations", spec = "An energy check-in emblem for an invented wellness app, Vessa: on a near-black stage one glowing shape, filled like a thermal camera image with a white-hot core, a violet halo and a thin hot red rim, morphs from a four-point star to a rounded diamond, a circle, a clover and a loose blob, swapping between hot and cool palettes. The state's name and line (Spark, Steady, Glow, Bloom, Drift) crossfade under it above a row of five dots. Tap for the next state, drag sideways to scrub the morph.") { ThermalShapeMorphDemo() },
     Block(slug = "gold-dune-contours", name = "Gold Dune Contours", category = "Animations", spec = "A full-screen sleep-sound player called Dune Wind frames a moonlit field of thin cream, gold and rose contour lines. Near ridges glow more brightly and hide the terrain behind them while a warm light travels across the sand. Drag the dunes to raise a ridge beneath your finger, or pause the silent player.") { GoldDuneContoursDemo() },
     Block(slug = "radar-friend-finder", name = "Radar Friend Finder", category = "Animations", spec = "The \"find your crew\" screen of an invented festival app, Beacon: a green radar sweeps a dark scope and each friend's blip flashes as the beam passes. On the second turn it locks on to Maya — her blip becomes a ringed avatar, a dashed line runs out to her and a card says how far away she is.") { RadarFriendFinderDemo() },
     Block(slug = "robot-mood-companion", name = "Robot Mood Companion", category = "Animations", spec = "The home screen of an invented desk companion, Pip: a teal robot head whose black visor shows a glowing cyan face. Pip runs through six moods — happy, surprised, sleepy, proud, sad, grumpy — each with its own face, head pose, extras and room colour.") { RobotMoodCompanionDemo() },
