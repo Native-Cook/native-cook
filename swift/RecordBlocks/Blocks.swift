@@ -632,6 +632,7 @@ final class BlockRecordings: Recorder {
     func test_spirograph_draw() throws { try record(slug: "spirograph-draw", loop: 16) }
     func test_truchet_wave_tiles() throws { try record(slug: "truchet-wave-tiles", loop: 16) }
     func test_zen_sand_garden() throws { try record(slug: "zen-sand-garden", loop: 18) }
+    func test_aurora_slat_sync() throws { try record(slug: "aurora-slat-sync", loop: 8) }
     func test_trip_line_loader() throws { try record(slug: "trip-line-loader", loop: 8) }
     func test_vitamin_capsule_dose() throws { try record(slug: "vitamin-capsule-dose", loop: 10, sound: true) }
     func test_petal_loader_spin() throws { try record(slug: "petal-loader-spin", loop: 6) }
