@@ -72,6 +72,7 @@ final class BlockRecordings: Recorder {
     func test_glass_pay_morph() throws { try record(slug: "glass-pay-morph", loop: 4.4) }
     func test_reeded_glass_reveal() throws { try record(slug: "reeded-glass-reveal", loop: 8) }
     func test_daypart_weather_bands() throws { try record(slug: "daypart-weather-bands", loop: 8) }
+    func test_frost_heart_rewards() throws { try record(slug: "frost-heart-rewards", loop: 10, sound: true) }
     func test_eyewear_lens_tint() throws { try record(slug: "eyewear-lens-tint", loop: 10, sound: true) }
     func test_filament_bulb_dimmer() throws { try record(slug: "filament-bulb-dimmer", loop: 10) }
     func test_gold_emblem_membership() throws { try record(slug: "gold-emblem-membership", loop: 10, sound: true) }
