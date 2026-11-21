@@ -1,0 +1,33 @@
+package com.ngocdevv.nativecook.blocks.media.islandprintcamera
+
+/** Point-for-point state of the React Native reference, on its 402 × 874 canvas. */
+internal data class IslandPrintCameraFrame(
+    val p: Double = 0.0,
+    val slot: Double = 0.0,
+    val antic: Double = 0.0,
+    val slotDip: Double = 0.0,
+    val rise: DoubleArray = doubleArrayOf(0.0, 0.0, 0.0),
+    val flood: DoubleArray = doubleArrayOf(0.0, 0.0, 0.0),
+    val depth: Double = 0.0,
+    val exposure: Double = 0.0,
+    val blur: Double = 12.0,
+    val focus: Double = 1.0,
+    val glint: Double = 0.0,
+    val black: Double = 0.0,
+    val flash: Double = 0.0,
+    val bloom: Double = 0.0,
+    val dim: Double = 1.0,
+    val led: Int = 0,
+    val ledHalo: Double = 0.0,
+    val f: Double = 0.0,
+    val printOut: Boolean = false,
+    val printTop: Double = -199.0,
+    val printRot: Double = 0.0,
+    val printScaleY: Double = 1.0,
+    val printTilt: Double = 38.0,
+    val d: Double = 0.0,
+    val sheen: Double = 0.0,
+    val empty: Double = 1.0,
+    val printShadow: Double = 0.0,
+    val dragX: Double = 0.0, val dragY: Double = 0.0,
+)

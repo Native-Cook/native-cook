@@ -1,0 +1,123 @@
+{
+  "format": "RGB8 PNG, no alpha, sRGB flag absent: read the bytes as linear data (disable colour management / sRGB decode)",
+  "R": "signed distance to the outline, pt: value = 0.5 + d/48 (d > 0 outside, < 0 inside), range +-24 pt, sample bilinear",
+  "G": "arc length along the outline from the electrodes: 0 at the lower tip, 1 where both heads meet at the top vertex; each chain is normalised separately, interior = inverse-square blend of the two chains (continuous), outside = nearest outline point",
+  "B": "bevel light for the dead metal, key light top-left (az 315, el 45): 0.5 flat, > 0.5 lit edge, < 0.5 shaded edge; only non-0.5 inside the chamfer ring",
+  "day": {
+    "size": [
+      128,
+      192
+    ],
+    "covers_pt": [
+      96,
+      144
+    ],
+    "texel_per_pt": 1.3333333333333333,
+    "silhouette_pt": [
+      40.0,
+      60.0
+    ],
+    "silhouette_origin_in_view_pt": [
+      28.0,
+      42.0
+    ],
+    "centre_line_pt": [
+      36.0,
+      56.0
+    ],
+    "tube_pt": 4.0,
+    "gap_pt": 4.0,
+    "chamfer_ring_pt": "centre line (d=0) to silhouette edge (d=2)",
+    "chain_lengths_pt": [
+      74.263,
+      74.317
+    ],
+    "perimeter_pt": 152.581,
+    "gap_cut_disc": {
+      "centre_pt": [
+        12.19,
+        57.554
+      ],
+      "radius_pt": 2.0,
+      "note": "silhouette space (origin top-left of the 40 x 60 box). Remove the tube (core, tube, glass) inside this disc; the dead fill and bloom stay. Two electrode studs r 0.85 pt sit at the centre +-1 pt along the tip tangent (see bolt-day.svg #electrode-a/b)."
+    }
+  },
+  "hero": {
+    "size": [
+      256,
+      384
+    ],
+    "covers_pt": [
+      280,
+      420
+    ],
+    "texel_per_pt": 0.9142857142857143,
+    "shape_pt": [
+      190.0,
+      292.0
+    ],
+    "shape_origin_in_view_pt": [
+      45.0,
+      64.0
+    ],
+    "bevel_width_pt": 11,
+    "chain_lengths_pt": [
+      408.176,
+      408.599
+    ],
+    "perimeter_pt": 816.775
+  },
+  "vertices_day_centre_line_pt": {
+    "A": [
+      31.898,
+      -5.894
+    ],
+    "B": [
+      -0.45,
+      29.868
+    ],
+    "C": [
+      14.95,
+      35.046
+    ],
+    "D": [
+      6.917,
+      67.242
+    ],
+    "E": [
+      40.493,
+      31.37
+    ],
+    "F": [
+      25.735,
+      26.209
+    ]
+  },
+  "vertices_hero_pt": {
+    "A": [
+      154.966,
+      -18.539
+    ],
+    "B": [
+      -8.157,
+      142.027
+    ],
+    "C": [
+      69.5,
+      165.274
+    ],
+    "D": [
+      28.996,
+      309.829
+    ],
+    "E": [
+      198.308,
+      148.769
+    ],
+    "F": [
+      123.887,
+      125.598
+    ]
+  },
+  "light": "toward-light vector (-0.5, -0.5, 0.7071), y down"
+}

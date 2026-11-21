@@ -9,6 +9,7 @@ struct DemoScreen: View {
 
     var body: some View {
         block.demo()
+            .environment(\.galleryBlockDismiss, onBack)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(GalleryColors.background.ignoresSafeArea())
             // The back swipe is a UIKit pan on the window that never cancels touches, not a SwiftUI

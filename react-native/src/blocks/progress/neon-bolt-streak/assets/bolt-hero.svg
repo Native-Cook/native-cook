@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="190" height="292" viewBox="0 0 190 292">
+  <title>neon bolt, hero</title>
+  <desc>190 x 292 pt filled hero bolt, corner joins r 9. Fill gradient top #F5D21F, #C9A516 at 55 %, page colour (alpha 0) at 100 % (the app drives the level).</desc>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#F5D21F"/><stop offset="0.55" stop-color="#C9A516"/><stop offset="1" stop-color="#26272B" stop-opacity="0"/>
+  </linearGradient></defs>
+  <path id="hero" d="M133.509 2.582 L2.685 131.354 A9.000 9.000 0 0 0 6.418 146.390 L63.853 163.584 A6.000 6.000 0 0 1 67.910 170.950 L36.838 281.841 A8.000 8.000 0 0 0 50.055 289.796 L187.207 159.329 A9.000 9.000 0 0 0 183.680 144.215 L128.252 126.957 A5.000 5.000 0 0 1 124.851 121.129 L148.620 10.893 A9.000 9.000 0 0 0 133.509 2.582 Z" fill="url(#g)"/>
+</svg>

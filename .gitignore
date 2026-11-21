@@ -1,5 +1,5 @@
 .DS_Store
-node_modules/
+node_modules
 
 # React Native (Expo)
 react-native/.expo/

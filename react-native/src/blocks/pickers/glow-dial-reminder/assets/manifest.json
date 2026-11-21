@@ -1,0 +1,10 @@
+{
+  "reference": "Pinterest 462604192998351840 — Ron Design Lab; flat layout board 1127307350523162056",
+  "motion": "Original motion; no raster artwork is used.",
+  "assets": [
+    { "name": "Static neutral grain", "file": "gd-grain.png", "pointSize": [85.333333, 85.333333], "pixelSize": [256, 256], "alpha": false, "generator": "Deterministic periodic blue-noise synthesis, seed 462604192", "gate": "Asset report: format, spectrum and tile seam pass; overlay 5%", "credit": "Original procedural texture" },
+    { "name": "Urbanist Regular", "file": "Urbanist-Regular.ttf", "weight": 400, "generator": "Official Google Fonts static instance", "license": "fonts/urbanist/OFL.txt", "credit": "The Urbanist Project Authors", "gate": "Font metadata and ASCII coverage pass" },
+    { "name": "Urbanist Medium", "file": "Urbanist-Medium.ttf", "weight": 500, "generator": "Official Google Fonts static instance", "license": "fonts/urbanist/OFL.txt", "credit": "The Urbanist Project Authors", "gate": "Font metadata and ASCII coverage pass" },
+    { "name": "Doto Bold", "file": "Doto-Bold.ttf", "weight": 700, "generator": "Official Google Fonts static instance, ROND 0", "license": "fonts/doto/OFL.txt", "credit": "The Doto Project Authors", "gate": "Font metadata and ASCII coverage pass" }
+  ]
+}

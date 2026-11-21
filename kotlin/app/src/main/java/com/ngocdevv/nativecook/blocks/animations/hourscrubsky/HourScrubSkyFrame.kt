@@ -1,0 +1,2 @@
+package com.ngocdevv.nativecook.blocks.animations.hourscrubsky
+internal data class HourScrubSkyFrame(var h: Double=0.0,var rate: Double=0.0,var hp: Double=0.0,var cs: Double=0.0,var rs: Double=0.0,var pill: Double=0.0,var pillDark: Double=0.0,var disc: Double=1.0,var gPlay: Double=1.0,var gPause: Double=0.0,var gReset: Double=0.0,var resetRot: Double=-90.0,var flare: Double=0.0,var sway: Double=0.0)
