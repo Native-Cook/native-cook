@@ -70,6 +70,7 @@ final class BlockRecordings: Recorder {
     func test_thinking_button() throws { try record(slug: "thinking-button", loop: 8.4) }
     func test_ticket_button() throws { try record(slug: "ticket-button", loop: 3.9) }
     func test_tilt_button() throws { try record(slug: "tilt-button", loop: 6.1) }
+    func test_kite_wind_card() throws { try record(slug: "kite-wind-card", loop: 8) }
     func test_heat_haze_weather() throws { try record(slug: "heat-haze-weather", loop: 10) }
     func test_skeleton_content_resolve() throws { try record(slug: "skeleton-content-resolve", loop: 10) }
     func test_card_vacuum_seal() throws { try record(slug: "card-vacuum-seal", loop: 6) }
