@@ -361,6 +361,7 @@ final class BlockRecordings: Recorder {
     func test_thinking_frame_search() throws { try record(slug: "thinking-frame-search", loop: 9.2) }
     func test_tone_rewrite_composer() throws { try record(slug: "tone-rewrite-composer", loop: 9) }
     func test_voice_note_composer() throws { try record(slug: "voice-note-composer", loop: 9) }
+    func test_snack_stop_vending() throws { try record(slug: "snack-stop-vending", loop: 8) }
     func test_spring_disclosure_faq() throws { try record(slug: "spring-disclosure-faq", loop: 9) }
     func test_spring_reorder_checklist() throws { try record(slug: "spring-reorder-checklist", loop: 9) }
     func test_sticky_section_headers() throws { try record(slug: "sticky-section-headers", loop: 10) }
