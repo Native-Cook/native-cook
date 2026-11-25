@@ -815,6 +815,7 @@ final class BlockRecordings: Recorder {
     func test_foil_monogram_splash() throws { try record(slug: "foil-monogram-splash", loop: 9) }
     func test_kinetic_type_splash() throws { try record(slug: "kinetic-type-splash", loop: 9.6) }
     func test_pill_rise_splash() throws { try record(slug: "pill-rise-splash", loop: 11) }
+    func test_back_online_plug() throws { try record(slug: "back-online-plug", loop: 7) }
     func test_floating_letters_stir() throws { try record(slug: "floating-letters-stir", loop: 10) }
     func test_glyph_reflow_edit() throws { try record(slug: "glyph-reflow-edit", loop: 9) }
     func test_rotating_word_headline() throws { try record(slug: "rotating-word-headline", loop: 8) }
