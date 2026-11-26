@@ -686,6 +686,7 @@ final class BlockRecordings: Recorder {
     func test_sunburst_timer_dial() throws { try record(slug: "sunburst-timer-dial", loop: 8) }
     func test_walk_radius_dial() throws { try record(slug: "walk-radius-dial", loop: 8) }
     func test_weather_fan_dial() throws { try record(slug: "weather-fan-dial", loop: 7) }
+    func test_spinning_top_toy() throws { try record(slug: "spinning-top-toy", loop: 7.6) }
     func test_disc_ring_stack() throws { try record(slug: "disc-ring-stack", loop: 9) }
     func test_jelly_googly_mascot() throws { try record(slug: "jelly-googly-mascot", loop: 8) }
     func test_noodle_net_orbit() throws { try record(slug: "noodle-net-orbit", loop: 8) }
