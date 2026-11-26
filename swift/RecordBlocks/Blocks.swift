@@ -796,6 +796,7 @@ final class BlockRecordings: Recorder {
     func test_sheet_card_handoff() throws { try record(slug: "sheet-card-handoff", loop: 9) }
     func test_stage_card_sheet() throws { try record(slug: "stage-card-sheet", loop: 9) }
     func test_widget_guide_sheet() throws { try record(slug: "widget-guide-sheet", loop: 10.5) }
+    func test_paint_pour_splash() throws { try record(slug: "paint-pour-splash", loop: 4) }
     func test_spin_to_logo_splash() throws { try record(slug: "spin-to-logo-splash", loop: 14) }
     func test_token_fusion_splash() throws { try record(slug: "token-fusion-splash", loop: 7.5) }
     func test_flame_mascot_splash() throws { try record(slug: "flame-mascot-splash", loop: 8) }
