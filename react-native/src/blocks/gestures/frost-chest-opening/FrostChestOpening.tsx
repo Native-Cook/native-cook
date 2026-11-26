@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, type SkFont, type SkTypeface, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, type SkFont, type SkTypeface, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -80,11 +80,12 @@ export function FrostChestOpening({ autoPlay = false, previewTime }: Props) {
   const floor = useImage(require('./assets/floor.webp'));
   const cardFront = useImage(require('./assets/card-front.webp'));
   const cardBack = useImage(require('./assets/card-back.webp'));
-  const black = useFont(require('./assets/fonts/Poppins-Black.ttf'), 100);
-  const extra = useFont(require('./assets/fonts/Poppins-ExtraBold.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Poppins-Bold.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Poppins-SemiBold.ttf'), 100);
-  const regular = useFont(require('./assets/fonts/Poppins-Regular.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const black = useTypeface(require('./assets/fonts/Poppins-Black.ttf'));
+  const extra = useTypeface(require('./assets/fonts/Poppins-ExtraBold.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Poppins-Bold.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Poppins-SemiBold.ttf'));
+  const regular = useTypeface(require('./assets/fonts/Poppins-Regular.ttf'));
 
   const w = size?.width ?? REF_W;
   const h = size?.height ?? REF_H;
@@ -93,9 +94,7 @@ export function FrostChestOpening({ autoPlay = false, previewTime }: Props) {
   const res = useMemo<Res | null>(() => {
     if (!chestClosed || !chestOpen || !jacket || !xp || !boots || !shrine || !coin || !crystal || !backdrop || !floor || !cardFront || !cardBack) return null;
     if (!black || !extra || !bold || !semi || !regular || !raysEffect || !orbEffect || !rayLightEffect || !lightEffect) return null;
-    const faces = [black, extra, bold, semi, regular].map((f) => f.getTypeface());
-    const [fBlack, fExtra, fBold, fSemi, fRegular] = faces;
-    if (!fBlack || !fExtra || !fBold || !fSemi || !fRegular) return null;
+    const [fBlack, fExtra, fBold, fSemi, fRegular] = [black, extra, bold, semi, regular];
     const s = geo.sx;
     const arrow = Skia.Path.MakeFromSVGString(ARROW);
     const hand = Skia.Path.MakeFromSVGString(HAND);

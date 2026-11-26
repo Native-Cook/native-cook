@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -91,16 +91,15 @@ export function GoldTicketReward({ autoPlay = false, previewTime }: Props) {
 
   const cars = useImage(require('./assets/cars.webp'));
   const coin = useImage(require('./assets/coin-atlas.webp'));
-  const regular = useFont(require('./assets/fonts/Poppins-Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Poppins-Medium.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Poppins-SemiBold.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Poppins-Bold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const regular = useTypeface(require('./assets/fonts/Poppins-Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Poppins-Medium.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Poppins-SemiBold.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Poppins-Bold.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!cars || !coin || !regular || !medium || !semi || !bold || !foilEffect || !dissolveEffect) return null;
-    const faces = { regular: regular.getTypeface(), medium: medium.getTypeface(), semi: semi.getTypeface(), bold: bold.getTypeface() };
-    if (!faces.regular || !faces.medium || !faces.semi || !faces.bold) return null;
-    const labels = makeLabels({ regular: faces.regular, medium: faces.medium, semi: faces.semi, bold: faces.bold });
+    const labels = makeLabels({ regular, medium, semi, bold });
     const page = blurPage(drawPage(labels));
     if (!page) return null;
     return { page, labels, cars, coin, foil: foilEffect, dissolve: dissolveEffect, dust: makeDust(cars), ...makeStatics(cars) };

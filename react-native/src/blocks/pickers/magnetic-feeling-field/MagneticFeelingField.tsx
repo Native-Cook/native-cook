@@ -1,4 +1,4 @@
-import { Atlas, BlurMask, BlurStyle, Canvas, Circle, FilterMode, Group, LinearGradient, MipmapMode, Oval, RadialGradient, Rect, RoundedRect, Shadow, Skia, type SkImage, matchFont, rrect, rect } from '@shopify/react-native-skia';
+import { Atlas, BlurMask, BlurStyle, Canvas, Circle, FilterMode, FontSlant, FontWeight, FontWidth, Group, LinearGradient, MipmapMode, Oval, RadialGradient, Rect, RoundedRect, Shadow, Skia, type SkImage, rrect, rect } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -119,10 +119,16 @@ const FieldDot = memo(function FieldDot({ x, y, tone, scene, reduced }: { x: num
 
 /** Per-glyph poses are plain shareable data; native shaping happens once on the RN thread. */
 function makeLabelTypography() {
-  const font = matchFont({ fontFamily: Platform.OS === 'ios' ? '.AppleSystemUIFont' : 'sans-serif', fontSize: 20.5, fontWeight: '600' });
+  // The typeface matchFont would pick, kept here: Skia 2.6.2's font.getTypeface() returns it without a reference, so
+  // each wrapper it hands out frees the typeface once when collected.
+  const face = Skia.FontMgr.System().matchFamilyStyle(Platform.OS === 'ios' ? '.AppleSystemUIFont' : 'sans-serif', {
+    weight: FontWeight.SemiBold,
+    width: FontWidth.Normal,
+    slant: FontSlant.Upright,
+  });
+  const font = Skia.Font(face, 20.5);
   const provider = Skia.TypefaceFontProvider.Make();
-  const face = font.getTypeface();
-  if (face) provider.registerFont(face, 'MagneticFeelingFieldLabel');
+  provider.registerFont(face, 'MagneticFeelingFieldLabel');
   const layouts = WORDS.map((name) => {
     const paragraph = Skia.ParagraphBuilder.Make({}, provider)
       .pushStyle({ fontFamilies: ['MagneticFeelingFieldLabel'], fontSize: 20.5, fontStyle: { weight: 600 }, letterSpacing: -0.4 })

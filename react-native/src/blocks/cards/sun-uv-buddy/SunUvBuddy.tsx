@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -46,16 +46,15 @@ export function SunUvBuddy({ autoPlay = false, previewTime }: Props) {
     return () => sub.remove();
   }, []);
 
-  const regular = useFont(require('./assets/fonts/Inter-Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Inter-Medium.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Inter-SemiBold.ttf'), 100);
-  const round = useFont(require('./assets/fonts/Nunito-ExtraBold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const regular = useTypeface(require('./assets/fonts/Inter-Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Inter-Medium.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Inter-SemiBold.ttf'));
+  const round = useTypeface(require('./assets/fonts/Nunito-ExtraBold.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!regular || !medium || !semi || !round) return null;
-    const f = { regular: regular.getTypeface(), medium: medium.getTypeface(), semi: semi.getTypeface(), round: round.getTypeface() };
-    if (!f.regular || !f.medium || !f.semi || !f.round) return null;
-    return makeRes({ regular: f.regular, medium: f.medium, semi: f.semi, round: f.round });
+    return makeRes({ regular, medium, semi, round });
   }, [regular, medium, semi, round]);
 
   const w = size?.width ?? REF_W;

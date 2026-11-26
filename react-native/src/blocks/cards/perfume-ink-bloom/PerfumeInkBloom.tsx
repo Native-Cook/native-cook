@@ -1,4 +1,4 @@
-import { Canvas, Circle, Group, RoundedRect, useFont } from '@shopify/react-native-skia';
+import { Canvas, Circle, Group, RoundedRect, useTypeface } from '@shopify/react-native-skia';
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -60,7 +60,8 @@ export function PerfumeInkBloom({ autoPlay = false }: Props) {
     [FONT.semibold]: require('./assets/fonts/Nunito-SemiBold.ttf'),
     [FONT.bold]: require('./assets/fonts/Nunito-Bold.ttf'),
   });
-  const noteFont = useFont(require('./assets/fonts/Nunito-Bold.ttf'), 21);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const noteFace = useTypeface(require('./assets/fonts/Nunito-Bold.ttf'));
   const [active, setActive] = useState(AppState.currentState === 'active');
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));
@@ -80,7 +81,7 @@ export function PerfumeInkBloom({ autoPlay = false }: Props) {
     const capY = cy - Math.cos(D.bottle.lean) * 138 * sc;
     return { sc, cx, cy, capX, capY };
   }, [L]);
-  const notes = useMemo(() => (noteFont && size ? makeNotes(L, noteFont, DROPS) : null), [noteFont, size, L]);
+  const notes = useMemo(() => (noteFace && size ? makeNotes(L, noteFace, DROPS) : null), [noteFace, size, L]);
 
   /* ------------------------------------------------------------ state */
   const clock = useSharedValue(0);

@@ -1,7 +1,7 @@
 // Perfume Ink Bloom — the points the mist condenses onto: the perfume's notes, spelled out in the
 // block's type, drawn once into a small raster surface and sampled where the letters are inked.
 
-import { AlphaType, ColorType, type SkFont, Skia } from '@shopify/react-native-skia';
+import { AlphaType, ColorType, Skia, type SkTypeface } from '@shopify/react-native-skia';
 
 import { COPY, D, type Layout } from './pib-theme';
 
@@ -11,7 +11,7 @@ function rand(n: number) {
 }
 
 /** count points (x, y in screen points) on the inked pixels of the notes, or null if it cannot draw */
-export function makeNotes(L: Layout, font: SkFont, count: number): Float32Array | null {
+export function makeNotes(L: Layout, typeface: SkTypeface, count: number): Float32Array | null {
   const S = 3;
   const x0 = Math.floor((D.notes.x - 90) * L.sx);
   const y0 = Math.floor(L.Y(D.notes.y) - 30);
@@ -22,7 +22,7 @@ export function makeNotes(L: Layout, font: SkFont, count: number): Float32Array 
   const canvas = surface.getCanvas();
   const paint = Skia.Paint();
   paint.setColor(Skia.Color('white'));
-  const big = Skia.Font(font.getTypeface() ?? undefined, D.notes.size * L.sx * S);
+  const big = Skia.Font(typeface, D.notes.size * L.sx * S);
   COPY.notes.forEach((word, i) => {
     const tw = big.getTextWidth(word);
     const cx = (D.notes.x * L.sx - x0) * S;

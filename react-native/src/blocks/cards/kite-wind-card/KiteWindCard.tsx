@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { AccessibilityActionEvent } from 'react-native';
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -89,22 +89,20 @@ export function KiteWindCard({ autoPlay = false }: Props) {
   const layout: Layout = useMemo(() => makeLayout(width, height), [width, height]);
   const kite = useImage(KITE);
   const clouds = useImage(CLOUDS);
-  const display = useFont(INTER_DISPLAY_BOLD, 132);
-  const semibold = useFont(INTER_SEMIBOLD, 13);
-  const medium = useFont(INTER_MEDIUM, 16);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const display = useTypeface(INTER_DISPLAY_BOLD);
+  const semibold = useTypeface(INTER_SEMIBOLD);
+  const medium = useTypeface(INTER_MEDIUM);
   const fonts: Fonts | null = useMemo(() => {
-    const d = display?.getTypeface();
-    const s = semibold?.getTypeface();
-    const m = medium?.getTypeface();
-    if (!display || !semibold || !medium || !d || !s || !m) return null;
+    if (!display || !semibold || !medium) return null;
     return {
-      eyebrow: semibold,
-      number: display,
-      unit: Skia.Font(d, 24),
-      note: medium,
-      today: Skia.Font(s, 15),
-      cardValue: Skia.Font(m, 13),
-      hour: Skia.Font(m, 11),
+      eyebrow: Skia.Font(semibold, 13),
+      number: Skia.Font(display, 132),
+      unit: Skia.Font(display, 24),
+      note: Skia.Font(medium, 16),
+      today: Skia.Font(semibold, 15),
+      cardValue: Skia.Font(medium, 13),
+      hour: Skia.Font(medium, 11),
     };
   }, [display, semibold, medium]);
 

@@ -1,4 +1,4 @@
-import { BlurStyle, Canvas, Picture, Skia, createPicture, useClock, useFont } from '@shopify/react-native-skia';
+import { BlurStyle, Canvas, Picture, Skia, createPicture, useClock, useTypeface } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -154,15 +154,15 @@ export function BlurEdgeTypeIn({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const reduced = useReducedMotion();
-  const probe = useFont(require('./assets/BebasNeue-Regular.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const typeface = useTypeface(require('./assets/BebasNeue-Regular.ttf'));
 
   // The lines at the size that makes the widest span the screen less 24 pt a side (at most 104 pt).
   // A line break between lines is a character too (a pause), placed at the end of its line.
   // Characters are placed by a Skia paragraph, which applies the font's kerning as Core Text does
   // (summed glyph widths would not, and `getTextWidth` comes back rounded).
   const layout = useMemo(() => {
-    const typeface = probe?.getTypeface();
-    if (!probe || !typeface) return null;
+    if (!typeface) return null;
     const provider = Skia.TypefaceFontProvider.Make();
     provider.registerFont(typeface, FAMILY);
     const shape = (text: string, fontSize: number) => {
@@ -197,7 +197,7 @@ export function BlurEdgeTypeIn({
       height: size * 0.7 + (lines.length - 1) * size * 0.86,
       full: glyphs.length + EDGE,
     };
-  }, [probe, lines, width]);
+  }, [typeface, lines, width]);
   const full = layout ? layout.full : EDGE;
 
   const clock = useClock();

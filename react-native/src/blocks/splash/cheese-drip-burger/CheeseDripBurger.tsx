@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Picture, Skia, matchFont, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, matchFont, useTypeface, useImage } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -106,16 +106,16 @@ export function CheeseDripBurger({ autoPlay = false }: Props) {
   const layout = useMemo(() => makeLayout(designHeight, insets.top / k, insets.bottom / k), [designHeight, insets.top, insets.bottom, k]);
 
   const burger = useImage(BURGER);
-  const anton = useFont(ANTON, WORD_SIZE);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const anton = useTypeface(ANTON);
   const grain = useMemo(() => makeGrain(), []);
   const fonts = useMemo(() => {
-    const typeface = anton?.getTypeface();
-    if (!anton || !typeface) return null;
+    if (!anton) return null;
     return {
-      word: anton,
-      row: Skia.Font(typeface, ROW_SIZE),
-      brand: Skia.Font(typeface, 15),
-      label: Skia.Font(typeface, 22),
+      word: Skia.Font(anton, WORD_SIZE),
+      row: Skia.Font(anton, ROW_SIZE),
+      brand: Skia.Font(anton, 15),
+      label: Skia.Font(anton, 22),
       line: matchFont({ fontFamily: FAMILY, fontSize: 14, fontWeight: '600' }),
     };
   }, [anton]);

@@ -1,4 +1,4 @@
-import { Canvas, Group, Paint, RuntimeShader, Skia, Text as SkiaText, useFont } from '@shopify/react-native-skia';
+import { Canvas, Group, Paint, RuntimeShader, Skia, type SkFont, Text as SkiaText, useTypeface } from '@shopify/react-native-skia';
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -197,17 +197,19 @@ export function SwipeFlipWord({
   const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ [FONT_NAME]: FONT_FILE });
-  const unitFont = useFont(FONT_FILE, 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const face = useTypeface(FONT_FILE);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const pd = PixelRatio.get();
 
   // The word at the size that makes it 80 % of the width, and the prism around it.
   const metrics = useMemo(() => {
-    if (!unitFont || size.width <= 0) return null;
+    if (!face || size.width <= 0) return null;
+    const unitFont = Skia.Font(face, 100);
     // The advance character by character (no kerning, as in every stack).
-    const advance = (f: typeof unitFont) => Array.from(word).reduce((s, ch) => s + (f.getGlyphWidths(f.getGlyphIDs(ch))[0] ?? 0), 0);
+    const advance = (f: SkFont) => Array.from(word).reduce((s, ch) => s + (f.getGlyphWidths(f.getGlyphIDs(ch))[0] ?? 0), 0);
     const fontSize = (size.width * 0.8) / Math.max(advance(unitFont) / 100, 0.1);
-    const font = Skia.Font(unitFont.getTypeface() ?? undefined, fontSize);
+    const font = Skia.Font(face, fontSize);
     // The glyphs' ink box, from their outlines as in Swift (measureText's box is taller).
     const bounds = Skia.Path.MakeFromText(word, 0, 0, font)?.computeTightBounds() ?? font.measureText(word);
     return {
@@ -218,7 +220,7 @@ export function SwipeFlipWord({
       // The prism's half side: half the glyphs' height plus 0.04 em.
       radius: bounds.height / 2 + 0.04 * fontSize,
     };
-  }, [unitFont, size.width, word]);
+  }, [face, size.width, word]);
 
   const m: Motion = {
     clock: useSharedValue(-1),

@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -54,15 +54,14 @@ export function MorphObjectOnboarding({ autoPlay = false, previewTime }: Props) 
   const k0 = useImage(require('./assets/morph-clock.webp'));
   const k1 = useImage(require('./assets/morph-laptop.webp'));
   const k2 = useImage(require('./assets/morph-book.webp'));
-  const regular = useFont(require('./assets/fonts/Poppins-Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Poppins-Medium.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Poppins-Bold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const regular = useTypeface(require('./assets/fonts/Poppins-Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Poppins-Medium.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Poppins-Bold.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!atlas || !k0 || !k1 || !k2 || !regular || !medium || !bold) return null;
-    const f = { regular: regular.getTypeface(), medium: medium.getTypeface(), bold: bold.getTypeface() };
-    if (!f.regular || !f.medium || !f.bold) return null;
-    return makeRes({ regular: f.regular, medium: f.medium, bold: f.bold }, atlas, [k0, k1, k2]);
+    return makeRes({ regular, medium, bold }, atlas, [k0, k1, k2]);
   }, [atlas, k0, k1, k2, regular, medium, bold]);
 
   const w = size?.width ?? REF_W;

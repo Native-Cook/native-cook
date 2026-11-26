@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, AppState, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useFont, useTypeface, useImage } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -95,12 +95,12 @@ export function YoyoPullRefresh({ autoPlay = false }: Props) {
   const layout: Layout = useMemo(() => makeLayout(width, height), [width, height]);
   const yoyo = useImage(YOYO);
   const display = useFont(INTER_DISPLAY_BOLD, TITLE_SIZE);
-  const medium = useFont(INTER_MEDIUM, 15);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const medium = useTypeface(INTER_MEDIUM);
   const semibold = useFont(INTER_SEMIBOLD, 17);
   const fonts: Fonts | null = useMemo(() => {
-    const mediumFace = medium?.getTypeface();
-    if (!display || !medium || !semibold || !mediumFace) return null;
-    return { title: display, status: medium, cardTitle: semibold, cardMeta: Skia.Font(mediumFace, 14) };
+    if (!display || !medium || !semibold) return null;
+    return { title: display, status: Skia.Font(medium, 15), cardTitle: semibold, cardMeta: Skia.Font(medium, 14) };
   }, [display, medium, semibold]);
 
   const clock = useSharedValue(0);

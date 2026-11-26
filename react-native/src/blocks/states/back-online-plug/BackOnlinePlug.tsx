@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useFont, useTypeface, useImage } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   ReduceMotion,
@@ -114,11 +114,11 @@ export function BackOnlinePlug({ autoPlay = false }: Props) {
   const socket = useImage(SOCKET);
   const barlow = useFont(BARLOW, TITLE_SIZE);
   const interMedium = useFont(INTER_MEDIUM, 16);
-  const interSemi = useFont(INTER_SEMIBOLD, 17);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const interSemi = useTypeface(INTER_SEMIBOLD);
   const fonts: Fonts | null = useMemo(() => {
-    const semi = interSemi?.getTypeface();
-    if (!barlow || !interMedium || !interSemi || !semi) return null;
-    return { title: barlow, line: interMedium, button: interSemi, chip: Skia.Font(semi, 15) };
+    if (!barlow || !interMedium || !interSemi) return null;
+    return { title: barlow, line: interMedium, button: Skia.Font(interSemi, 17), chip: Skia.Font(interSemi, 15) };
   }, [barlow, interMedium, interSemi]);
 
   const clock = useSharedValue(0);

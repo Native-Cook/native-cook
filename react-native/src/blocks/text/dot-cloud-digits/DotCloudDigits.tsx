@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, type SkFont, useFont } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, type SkFont, type SkTypeface, useTypeface } from '@shopify/react-native-skia';
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -111,11 +111,14 @@ function travel(a: Point, b: Point, cloud: Point, center: Point, s: number): Poi
 
 type Outline = { contours: Point[][]; minX: number; minY: number; maxX: number; maxY: number };
 
-/** The figure's outline at 1 pt per em, y down, from the glyphs placed by their advances (no kerning). */
-function outline(text: string, font: SkFont): Outline {
+/**
+ * The figure's outline at 1 pt per em, y down, from the glyphs placed by their advances (no kerning). `typeface` is
+ * the one the font was made from: Skia 2.6.2's `font.getTypeface()` returns it without a reference, so each wrapper
+ * it hands out frees the typeface once when collected.
+ */
+function outline(text: string, typeface: SkTypeface): Outline {
   const unit = 1000;
-  const typeface = font.getTypeface();
-  const big = typeface ? Skia.Font(typeface, unit) : font;
+  const big = Skia.Font(typeface, unit);
   const contours: Point[][] = [];
   let x = 0;
   for (const ch of text) {
@@ -187,8 +190,8 @@ function sample(contours: Point[][], count: number): Point[] {
   return points;
 }
 
-function buildShapes(stats: DotCloudDigitsStat[], font: SkFont, width: number, height: number): Shapes {
-  const outlines = stats.map((s) => outline(s.value, font));
+function buildShapes(stats: DotCloudDigitsStat[], font: SkFont, typeface: SkTypeface, width: number, height: number): Shapes {
+  const outlines = stats.map((s) => outline(s.value, typeface));
   const maxW = Math.max(...outlines.map((o) => o.maxX - o.minX));
   const maxH = Math.max(...outlines.map((o) => o.maxY - o.minY));
   // The figures share one scale (pt per em) so that "12" is not bigger than "64".
@@ -314,11 +317,12 @@ export function DotCloudDigits({ stats = DOT_CLOUD_DIGITS_STATS, title = 'OCTOBE
   const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ [FONT_NAME]: FONT_FILE });
-  const font = useFont(FONT_FILE, LETTER_SIZE);
+  const typeface = useTypeface(FONT_FILE);
+  const font = useMemo(() => (typeface ? Skia.Font(typeface, LETTER_SIZE) : null), [typeface]);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const shapes = useMemo(
-    () => (font && size.width > 0 ? buildShapes(stats, font, size.width, size.height) : null),
-    [font, size.width, size.height, stats],
+    () => (typeface && font && size.width > 0 ? buildShapes(stats, font, typeface, size.width, size.height) : null),
+    [typeface, font, size.width, size.height, stats],
   );
   const count = stats.length;
 

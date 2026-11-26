@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -75,15 +75,14 @@ export function GlassPayMorph({ autoPlay = false, previewTime }: Props) {
     return () => sub.remove();
   }, []);
 
-  const light = useFont(require('./assets/fonts/Outfit-Light.ttf'), 100);
-  const regular = useFont(require('./assets/fonts/Outfit-Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Outfit-Medium.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Outfit-SemiBold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const light = useTypeface(require('./assets/fonts/Outfit-Light.ttf'));
+  const regular = useTypeface(require('./assets/fonts/Outfit-Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Outfit-Medium.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Outfit-SemiBold.ttf'));
   const res = useMemo<Res | null>(() => {
     if (!light || !regular || !medium || !semi || !effect) return null;
-    const f = { light: light.getTypeface(), regular: regular.getTypeface(), medium: medium.getTypeface(), semi: semi.getTypeface() };
-    if (!f.light || !f.regular || !f.medium || !f.semi) return null;
-    return makeRes(effect, { light: f.light, regular: f.regular, medium: f.medium, semi: f.semi });
+    return makeRes(effect, { light, regular, medium, semi });
   }, [light, regular, medium, semi]);
 
   const w = size?.width ?? REF_W;

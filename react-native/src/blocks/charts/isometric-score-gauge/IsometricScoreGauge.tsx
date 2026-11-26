@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -47,16 +47,15 @@ export function IsometricScoreGauge({ autoPlay = false, previewTime }: Props) {
   }, []);
 
   const icons = useImage(require('./assets/icons.webp'));
-  const serif = useFont(require('./assets/fonts/DMSerifDisplay-Regular.ttf'), 100);
-  const display = useFont(require('./assets/fonts/ArchivoBlack-Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Inter-Medium.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Inter-SemiBold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const serif = useTypeface(require('./assets/fonts/DMSerifDisplay-Regular.ttf'));
+  const display = useTypeface(require('./assets/fonts/ArchivoBlack-Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Inter-Medium.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Inter-SemiBold.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!icons || !serif || !display || !medium || !semi) return null;
-    const f = { serif: serif.getTypeface(), display: display.getTypeface(), medium: medium.getTypeface(), semi: semi.getTypeface() };
-    if (!f.serif || !f.display || !f.medium || !f.semi) return null;
-    return makeRes({ serif: f.serif, display: f.display, medium: f.medium, semi: f.semi }, icons);
+    return makeRes({ serif, display, medium, semi }, icons);
   }, [icons, serif, display, medium, semi]);
 
   const w = size?.width ?? REF_W;

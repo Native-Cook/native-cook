@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -76,16 +76,15 @@ export function QrJoyPostcard({ autoPlay = false, previewTime }: Props) {
   const cushion = useImage(require('./assets/cushion.webp'));
   const gift = useImage(require('./assets/gift.webp'));
   const tulips = useImage(require('./assets/tulips.webp'));
-  const regular = useFont(require('./assets/fonts/Inter-Regular.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Inter-SemiBold.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Inter-Bold.ttf'), 100);
-  const hand = useFont(require('./assets/fonts/CoveredByYourGrace.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const regular = useTypeface(require('./assets/fonts/Inter-Regular.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Inter-SemiBold.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Inter-Bold.ttf'));
+  const hand = useTypeface(require('./assets/fonts/CoveredByYourGrace.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!bear || !cushion || !gift || !tulips || !regular || !semi || !bold || !hand) return null;
-    const faces = { regular: regular.getTypeface(), semi: semi.getTypeface(), bold: bold.getTypeface(), hand: hand.getTypeface() };
-    if (!faces.regular || !faces.semi || !faces.bold || !faces.hand) return null;
-    return makeRes({ regular: faces.regular, semi: faces.semi, bold: faces.bold, hand: faces.hand }, { bear, cushion, gift, tulips });
+    return makeRes({ regular, semi, bold, hand }, { bear, cushion, gift, tulips });
   }, [bear, cushion, gift, tulips, regular, semi, bold, hand]);
 
   const w = size?.width ?? REF_W;

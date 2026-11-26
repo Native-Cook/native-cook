@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -53,16 +53,15 @@ export function LuckyTaskHub({ autoPlay = false, previewTime }: Props) {
   }, []);
 
   const atlas = useImage(require('./assets/atlas.webp'));
-  const black = useFont(require('./assets/fonts/Nunito-Black.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Inter-Bold.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Inter-SemiBold.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Inter-Medium.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const black = useTypeface(require('./assets/fonts/Nunito-Black.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Inter-Bold.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Inter-SemiBold.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Inter-Medium.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!atlas || !black || !bold || !semi || !medium) return null;
-    const f = { black: black.getTypeface(), bold: bold.getTypeface(), semi: semi.getTypeface(), medium: medium.getTypeface() };
-    if (!f.black || !f.bold || !f.semi || !f.medium) return null;
-    return makeRes({ black: f.black, bold: f.bold, semi: f.semi, medium: f.medium }, atlas);
+    return makeRes({ black, bold, semi, medium }, atlas);
   }, [atlas, black, bold, semi, medium]);
 
   const w = size?.width ?? REF_W;

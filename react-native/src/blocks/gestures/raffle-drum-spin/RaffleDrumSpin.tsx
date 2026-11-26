@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, type SkFont, type SkTypeface, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, type SkFont, type SkTypeface, useTypeface, useImage } from '@shopify/react-native-skia';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -97,14 +97,15 @@ export function RaffleDrumSpin({ autoPlay = false }: Props) {
     return () => sub.remove();
   }, []);
 
-  const bold = useFont(require('./assets/Inter-Bold.ttf'), 100);
-  const semi = useFont(require('./assets/Inter-SemiBold.ttf'), 100);
-  const medium = useFont(require('./assets/Inter-Medium.ttf'), 100);
-  const regular = useFont(require('./assets/Inter-Regular.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const bold = useTypeface(require('./assets/Inter-Bold.ttf'));
+  const semi = useTypeface(require('./assets/Inter-SemiBold.ttf'));
+  const medium = useTypeface(require('./assets/Inter-Medium.ttf'));
+  const regular = useTypeface(require('./assets/Inter-Regular.ttf'));
   // Display and print: Archivo ExtraBold for the title, Source Serif 4 Semibold for the ticket's
   // engraved capitals and its tabular entry number (chosen with Codex: .work/research/assets/fonts).
-  const display = useFont(require('./assets/Archivo-ExtraBold.ttf'), 100);
-  const serif = useFont(require('./assets/SourceSerif4-Semibold.ttf'), 100);
+  const display = useTypeface(require('./assets/Archivo-ExtraBold.ttf'));
+  const serif = useTypeface(require('./assets/SourceSerif4-Semibold.ttf'));
   const ticket = useImage(require('./assets/golden-ticket.webp'));
   const back = useImage(require('./assets/golden-ticket-back.webp'));
 
@@ -114,10 +115,7 @@ export function RaffleDrumSpin({ autoPlay = false }: Props) {
 
   const res = useMemo<Res | null>(() => {
     if (!bold || !semi || !medium || !regular || !display || !serif || !ticket || !back || !foilEffect || !lightEffect || !glassEffect || !liquidEffect || !bgEffect || !ballEffect || !raysEffect || !morphEffect) return null;
-    const [fb, fs, fm, fr] = [bold, semi, medium, regular].map((f) => f.getTypeface());
-    const fd = display.getTypeface();
-    const fz = serif.getTypeface();
-    if (!fb || !fs || !fm || !fr || !fd || !fz) return null;
+    const [fs, fm, fr, fd, fz] = [semi, medium, regular, display, serif];
     const star = Skia.Path.MakeFromSVGString(STAR);
     if (!star) return null;
     const s = geo.sx;

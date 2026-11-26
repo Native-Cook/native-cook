@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -47,17 +47,16 @@ export function CashbackPickFive({ autoPlay = false, previewTime }: Props) {
     return () => sub.remove();
   }, []);
 
-  const regular = useFont(require('./assets/fonts/Inter-Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Inter-Medium.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Inter-SemiBold.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Inter-Bold.ttf'), 100);
-  const heavy = useFont(require('./assets/fonts/Inter-ExtraBold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const regular = useTypeface(require('./assets/fonts/Inter-Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Inter-Medium.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Inter-SemiBold.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Inter-Bold.ttf'));
+  const heavy = useTypeface(require('./assets/fonts/Inter-ExtraBold.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!regular || !medium || !semi || !bold || !heavy) return null;
-    const f = { regular: regular.getTypeface(), medium: medium.getTypeface(), semi: semi.getTypeface(), bold: bold.getTypeface(), heavy: heavy.getTypeface() };
-    if (!f.regular || !f.medium || !f.semi || !f.bold || !f.heavy) return null;
-    return makeRes({ regular: f.regular, medium: f.medium, semi: f.semi, bold: f.bold, heavy: f.heavy });
+    return makeRes({ regular, medium, semi, bold, heavy });
   }, [regular, medium, semi, bold, heavy]);
 
   const w = size?.width ?? REF_W;

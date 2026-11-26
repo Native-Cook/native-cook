@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -54,16 +54,15 @@ export function GhostFloatWelcome({ autoPlay = false, previewTime }: Props) {
 
   const dino = useImage(require('./assets/avatar-dino.webp'));
   const penguin = useImage(require('./assets/avatar-penguin.webp'));
-  const regular = useFont(require('./assets/fonts/Manrope_400Regular.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Manrope_500Medium.ttf'), 100);
-  const semi = useFont(require('./assets/fonts/Manrope_600SemiBold.ttf'), 100);
-  const bold = useFont(require('./assets/fonts/Manrope_700Bold.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const regular = useTypeface(require('./assets/fonts/Manrope_400Regular.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Manrope_500Medium.ttf'));
+  const semi = useTypeface(require('./assets/fonts/Manrope_600SemiBold.ttf'));
+  const bold = useTypeface(require('./assets/fonts/Manrope_700Bold.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!dino || !penguin || !regular || !medium || !semi || !bold) return null;
-    const f = { regular: regular.getTypeface(), medium: medium.getTypeface(), semi: semi.getTypeface(), bold: bold.getTypeface() };
-    if (!f.regular || !f.medium || !f.semi || !f.bold) return null;
-    return makeRes({ regular: f.regular, medium: f.medium, semi: f.semi, bold: f.bold }, { dino, penguin });
+    return makeRes({ regular, medium, semi, bold }, { dino, penguin });
   }, [dino, penguin, regular, medium, semi, bold]);
 
   const w = size?.width ?? REF_W;

@@ -1,4 +1,4 @@
-import { Canvas, ClipOp, Picture, Skia, createPicture, useClock, useFont } from '@shopify/react-native-skia';
+import { Canvas, ClipOp, Picture, Skia, createPicture, useClock, useTypeface } from '@shopify/react-native-skia';
 import type { SkCanvas, SkFont, SkPaint, SkPath } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -211,17 +211,19 @@ export function RollingCountdownDigits({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const reduced = useReducedMotion();
-  const probe = useFont(require('./assets/Anton-Regular.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const face = useTypeface(require('./assets/Anton-Regular.ttf'));
 
   // The size at which "00:00" spans the screen less 24 pt a side (at most 180 pt).
   const type = useMemo<DigitType | null>(() => {
-    if (!probe) return null;
+    if (!face) return null;
+    const probe = Skia.Font(face, 100);
     // Advances from the glyph widths: `getTextWidth` comes back rounded.
     const advance = (f: SkFont, s: string) => f.getGlyphWidths(f.getGlyphIDs(s))[0] ?? 0;
     const probeCell = Math.max(...Array.from({ length: 10 }, (_, i) => advance(probe, `${i}`)));
     const probeWidth = 4 * probeCell + advance(probe, ':');
     const size = Math.min(SIZE_LIMIT, Math.floor((100 * (width - 48)) / probeWidth));
-    const font = Skia.Font(probe.getTypeface() ?? undefined, size);
+    const font = Skia.Font(face, size);
     const path = (s: string) => Skia.Path.MakeFromText(s, 0, 0, font) ?? Skia.Path.Make();
     const digits = Array.from({ length: 10 }, (_, i) => path(`${i}`));
     const advances = Array.from({ length: 10 }, (_, i) => advance(font, `${i}`));
@@ -230,7 +232,7 @@ export function RollingCountdownDigits({
     const ink = digits[0].computeTightBounds();
     const pad = 0.04 * size;
     return { digits, advances, colon: path(':'), colonAdvance, cell, top: ink.y - pad, height: ink.height + 2 * pad, width: 4 * cell + colonAdvance };
-  }, [probe, width]);
+  }, [face, width]);
 
   const clock = useClock();
   const origin = useSharedValue(0);

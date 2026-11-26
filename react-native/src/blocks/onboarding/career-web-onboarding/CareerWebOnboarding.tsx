@@ -1,4 +1,4 @@
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useTypeface, useImage } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -50,15 +50,13 @@ export function CareerWebOnboarding({ autoPlay = false, previewTime }: Props) {
   const pa = useImage(require('./assets/person-a.webp'));
   const pb = useImage(require('./assets/person-b.webp'));
   const pc = useImage(require('./assets/person-c.webp'));
-  const semi = useFont(require('./assets/fonts/Poppins-SemiBold.ttf'), 100);
-  const medium = useFont(require('./assets/fonts/Poppins-Medium.ttf'), 100);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const semi = useTypeface(require('./assets/fonts/Poppins-SemiBold.ttf'));
+  const medium = useTypeface(require('./assets/fonts/Poppins-Medium.ttf'));
 
   const res = useMemo<Res | null>(() => {
     if (!pa || !pb || !pc || !semi || !medium) return null;
-    const s = semi.getTypeface();
-    const m = medium.getTypeface();
-    if (!s || !m) return null;
-    return makeRes({ semi: s, medium: m }, [pa, pb, pc]);
+    return makeRes({ semi, medium }, [pa, pb, pc]);
   }, [pa, pb, pc, semi, medium]);
 
   const w = size?.width ?? REF_W;

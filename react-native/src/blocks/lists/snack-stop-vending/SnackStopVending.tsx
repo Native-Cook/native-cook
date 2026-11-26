@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, AppState, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Picture, Skia, useFont, useImage } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useFont, useTypeface, useImage } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue, useFrameCallback, useReducedMotion, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -102,14 +102,14 @@ export function SnackStopVending({ autoPlay = false }: Props) {
   const base = useMemo(() => (machine ? recordBase(layout, machine) : null), [machine, layout]);
 
   const titan = useFont(TITAN, 30);
-  const onest = useFont(ONEST, 20);
+  // Typefaces, not fonts: Skia 2.6.2's font.getTypeface() returns the typeface without a reference, so each wrapper frees it once when collected.
+  const onest = useTypeface(ONEST);
   const medium = useFont(INTER_MEDIUM, 14);
   const semibold = useFont(INTER_SEMIBOLD, 9);
   const mono = useFont(MONO, 15);
   const fonts: Fonts | null = useMemo(() => {
-    const onestFace = onest?.getTypeface();
-    if (!titan || !onest || !medium || !semibold || !mono || !onestFace) return null;
-    return { title: titan, sub: medium, name: onest, line: medium, pill: Skia.Font(onestFace, 22), lcd: mono, key: semibold };
+    if (!titan || !onest || !medium || !semibold || !mono) return null;
+    return { title: titan, sub: medium, name: Skia.Font(onest, 20), line: medium, pill: Skia.Font(onest, 22), lcd: mono, key: semibold };
   }, [titan, onest, medium, semibold, mono]);
 
   const clock = useSharedValue(0);
