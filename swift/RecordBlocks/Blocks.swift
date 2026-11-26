@@ -410,6 +410,7 @@ final class BlockRecordings: Recorder {
     func test_glass_folder_burst() throws { try record(slug: "glass-folder-burst", loop: 10) }
     func test_origami_fold_list() throws { try record(slug: "origami-fold-list", loop: 11) }
     func test_rubber_chain_list() throws { try record(slug: "rubber-chain-list", loop: 9) }
+    func test_jellyfish_sleep_player() throws { try record(slug: "jellyfish-sleep-player", loop: 8) }
     func test_compare_reveal_slider() throws { try record(slug: "compare-reveal-slider", loop: 8) }
     func test_extrusion_recap_story() throws { try record(slug: "extrusion-recap-story", loop: 8) }
     func test_island_print_camera() throws { try record(slug: "island-print-camera", loop: 11) }
