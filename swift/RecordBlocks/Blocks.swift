@@ -317,6 +317,7 @@ final class BlockRecordings: Recorder {
     func test_scratch_ticket() throws { try record(slug: "scratch-ticket", loop: 9) }
     func test_sticker_board() throws { try record(slug: "sticker-board", loop: 15) }
     func test_breathing_gap_grid() throws { try record(slug: "breathing-gap-grid", loop: 11) }
+    func test_honey_drizzle_stepper() throws { try record(slug: "honey-drizzle-stepper", loop: 6) }
     func test_dual_range_histogram() throws { try record(slug: "dual-range-histogram", loop: 8) }
     func test_ghost_complete_field() throws { try record(slug: "ghost-complete-field", loop: 10) }
     func test_mention_autocomplete() throws { try record(slug: "mention-autocomplete", loop: 9) }
