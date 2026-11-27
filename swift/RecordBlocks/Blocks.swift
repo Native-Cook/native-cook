@@ -355,6 +355,7 @@ final class BlockRecordings: Recorder {
     func test_mailbox_inbox() throws { try record(slug: "mailbox-inbox", loop: 9) }
     func test_lucky_task_hub() throws { try record(slug: "lucky-task-hub", loop: 9, sound: true) }
     func test_pasta_plate_wheel() throws { try record(slug: "pasta-plate-wheel", loop: 8) }
+    func test_pickle_flavour_wipe() throws { try record(slug: "pickle-flavour-wipe", loop: 10) }
     func test_newspaper_pile_reader() throws { try record(slug: "newspaper-pile-reader", loop: 9) }
     func test_aquarium_feed_list() throws { try record(slug: "aquarium-feed-list", loop: 9) }
     func test_card_catalog_list() throws { try record(slug: "card-catalog-list", loop: 9) }
@@ -522,6 +523,7 @@ final class BlockRecordings: Recorder {
     func test_bookmark_pocket_intro() throws { try record(slug: "bookmark-pocket-intro", loop: 9) }
     func test_color_shift_card_stack() throws { try record(slug: "color-shift-card-stack", loop: 8.5) }
     func test_curtain_split_welcome() throws { try record(slug: "curtain-split-welcome", loop: 15) }
+    func test_ember_glow_story() throws { try record(slug: "ember-glow-story", loop: 11) }
     func test_flow_field_welcome() throws { try record(slug: "flow-field-welcome", loop: 8.6) }
     func test_goal_staircase_glow() throws { try record(slug: "goal-staircase-glow", loop: 8.5) }
     func test_liquid_swipe_pages() throws { try record(slug: "liquid-swipe-pages", loop: 9.6) }
