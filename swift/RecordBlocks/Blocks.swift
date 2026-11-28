@@ -339,7 +339,6 @@ final class BlockRecordings: Recorder {
     func test_clay_relight_settings() throws { try record(slug: "clay-relight-settings", loop: 10) }
     func test_fridge_door_grocery() throws { try record(slug: "fridge-door-grocery", loop: 9) }
     func test_mailbox_inbox() throws { try record(slug: "mailbox-inbox", loop: 9) }
-    func test_lucky_task_hub() throws { try record(slug: "lucky-task-hub", loop: 9, sound: true) }
     func test_pasta_plate_wheel() throws { try record(slug: "pasta-plate-wheel", loop: 8) }
     func test_pickle_flavour_wipe() throws { try record(slug: "pickle-flavour-wipe", loop: 10) }
     func test_newspaper_pile_reader() throws { try record(slug: "newspaper-pile-reader", loop: 9) }
